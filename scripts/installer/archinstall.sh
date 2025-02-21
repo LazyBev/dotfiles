@@ -121,6 +121,8 @@ NET
 
 sudo systemctl restart systemd-resolved 
 sudo systemctl restart systemd-resolved
+
+bash -c "sh install.sh"
 EOF
 
 set +a
