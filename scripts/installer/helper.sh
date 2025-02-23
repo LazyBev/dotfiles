@@ -129,18 +129,6 @@ function run_script {
     fi
 }
 
-function check_root {
-    if [ "$EUID" -ne 0 ]; then
-        print_error "Please run as root"
-        log_message "Script not run as root. Exiting."
-        exit 1
-    fi
-    
-    # Store the original user for later use
-    SUDO_USER=$(logname)
-    log_message "Original user is $SUDO_USER"
-}
-
 function check_os {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
