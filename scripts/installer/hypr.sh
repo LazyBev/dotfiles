@@ -91,6 +91,7 @@ yay -S --needed \
     stremio \
     fastfetch \
     cargo \
+    spotify \
     ttf-dejavu \
     ttf-liberation \
     ttf-joypixels \
