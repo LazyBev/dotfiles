@@ -14,9 +14,6 @@ log_message "Installation started"
 print_bold_blue "\nSimple Hyprland"
 echo "---------------"
 
-# Check if running as root
-check_root
-
 # Check if OS is Arch Linux
 check_os
 
