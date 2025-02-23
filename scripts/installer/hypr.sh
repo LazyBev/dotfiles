@@ -20,6 +20,8 @@ run_command "pacman -S --noconfirm polkit-kde-agent" "Install KDE Polkit agent f
 run_command "pacman -S --noconfirm dunst" "Install Dunst notification daemon" "yes"
 run_command "cp -r /home/$SUDO_USER/simple-hyprland/configs/dunst /home/$SUDO_USER/.config/" "Copy dunst config" "yes" "no"
 
+cp -f -r /home/$SUDO_USER/simple-hyprland/configs/hypr /home/$SUDO_USER/.config/
+
 run_command "yay (bunch of hypr packages)" "Install a full hypr system" "yes"
 yay -S --needed \
     aquamarine \
