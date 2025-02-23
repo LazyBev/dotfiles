@@ -21,6 +21,8 @@ run_command "yay -S --sudoloop --noconfirm kvantum-theme-catppuccin-git" "Instal
 
 run_command "cp -r /home/$SUDO_USER/simple-hyprland/configs/kitty /home/$SUDO_USER/.config/" "Copy Catppuccin theme configuration for Kitty terminal" "yes" "no"
 
+cp -f -r $HOME/simple-hyprland/configs/Pictures/ $HOME
+
 # Add instructions to configure theming
 print_info "\nPost-installation instructions:"
 print_bold_blue "Set themes and icons:"
