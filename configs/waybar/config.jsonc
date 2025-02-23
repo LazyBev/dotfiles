@@ -1,146 +1,150 @@
+/* ---- 💫 https://github.com/JaKooLit 💫 ---- */
+/* -- designed by https://github.com/DevNChill */
+// ### Everforest ### //
+
 {
-    "layer": "top",
-    "position": "top",
-    "mode": "dock",
-    "exclusive": true,
-    "passthrough": false,
-    "gtk-layer-shell": true,
-    "height": 0,
-    "modules-left": [
-        "clock",
-        "hyprland/workspaces"
-    ],
-    "modules-center": ["hyprland/window"],
-    "modules-right": [
-        "tray",
-        "memory",
-        "cpu",
-        "network",
-        "battery",
-        "backlight",
-        "pulseaudio",
-        "pulseaudio#microphone"
-    ],
-
-    "hyprland/window": {
-        "format": "󰣇 {}"
-    },
-    
-    "hyprland/workspaces": {
-        "disable-scroll": true,
-        "all-outputs": true,
-        "on-click": "activate"
-        //"format": "{icon}",
-    },
-
-    "tray": {
-        "icon-size": 13,
-        "spacing": 10
-    },
-
-    "clock": {
-        "format": "{:%A    %B-%d-%Y    %I:%M:%S %p}",
-        "interval": 1,
-        "rotate": 0,
-        "tooltip-format": "<tt>{calendar}</tt>",
-        "calendar": {
-            "mode": "month",
-            "mode-mon-col": 3,
-            "on-scroll": 1,
-            "on-click-right": "mode",
-            "format": {
-                "months": "<span color='#a6adc8'><b>{}</b></span>",
-                "weekdays": "<span color='#a6adc8'><b>{}</b></span>",
-                "today": "<span color='#a6adc8'><b>{}</b></span>",
-                "days": "<span color='#555869'><b>{}</b></span>"
-            }
-        }
-    },
-
-    "backlight": {
-        "device": "intel_backlight",
-        "format": "{icon} {percent}%",
-        "format-icons": ["󰃞", "󰃟", "󰃠"],
-        "on-scroll-up": "brightnessctl set 1%+",
-        "on-scroll-down": "brightnessctl set 1%-",
-        "min-length": 6
-    },
-
-    "battery": {
-        "states": {
-            "good": 95,
-            "warning": 30,
-            "critical": 20
-        },
-        "format": "{icon} {capacity}%",
-        "format-charging": " {capacity}%",
-        "format-plugged": " {capacity}%",
-        "format-alt": "{time} {icon}",
-        "format-icons": ["󰂃", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
-    },
-
-    "pulseaudio": {
-        "format": "{icon}  {volume}%",
-        "tooltip": false,
-        "format-muted": "  Muted",
-        "on-click": "pamixer -t",
-        "on-scroll-up": "pamixer -i 1",
-        "on-scroll-down": "pamixer -d 1",
-        "scroll-step": 5,
-        "format-icons": {
-            "headphone": "",
-            "hands-free": "",
-            "headset": "",
-            "phone": "",
-            "portable": "",
-            "car": "",
-            "default": ["","", "", ""]
-        }
-    },
-
-    "pulseaudio#microphone": {
-        "format": "{format_source}",
-        "format-source": " {volume}%",
-        "format-source-muted": "  Muted",
-        "on-click": "pamixer --default-source -t",
-        "on-scroll-up": "pamixer --default-source -i 5",
-        "on-scroll-down": "pamixer --default-source -d 5",
-        "scroll-step": 5
-    },
-
-    "memory": {
-        "states": {
-            "c": 90, // critical
-            "h": 60, // high
-            "m": 30 // medium
-        },
-        "interval": 10,
-        "format": "󰾆 {used}GB",
-        "format-m": "󰾅 {used}GB",
-        "format-h": "󰓅 {used}GB",
-        "format-c": " {used}GB",
-        "format-alt": "󰾆 {percentage}%",
-        "max-length": 10,
-        "tooltip": true,
-        "tooltip-format": "󰾆 {percentage}%\n {used:0.1f}GB/{total:0.1f}GB"
-    },
-
-    "cpu": {
-        "interval": 10,
-        "format": "󰍛 {usage}%",
-        "format-alt": "{icon0}{icon1}{icon2}{icon3}",
-        "format-icons": ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-    },
-
-    "network": {
-        "tooltip": true,
-        "format-wifi": "  {essid}",
-        "format-ethernet": "󰈀 ",
-        "tooltip-format": "Network: <big><b>{essid}</b></big>\nSignal strength: <b>{signaldBm}dBm ({signalStrength}%)</b>\nFrequency: <b>{frequency}MHz</b>\nInterface: <b>{ifname}</b>\nIP: <b>{ipaddr}/{cidr}</b>\nGateway: <b>{gwaddr}</b>\nNetmask: <b>{netmask}</b>",
-        "format-linked": "󰈀 {ifname} (No IP)",
-        "format-disconnected": "󰖪 ",
-        "tooltip-format-disconnected": "Disconnected",
-        "format-alt": "<span foreground='#99ffdd'> {bandwidthDownBytes}</span> <span foreground='#ffcc66'> {bandwidthUpBytes}</span>",
-        "interval": 2
-    }
-}
+	"include": [
+	  "$HOME/.config/waybar/Modules",
+	  "$HOME/.config/waybar/ModulesWorkspaces",
+	  "$HOME/.config/waybar/ModulesCustom",
+	  "$HOME/.config/waybar/ModulesGroups",
+	  "$HOME/.config/waybar/ModulesVertical",
+	  ],
+	"layer": "top",
+	"mode": "dock",
+	"exclusive": true,
+	"passthrough": false,
+	"position": "top",
+	//"spacing": 6,
+	"fixed-center": true,
+	"ipc": true,
+	//"margin-top": 3,
+	//"margin-left": 8,
+	//"margin-right": 8,
+	
+	"modules-left": [
+	  "custom/arch",
+		"custom/separator#blank_2", 
+		"hyprland/workspaces#rw",
+		"custom/separator#blank_2",
+		"tray",
+		],
+	"modules-center": [
+        "mpris",
+		"group/notify",
+		"clock#forest",
+		"idle_inhibitor",
+		],
+	"modules-right": [
+		"keyboard-state",
+		"cpu#forest",
+		"memory#forest",
+		"temperature#forest",
+		"disk#forest",
+		"custom/separator#blank_2",
+		"backlight",
+		"battery#forest",
+		"custom/separator#blank_2",
+		"group/audio",
+		"custom/separator#blank_2",
+		"custom/power_vertical",
+		],
+	
+	// Additional / Edited Waybar Modules //
+	"custom/arch": {
+		  "format":" ",
+		  "tooltip": false,
+		  "on-click": "rofi -show drun"
+	},
+	"clock#forest": {
+		  "format": "{:%A %d.%m.%Y - %H:%M}",
+		  "tooltip-format": "<span color='#D3C6AA' size='larger'>{:%Y %B}</span>\n<tt>{calendar}</tt>",
+		  "calendar-weeks-pos": "right",
+		  "today-format": "<span color='#E67E80' weight='ultrabold'>{}</span>",
+		  "format-calendar": "<span color='#D3C6AA' weight='normal'>{}</span>",
+		  "format-calendar-weeks": "<span color='#7FBBB3'><b>W{:%V}</b></span>",
+		  "format-calendar-weekdays": "<span color='#A7C080'><b>{}</b></span>",
+		  "on-scroll": {
+					  "calendar": 1
+					   }
+	},
+	"battery#forest": {
+		//"interval": 5,
+		"align": 0,
+		"rotate": 0,
+		//"bat": "BAT1",
+		//"adapter": "ACAD",
+		"full-at": 100,
+		"design-capacity": false,
+		"states": {
+			"good": 95,
+			"warning": 30,
+			"critical": 15
+		},
+		"format": "Battery {icon}  {capacity}%",
+		"format-charging": "Battery  {capacity}%",
+		"format-plugged": "Battery 󱘖 {capacity}%",
+		"format-alt-click": "click",
+		"format-full": "Battery {icon} Full",
+		"format-alt": "Battery {icon} {time}",
+		"format-icons": [
+			"󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"
+		],
+		"format-time": "{H}h {M}min",
+		"tooltip": true,
+		"tooltip-format": "{timeTo} {power}w",
+		"on-click-middle": "~/.config/hypr/scripts/ChangeBlur.sh",
+		"on-click-right": "~/.config/hypr/scripts/Wlogout.sh",
+	},
+	
+	"cpu#forest": {
+		"format": "Cpu  󰍛  {usage}%",
+		"interval": 1,
+		"min-length": 5,
+		"format-alt-click": "click",
+		"format-alt": "{icon0}{icon1}{icon2}{icon3} {usage:>2}% 󰍛",
+		"format-icons": [
+			"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"
+		],
+		"on-click-right": "gnome-system-monitor",
+	},
+	
+	"disk#forest": {
+		"interval": 30,
+		//"format": "Disk    󰋊",
+		"path": "/",
+		//"format-alt-click": "click",
+		"format": "Disk 󰋊  {used}",
+	  "on-click-right": "baobab",
+	//	"tooltip": true,
+	//	"tooltip-format": "Disk    {used} used out of {total} on {path} ({percentage_used}%)",
+	},
+	
+	"memory#forest": {
+		"interval": 10,
+		"format": "Ram  󰾆  {used:0.1f}G",
+		"format-alt": "Ram    {percentage}%    󰾆",
+		"format-alt-click": "click",
+		"tooltip": true,
+		"tooltip-format": "Ram    {used:0.1f}GB/{total:0.1f}G",
+		"on-click-right": "kitty --title btop sh -c 'btop'"
+	},
+	"temperature#forest": {
+		"interval": 10,
+		"tooltip": true,
+		"hwmon-path": [
+			"/sys/class/hwmon/hwmon1/temp1_input",
+			"/sys/class/thermal/thermal_zone0/temp"
+		],
+		//"thermal-zone": 0,
+		"critical-threshold": 82,
+		"format-critical": "Temp {icon}  {temperatureC}°C",
+		"format": "Temp {icon}  {temperatureC}°C",
+		"format-icons": [
+			" 󰈸"
+		],
+		"on-click-right": "kitty --title nvtop sh -c 'nvtop'"
+	},
+	}
+	
+	
