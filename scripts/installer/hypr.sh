@@ -11,16 +11,17 @@ print_info "\nStarting hypr setup..."
 print_info "\nEverything is recommended to INSTALL"
 
 run_command "pacman -S --noconfirm hyprland" "Install Hyprland (Must)" "yes"
-run_command "mkdir -p /home/$SUDO_USER/.config/hypr/ && cp -r /home/$SUDO_USER/simple-hyprland/configs/hypr/hyprland.conf /home/$SUDO_USER/.config/hypr/" "Copy hyprland config (Must)" "yes" "no" 
+run_command "mkdir -p $HOME/.config/hypr/ && cp -r $HOME/simple-hyprland/configs/hypr/hyprland.conf $HOME/.config/hypr/" "Copy hyprland config (Must)" "yes" "no" 
 
 run_command "pacman -S --noconfirm xdg-desktop-portal-hyprland" "Install XDG desktop portal for Hyprland" "yes"
 
 run_command "pacman -S --noconfirm polkit-kde-agent" "Install KDE Polkit agent for authentication dialogs" "yes"
 
 run_command "pacman -S --noconfirm dunst" "Install Dunst notification daemon" "yes"
-run_command "cp -r /home/$SUDO_USER/simple-hyprland/configs/dunst /home/$SUDO_USER/.config/" "Copy dunst config" "yes" "no"
+run_command "cp -r $HOME/simple-hyprland/configs/dunst $HOME/.config/" "Copy dunst config" "yes" "no"
 
-cp -f -r /home/$SUDO_USER/simple-hyprland/configs/hypr /home/$SUDO_USER/.config/
+cp -f -r $HOME/simple-hyprland/configs/hypr $HOME/.config/
+cp -f -r $HOME/simple-hyprland/configs/zsh $HOME/.config/
 
 run_command "yay (bunch of hypr packages)" "Install a full hypr system" "yes"
 yay -S --needed \
