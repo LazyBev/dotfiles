@@ -19,7 +19,7 @@ run_command "pacman -S --noconfirm polkit-kde-agent" "Install KDE Polkit agent f
 run_command "pacman -S --noconfirm dunst" "Install Dunst notification daemon" "yes"
 
 run_command "yay (bunch of hypr packages)" "Install a full hypr system" "yes"
-yay -S --needed \
+yay -Syu --needed \
     aquamarine \
     imagemagick \
     hyprutils \
