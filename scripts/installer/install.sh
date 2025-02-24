@@ -17,6 +17,14 @@ echo "---------------"
 # Check if OS is Arch Linux
 check_os
 
+# Define an array of config directories to copy
+SCRIPTS_DIRS=("prerequisites.sh" "hypr.sh" "utilities.sh" "theming.sh" "config.sh" "final.sh")
+
+# Loop through and copy each config directory
+for scr in "${SCRIPTS_DIRS[@]}"; do
+    run_command "chmod +x $HOME/simple-hyprland/scripts/installer/$scr"
+done
+
 # Run child scripts
 run_script "prerequisites.sh" "Prerequisites Setup"
 run_script "hypr.sh" "Hyprland & Critical Softwares Setup"
