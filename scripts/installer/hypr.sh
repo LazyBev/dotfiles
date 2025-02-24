@@ -27,6 +27,7 @@ run_command "yay (bunch of hypr packages)" "Install a full hypr system" "yes"
 yay -S --needed \
     aquamarine \
     hyprutils \
+    ags \
     hyprcursor \
     hyprwayland-scanner \
     hyprgraphics \
