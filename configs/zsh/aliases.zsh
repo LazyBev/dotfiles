@@ -3,6 +3,7 @@
 ##
 
 alias run='pnpm run'
+alias delcache='sudo pacman -Scc; sudo pacman -Sc; sudo sync; echo 1 | sudo tee /proc/sys/vm/drop_caches; sudo sync; echo 2 | sudo tee /proc/sys/vm/drop_caches; sudo sync; echo 3 | sudo tee /proc/sys/vm/drop_caches; sudo swapoff -a; sudo swapon -a; rm -rf .cache'
 alias c="clear"
 alias q="exit"
 alias cleanram="sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'"
@@ -13,6 +14,7 @@ alias utar='tar -zxvf' # utar <archive_decompress> <file_list>
 alias z='zip -r' # z <archive_compress> <file_list>
 alias uz='unzip' # uz <archive_decompress> -d <dir>
 alias sr='source ~/.config/zsh/env.zsh'
+
 alias ..="cd .."
 alias psg="ps aux | grep -v grep | grep -i -e VSZ -e" 
 alias mkdir="mkdir -p"
