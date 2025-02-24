@@ -19,10 +19,6 @@ run_command "tar -xvf $HOME/simple-hyprland/assets/icons/Tela-circle-dracula.tar
 
 run_command "yay -S --sudoloop --noconfirm kvantum-theme-catppuccin-git" "Install Catppuccin theme for Kvantum" "yes" "no"
 
-run_command "cp -r $HOME/simple-hyprland/configs/kitty $HOME/.config/" "Copy Catppuccin theme configuration for Kitty terminal" "yes" "no"
-
-cp -f -r $HOME/simple-hyprland/configs/Pictures/ $HOME
-
 # Add instructions to configure theming
 print_info "\nPost-installation instructions:"
 print_bold_blue "Set themes and icons:"
