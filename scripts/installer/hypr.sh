@@ -26,6 +26,7 @@ cp -f -r $HOME/simple-hyprland/configs/zsh $HOME/.config/
 run_command "yay (bunch of hypr packages)" "Install a full hypr system" "yes"
 yay -S --needed \
     aquamarine \
+    imagemagick \
     hyprutils \
     ags \
     hyprcursor \
