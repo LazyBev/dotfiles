@@ -33,4 +33,6 @@ run_command "yay -S --sudoloop --noconfirm grimblast" "Install Grimblast - Scree
 run_command "yay -S --sudoloop --noconfirm hypridle" "Install Hypridle for idle management (Must)" "yes" "no"
 run_command "cp -r $HOME/simple-hyprland/configs/hypr/hypridle.conf $HOME/.config/hypr/" "Copy Hypridle config" "yes" "no"
 
+run_command "git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti" "Install arti - tor in rust" "yes" "no"
+
 echo "------------------------------------------------------------------------"
