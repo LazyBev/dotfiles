@@ -33,6 +33,7 @@ if [ -d tempdir ]; then
     cd $HOME && python -m venv yt
     bash -c "source yt/bin/activate; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;"
     cd $tempdir
+    cp -r $HOME/simple-hyprland/configs/mov-cli $HOME/.config/
 fi
 
 run_command "git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti" "Install arti - tor in rust" "yes" "no"
