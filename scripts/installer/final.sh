@@ -6,7 +6,9 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Source helper file
 source $SCRIPT_DIR/helper.sh
 
-run_command "yay -Syu"
+log_message "Final setup script started"
+
+run_command "yay -Syu" "Full system update" "yes" "no"
 yay -Syu --needed --noconfirm \
     aquamarine \
     imagemagick \
@@ -133,7 +135,6 @@ if lspci | grep -i nvidia &> /dev/null; then
         lib32-opencl-nvidia
 fi
 
-log_message "Final setup script started"
 print_bold_blue "\nCongratulations! Your Simple Hyprland setup is complete!"
 
 print_bold_blue "\nRepository Information:"
