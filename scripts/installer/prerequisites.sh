@@ -15,7 +15,7 @@ if run_command "sudo pacman -S --noconfirm --needed git base-devel" "Install YAY
     git clone https://aur.archlinux.org/yay-bin.git && sudo chown $user:$user -R yay-bin
     cd yay-bin && makepkg --noconfirm -si && cd .. && rm -rf yay-bin
 fi
-run_command "sudo pacman -S --noconfirm pipewire wireplumber pamixer brightnessctl" "Configuring audio and brightness (Recommended)" "yes" 
+run_command "sudo pacman -S --noconfirm pipewire pipewire-alsa pipewire-pulse alsa-utils wireplumber pamixer brightnessctl" "Configuring audio and brightness (Recommended)" "yes" 
 
 run_command "sudo pacman -S --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono" "Installing Nerd Fonts and Symbols (Recommended)" "yes" 
 
