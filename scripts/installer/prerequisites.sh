@@ -21,6 +21,12 @@ run_command "pacman -S --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd 
 
 run_command "pacman -S --noconfirm sddm && systemctl enable sddm.service" "Install and enable SDDM (Recommended)" "yes"
 
+run_command "sddm_themes=true" "Install sddm themes" "yes" "no"
+
+if $sddm_themes == true; then
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
+fi
+
 run_command "yay -S --sudoloop --noconfirm firefox-bin" "Install firefox" "yes" "no" 
 
 run_command "pacman -S --noconfirm kitty" "Install Kitty (Recommended)" "yes"
