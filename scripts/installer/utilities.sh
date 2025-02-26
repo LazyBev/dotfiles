@@ -9,11 +9,11 @@ source $SCRIPT_DIR/helper.sh
 log_message "Installation started for utilities section"
 print_info "\nStarting utilities setup..."
 
-run_command "pacman -S --noconfirm waybar" "Install Waybar - Status Bar" "yes"
+run_command "sudo pacman -S --noconfirm waybar" "Install Waybar - Status Bar" "yes"
 
 run_command "yay -S --sudoloop --noconfirm Rofi" "Install Rofi - Application Launcher" "yes" "no"
 
-run_command "pacman -S --noconfirm cliphist" "Install Cliphist - Clipboard Manager" "yes"
+run_command "sudo pacman -S --noconfirm cliphist" "Install Cliphist - Clipboard Manager" "yes"
 
 run_command "yay -S --sudoloop --noconfirm swww" "Install SWWW for wallpaper management" "yes" "no"
 
