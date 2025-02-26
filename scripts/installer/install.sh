@@ -22,7 +22,7 @@ SCRIPTS_DIRS=("prerequisites.sh" "hypr.sh" "utilities.sh" "theming.sh" "config.s
 
 # Loop through and make scripts executable
 for scr in "${SCRIPTS_DIRS[@]}"; do
-    run_command "chmod +x $HOME/simple-hyprland/scripts/installer/$scr"
+    chmod +x $HOME/simple-hyprland/scripts/installer/$scr
 done
 
 # Run child scripts
