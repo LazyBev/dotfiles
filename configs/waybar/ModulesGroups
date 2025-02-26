@@ -103,7 +103,6 @@
         },
 	"modules": [
 		"custom/swaync",
-		"custom/dot_update",
 	]
 },
 }
