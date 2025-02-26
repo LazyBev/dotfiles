@@ -21,7 +21,7 @@ run_command "sudo pacman -S --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-
 
 run_command "sudo pacman -S --noconfirm sddm && systemctl enable sddm.service" "Install and enable SDDM (Recommended)" "yes"
 
-read -p "Do you want to install sddm themes (true/false)" sddm_themes 
+read -p "Do you want to install sddm themes (true/false): " sddm_themes 
 
 if $sddm_themes == true; then
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
