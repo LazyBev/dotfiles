@@ -9,17 +9,17 @@ source $SCRIPT_DIR/helper.sh
 log_message "Installation started for prerequisites section"
 print_info "\nStarting prerequisites setup..."
 
-run_command "pacman -Syyu --noconfirm" "Update package database and upgrade packages (Recommended)" "yes" # no
+run_command "sudo pacman -Syyu --noconfirm" "Update package database and upgrade packages (Recommended)" "yes" # no
 
-if run_command "pacman -S --noconfirm --needed git base-devel" "Install YAY (Must)/Breaks the script" "yes"; then # 
+if run_command "sudo pacman -S --noconfirm --needed git base-devel" "Install YAY (Must)/Breaks the script" "yes"; then # 
     run_command "git clone https://aur.archlinux.org/yay-bin.git && sudo chown $user:$user -R $HOME/yay-bin" "Clone YAY" "no" "no" 
     run_command "cd yay-bin && makepkg --noconfirm -si && cd .. && rm -rf yay-bin" "Build YAY" "no" "no" 
 fi
-run_command "pacman -S --noconfirm pipewire wireplumber pamixer brightnessctl" "Configuring audio and brightness (Recommended)" "yes" 
+run_command "sudo pacman -S --noconfirm pipewire wireplumber pamixer brightnessctl" "Configuring audio and brightness (Recommended)" "yes" 
 
-run_command "pacman -S --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono" "Installing Nerd Fonts and Symbols (Recommended)" "yes" 
+run_command "sudo pacman -S --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono" "Installing Nerd Fonts and Symbols (Recommended)" "yes" 
 
-run_command "pacman -S --noconfirm sddm && systemctl enable sddm.service" "Install and enable SDDM (Recommended)" "yes"
+run_command "sudo pacman -S --noconfirm sddm && systemctl enable sddm.service" "Install and enable SDDM (Recommended)" "yes"
 
 run_command "sddm_themes=true" "Install sddm themes" "yes" "no"
 
@@ -29,10 +29,10 @@ fi
 
 run_command "yay -S --sudoloop --noconfirm firefox-bin" "Install firefox" "yes" "no" 
 
-run_command "pacman -S --noconfirm kitty" "Install Kitty (Recommended)" "yes"
+run_command "sudo pacman -S --noconfirm kitty" "Install Kitty (Recommended)" "yes"
 
-run_command "pacman -S --noconfirm neovim" "Install neovim" "yes"
+run_command "sudo pacman -S --noconfirm neovim" "Install neovim" "yes"
 
-run_command "pacman -S --noconfirm tar" "Install tar for extracting files (Must)/needed for copying themes" "yes"
+run_command "sudo pacman -S --noconfirm tar" "Install tar for extracting files (Must)/needed for copying themes" "yes"
 
 echo "------------------------------------------------------------------------"
