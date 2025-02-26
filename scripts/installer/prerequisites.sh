@@ -12,7 +12,7 @@ print_info "\nStarting prerequisites setup..."
 run_command "sudo pacman -Syyu --noconfirm" "Update package database and upgrade packages (Recommended)" "yes" # no
 
 if run_command "sudo pacman -S --noconfirm --needed git base-devel" "Install YAY (Must)/Breaks the script" "yes"; then # 
-    run_command "git clone https://aur.archlinux.org/yay-bin.git && sudo chown $user:$user -R $HOME/yay-bin" "Clone YAY" "no" "no" 
+    run_command "git clone https://aur.archlinux.org/yay-bin.git && sudo chown $user:$user -R yay-bin" "Clone YAY" "no" "no" 
     run_command "cd yay-bin && makepkg --noconfirm -si && cd .. && rm -rf yay-bin" "Build YAY" "no" "no" 
 fi
 run_command "sudo pacman -S --noconfirm pipewire wireplumber pamixer brightnessctl" "Configuring audio and brightness (Recommended)" "yes" 
