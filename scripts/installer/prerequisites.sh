@@ -17,6 +17,11 @@ if run_command "sudo pacman -S --noconfirm --needed git base-devel" "Install YAY
 fi
 run_command "sudo pacman -S --noconfirm pipewire pipewire-alsa pipewire-pulse alsa-utils wireplumber pamixer brightnessctl" "Configuring audio and brightness (Recommended)" "yes" 
 
+echo tee /etc/asound.conf <<ASOUND
+defaults.pcm.card 0
+defaults.ctl.card 0
+ASOUND
+
 # Fonts
 sudo pacman -S --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono 
 
