@@ -29,7 +29,7 @@ fi
 
 run_command "yay -S --sudoloop --noconfirm firefox-bin" "Install firefox" "yes" "no" 
 
-run_command "sudo pacman -S --noconfirm kitty" "Install Kitty (Recommended)" "yes"
+run_command "sudo pacman -S --noconfirm ghostty" "Install Ghostty (Recommended)" "yes"
 
 run_command "sudo pacman -S --noconfirm neovim" "Install neovim" "yes"
 
