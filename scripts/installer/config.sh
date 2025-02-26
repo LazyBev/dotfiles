@@ -19,8 +19,8 @@ for dir in "${CONFIG_DIRS[@]}"; do
         sudo rm -rf $HOME/.config/$dir
     fi
 
-    run_command "cp -r $HOME/simple-hyprland/configs/$dir $HOME/.config/" "Copy $dir config" "yes" "no"
+    run_command "cp -f -r $HOME/simple-hyprland/configs/$dir $HOME/.config/" "Copy $dir config" "yes" "no"
 done
 
 # Copy Pictures directory silently
-cp -r "$HOME/simple-hyprland/configs/Pictures" "$HOME" &> /dev/null
+cp -f -r "$HOME/simple-hyprland/configs/Pictures" "$HOME" &> /dev/null
