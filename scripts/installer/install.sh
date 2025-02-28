@@ -18,7 +18,7 @@ echo "---------------"
 check_os
 
 # Define an array of config directories to copy
-SCRIPTS_DIRS=("prerequisites.sh" "hypr.sh" "utilities.sh" "theming.sh" "config.sh" "final.sh")
+SCRIPTS_DIRS=("hyprconfig.sh" "prerequisites.sh" "hypr.sh" "utilities.sh" "theming.sh" "config.sh" "final.sh")
 
 # Loop through and make scripts executable
 for scr in "${SCRIPTS_DIRS[@]}"; do
@@ -44,12 +44,13 @@ for change in "${pacman_conf[@]}"; do
 done
 
 # Run child scripts
-run_script "prerequisites.sh" "Prerequisites Setup"
-run_script "hypr.sh" "Hyprland & Critical Softwares Setup"
-run_script "utilities.sh" "Basic Utilities & Configs Setup"
-run_script "theming.sh" "Themes and Tools Setup"
-run script "config.sh" "Config Setup"
-run_script "final.sh" "Final Setup"
+run_script "hyprconfig.sh" "Prerequisites Setup"
+#run_script "prerequisites.sh" "Prerequisites Setup"
+#run_script "hypr.sh" "Hyprland & Critical Softwares Setup"
+#run_script "utilities.sh" "Basic Utilities & Configs Setup"
+#run_script "theming.sh" "Themes and Tools Setup"
+#run script "config.sh" "Config Setup"
+#run_script "final.sh" "Final Setup"
 
 print_bold_blue "\n🌟 Setup Complete\n"
 log_message "Installation completed successfully"
