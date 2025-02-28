@@ -148,6 +148,9 @@ curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/instal
 yay -S --noconfirm zsh-theme-powerlevel10k-git
 echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
 
+sudo chsh -s /usr/bin/zsh
+zsh -c "p10k configure"
+
 sudo pacman -Sy --sudoloop --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono 
 sudo pacman -Sy --sudoloop --noconfirm pipewire pipewire-alsa pipewire-pulse alsa-utils lib32-libpulse lib32-alsa-plugins wireplumber pamixer brightnessctl ghostty firefox-bin sddm firefox-bin tar neovim pam_rundir
 
@@ -276,6 +279,3 @@ done
 sudo cp -f -r "$HOME/simple-hyprland/configs/Pictures" "$HOME" &> /dev/null
 
 echo -e "\n------------------------------------------------------------------------\n"
-
-sudo chsh -s /usr/bin/zsh
-zsh -c "p10k configure"
