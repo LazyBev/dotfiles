@@ -168,6 +168,9 @@ yay -Syu --needed --noconfirm \
 sudo pacman -Sy --sudoloop --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono 
 sudo pacman -Sy --sudoloop --noconfirm pipewire pipewire-alsa pipewire-pulse alsa-utils lib32-libpulse lib32-alsa-plugins wireplumber pamixer brightnessctl ghostty firefox-bin sddm firefox-bin tar neovim pam_rundir
 
+XDG_RUNTIME_DIR=/run/user/$(id -u)
+export $(dbus-launch)
+
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
 useradd -d /var/run/pulse -s /usr/bin/nologin -G audio pulse
