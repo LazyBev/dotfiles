@@ -284,7 +284,7 @@ print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "rofi" "wlogout" "hypr" "zsh" "swaync" "dunst" "kitty" "nvim" "mov-cli")
+CONFIG_DIRS=("waybar" "rofi" "wlogout" "hypr" "zsh" "swaync" "dunst" "nvim" "mov-cli")
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
