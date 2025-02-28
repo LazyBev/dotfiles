@@ -18,7 +18,7 @@ echo "---------------"
 check_os
 
 # Define an array of config directories to copy
-SCRIPTS_DIRS=("hyprconfig.sh""hypr.sh" "utilities.sh" "theming.sh" "config.sh" "final.sh")
+SCRIPTS_DIRS=("hyprconfig.sh" "hypr.sh" "utilities.sh" "theming.sh" "config.sh" "final.sh")
 
 # Loop through and make scripts executable
 for scr in "${SCRIPTS_DIRS[@]}"; do
