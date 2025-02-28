@@ -12,28 +12,6 @@ trap 'trap_message' INT TERM
 # Script start
 log_message "Installation started"
 print_bold_blue "\nSimple Hyprland"
-echo "---------------"
-
-# Check if OS is Arch Linux
-check_os
-
-# Refactor pacman.conf update
-declare -a pacman_conf=(
-    "s/#Color/Color/"
-    "s/#ParallelDownloads/ParallelDownloads/"
-    "s/#\\[multilib\\]/\\[multilib\\]/"
-    "s/#Include = \\/etc\\/pacman\\.d\\/mirrorlist/Include = \\/etc\\/pacman\\.d\\/mirrorlist/"
-    "/# Misc options/a ILoveCandy"
-)
-
-# Backup the pacman.conf before modifying
-echo "Backing up /etc/pacman.conf"
-sudo cp /etc/pacman.conf /etc/pacman.conf.bak || { echo "Failed to back up pacman.conf"; exit 1;}
-
-echo "Modifying /etc/pacman.conf"
-for change in "${pacman_conf[@]}"; do
-    sudo sed -i "$change" /etc/pacman.conf || { echo "Failed to update pacman.conf"; exit 1; }
-done
 
 echo -e "\n------------------------------------------------------------------------\n"
 
