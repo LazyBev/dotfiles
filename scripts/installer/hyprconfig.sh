@@ -181,9 +181,15 @@ fi
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
 # Create pulse user and group
+sudo useradd -r -M -s /usr/bin/nologin pulse
 sudo useradd -d /var/run/pulse -s /usr/bin/nologin -G audio pulse
 sudo groupadd pulse-access
 sudo usermod -aG pulse-access $USER
+
+# Create necessary directories for PulseAudio and set permissions
+sudo mkdir -p /var/run/pulse
+sudo chmod 775 /var/run/pulse
+sudo chown -R pulse:pulse /var/run/pulse
 
 # Configure ALSA default sound card
 sudo tee /etc/asound.conf <<ASOUND
@@ -217,9 +223,6 @@ mkdir -p ~/.config/pulse
 sudo tee ~/.config/pulse/default.pa <<DPA
 ### Load the integrated PulseAudio equalizer and D-Bus module
 load-module module-dbus-protocol
-load-module module-ladspa-sink
-load-module module-jack-sink
-load-module module-jack-source
 load-module module-suspend-on-idle
 DPA
 
