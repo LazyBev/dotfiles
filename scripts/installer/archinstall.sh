@@ -52,7 +52,7 @@ else
 fi
 
 echo "Installing base system..."
-pacstrap -K /mnt base base-devel sudo linux linux-headers linux-firmware grub efibootmgr iwd grep git sed "$cpu"-ucode networkmanager 
+pacstrap -K /mnt base base-devel sudo linux linux-headers linux-firmware sof-firmware grub efibootmgr iwd grep git sed "$cpu"-ucode networkmanager 
 
 echo "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab 
