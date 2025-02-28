@@ -152,7 +152,8 @@ sudo chsh -s /usr/bin/zsh
 zsh -c "p10k configure"
 
 sudo pacman -Sy --sudoloop --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono 
-sudo pacman -Sy --sudoloop --noconfirm pipewire pipewire-alsa pipewire-pulse alsa-utils lib32-libpulse lib32-alsa-plugins wireplumber pamixer brightnessctl ghostty firefox-bin sddm firefox-bin tar neovim pam_rundir
+sudo pacman -Rdd --noconfirm jack2
+sudo pacman -Sy --sudoloop --noconfirm pipewire pipewire-alsa pipewire-jack pipewire-pulse alsa-utils lib32-libpulse lib32-alsa-plugins wireplumber pamixer brightnessctl ghostty firefox-bin sddm firefox-bin tar neovim pam_rundir
 
 XDG_RUNTIME_DIR=/run/user/$(id -u)
 export $(dbus-launch)
