@@ -91,7 +91,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     meson \
     mpv \
     neovim \
-    nerd-fonts-git \
     network-manager-applet \
     networkmanager \
     nm-connection-editor \
@@ -136,6 +135,11 @@ yay -Syu --needed --sudoloop --noconfirm \
     ttf-joypixels \
     ttf-liberation \
     ttf-meslo-nerd \
+    ttf-fira-code-nerd \
+    ttf-jetbrains-mono-nerd \
+    ttf-hack-nerd \
+    ttf-source-code-pro-nerd \
+    ttf-roboto-mono-nerd \
     unzip \
     vulkan-mesa-layers \
     waybar \
