@@ -143,6 +143,11 @@ yay -Syu --needed --noconfirm \
     vulkan-mesa-layers \
     lib32-vulkan-mesa-layers
 
+curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
+
+yay -S --noconfirm zsh-theme-powerlevel10k-git
+echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
+
 sudo pacman -Sy --sudoloop --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono 
 sudo pacman -Sy --sudoloop --noconfirm pipewire pipewire-alsa pipewire-pulse alsa-utils lib32-libpulse lib32-alsa-plugins wireplumber pamixer brightnessctl ghostty firefox-bin sddm firefox-bin tar neovim pam_rundir
 
@@ -264,8 +269,13 @@ for dir in "${CONFIG_DIRS[@]}"; do
         sudo rm -rf $HOME/.config/$dir
     fi
 
-    sudo cp -f -r $HOME/simple-hyprland/configs/$dir $HOME/.config/" "Copy $dir config" "yes" "no"
+    sudo cp -f -r $HOME/simple-hyprland/configs/$dir $HOME/.config/
 done
 
 # Copy Pictures directory silently
 sudo cp -f -r "$HOME/simple-hyprland/configs/Pictures" "$HOME" &> /dev/null
+
+echo -e "\n------------------------------------------------------------------------\n"
+
+sudo chsh -s /usr/bin/zsh
+zsh -c "p10k configure"
