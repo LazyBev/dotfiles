@@ -25,123 +25,139 @@ if sudo pacman -Sy --noconfirm --needed git base-devel; then #
     cd yay-bin && makepkg --noconfirm -si && cd .. && rm -rf yay-bin
 fi
 
-yay -Syu --needed --noconfirm \
-    aquamarine \
-    imagemagick \
-    hyprutils \
-    polkit-kde-agent \
+sudo pacman -Rdd --noconfirm jack2
+
+yay -Syu --needed --sudoloop --noconfirm \
+    acpi \
     ags \
+    alsa-utils \
+    arch-install-scripts \
+    aquamarine \
+    bluez \
+    bluez-utils \
+    blueman \
+    brightnessctl \
+    btop \
+    cargo \
+    cliphist \
+    cmake \
+    curl \
+    dbus \
+    discord \
+    dmenu \
+    eza \
+    fastfetch \
+    firefox-bin \
+    flatpak \
+    fzf \
+    ghostty \
+    git \
+    grim \
+    grimblast \
+    gvfs \
+    hwinfo \
     hyprcursor \
-    hyprwayland-scanner \
     hyprgraphics \
-    qt5-wayland \
-    qt6-wayland \
+    hypridle \
     hyprlang \
+    hyprland \
     hyprland-protocols \
     hyprland-qt-support \
     hyprland-qtutils \
-    hyprland \
     hyprlock \
-    hypridle \
-    xdg-desktop-portal \
-    xdg-desktop-portal-hyprland \
-    xdg-desktop-portal-gtk \
-    polkit \
-    hyprpolkitagent \
-    pyprland \
-    dmenu \
-    rofi \
-    waybar \
-    swaync \
-    cmake \
-    wayland-protocols \
-    xorg-xwayland \
-    wlroots \
-    wayland \
-    ranger \
     hyprpaper \
-    waypaper \
-    swww \
-    mako \
-    ghostty \
-    wdisplays \
-    grim \
-    slurp \
-    pavucontrol \
-    python \
-    pipewire \
-    pipewire-alsa \
-    pipewire-pulse \
-    pipewire-jack \
-    alsa-utils \
-    libinput \
-    libevdev \
-    libxkbcommon \
-    kwayland \
-    wlr-randr \
-    wlr-swaybg \
-    steam-native-runtime \
-    mangohud \
-    sddm \
-    gvfs \
-    thunar \
-    thunar-archive-plugin \
-    stow \
+    hyprpicker \
+    hyprpolkitagent \
+    hyprutils \
+    hyprwayland-scanner \
+    imagemagick \
     iwd \
-    networkmanager \
-    nm-connection-editor \
-    network-manager-applet \
-    zsh \
-    tlp \
-    stremio \
-    fastfetch \
-    cargo \
-    spotify \
-    ttf-dejavu \
-    ttf-liberation \
-    ttf-joypixels \
-    ttf-meslo-nerd \
-    tmux \
-    blueman \
-    bluez \
-    bluez-utils \
-    steam \
-    flatpak \
-    discord \
-    wine \
-    winetricks \
-    neovim \
-    lua \
-    libva-nvidia-driver \
-    ripgrep \
+    kwayland \
+    lib32-alsa-plugins \
+    lib32-libpulse \
+    lib32-pulseaudio \
+    lib32-vulkan-mesa-layers \
+    libevdev \
+    libinput \
     librewolf-bin \
-    acpi \
-    git \
-    hwinfo \
-    arch-install-scripts \
-    wireless_tools \
-    curl \
+    libva-nvidia-driver \
+    libxkbcommon \
     make \
-    meson \
-    obsidian \
+    mako \
     man-db \
     man-pages \
-    xdotool \
-    wget \
-    qutebrowser \
-    dbus \
-    cliphist \
-    zip \
-    hyprpicker \
-    unzip \
-    mpv \
-    btop \
-    xarchiver \
-    eza \
-    fzf \
+    mangohud \
     mesa \
+    meson \
+    mpv \
+    neovim \
+    nerd-fonts-git \
+    network-manager-applet \
+    networkmanager \
+    nm-connection-editor \
+    obsidian \
+    pam_rundir \
+    pamixer \
+    pavucontrol \
+    polkit \
+    polkit-kde-agent \
+    pulseaudio \
+    pulseaudio-alsa \
+    pulseaudio-bluetooth \
+    pulseaudio-equalizer \
+    pulseaudio-equalizer-ladspa \
+    pulseaudio-jack \
+    pulseaudio-lirc \
+    pulseaudio-rtp \
+    pyprland \
+    python \
+    qutebrowser \
+    ranger \
+    ripgrep \
+    rofi \
+    sddm \
+    slurp \
+    spotify \
+    stow \
+    stremio \
+    sudo \
+    swaync \
+    swww \
+    tar \
+    thunar \
+    thunar-archive-plugin \
+    tlp \
+    tmux \
+    ttf-dejavu \
+    ttf-fira-code \
+    ttf-fira-mono \
+    ttf-fira-sans \
+    ttf-jetbrains-mono \
+    ttf-joypixels \
+    ttf-liberation \
+    ttf-meslo-nerd \
+    unzip \
     vulkan-mesa-layers \
-    lib32-vulkan-mesa-layers
+    waybar \
+    wayland \
+    wayland-protocols \
+    waypaper \
+    wget \
+    wdisplays \
+    wine \
+    winetricks \
+    wireless_tools \
+    wlroots \
+    wlr-randr \
+    xarchiver \
+    xdg-desktop-portal \
+    xdg-desktop-portal-gtk \
+    xdg-desktop-portal-hyprland \
+    xdotool \
+    xorg-xwayland \
+    yay \
+    zip \
+    zsh
 
 curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
 
@@ -151,61 +167,60 @@ echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zs
 sudo chsh -s /usr/bin/zsh
 zsh -c "p10k configure"
 
-sudo pacman -Sy --sudoloop --noconfirm yay -S nerd-fonts-git ttf-cascadia-code-nerd ttf-cascadia-mono-nerd ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-firacode-nerd ttf-iosevka-nerd ttf-iosevkaterm-nerd ttf-jetbrains-mono-nerd ttf-jetbrains-mono ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono 
-sudo pacman -Rdd --noconfirm jack2
-sudo pacman -Sy --sudoloop --noconfirm pipewire pipewire-alsa pipewire-jack pipewire-pulse alsa-utils lib32-libpulse lib32-alsa-plugins wireplumber pamixer brightnessctl ghostty firefox-bin sddm firefox-bin tar neovim pam_rundir
-
 XDG_RUNTIME_DIR=/run/user/$(id -u)
-export $(dbus-launch)
+
+# Ensure D-Bus is running
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax) || systemctl --user start dbus
+fi
 
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
-useradd -d /var/run/pulse -s /usr/bin/nologin -G audio pulse
-groupadd pulse-access
-usermod -aG pulse-access $USER
+# Create pulse user and group
+sudo useradd -d /var/run/pulse -s /usr/bin/nologin -G audio pulse
+sudo groupadd pulse-access
+sudo usermod -aG pulse-access $USER
 
+# Configure ALSA default sound card
 sudo tee /etc/asound.conf <<ASOUND
 defaults.pcm.card 0
 defaults.ctl.card 0
 ASOUND
 
+# Disable PulseAudio auto-suspend
 sudo sed -i "/load-module module-suspend-on-idle/c\# load-module module-suspend-on-idle" /etc/pulse/default.pa
 
-if [ ! -d /etc/mplayer ]; then
-    sudo mkdir /etc/mplayer
-    if [ -f /etc/mplayer/mplayer.conf ]; then
-        sudo tee /etc/mplayer/mplayer.conf <<MPV
-ao=pulse
-MPV
-    else
-        sudo tee -a /etc/mplayer/mplayer.conf <<MPV
-ao=pulse
-MPV
-    fi
-fi
+# Configure MPlayer to use PulseAudio
+sudo mkdir -p /etc/mplayer
+echo "ao=pulse" | sudo tee /etc/mplayer/mplayer.conf
 
+# Create PulseAudio systemd service
 sudo tee /etc/systemd/system/pulseaudio.service <<PSER
 [Unit]
 Description=Sound Service
- 
+
 [Service]
-# Note that notify will only work if --daemonize=no
 Type=notify
-ExecStart=/usr/bin/pulseaudio --daemonize=no --exit-idle-time=-1 --disallow-exit=true --system --disallow-module-loading
+ExecStart=/usr/bin/pulseaudio --daemonize=no --exit-idle-time=-1 --disallow-exit=true
 Restart=always
- 
+
 [Install]
 WantedBy=default.target
 PSER
 
+# Configure PulseAudio with equalizer and D-Bus support
+mkdir -p ~/.config/pulse
 sudo tee ~/.config/pulse/default.pa <<DPA
 ### Load the integrated PulseAudio equalizer and D-Bus module
 load-module module-equalizer-sink
 load-module module-dbus-protocol
+load-module module-ladspa-sink
+load-module module-jack-sink
+load-module module-jack-source
 DPA
 
-sudo systemctl --user enable pulseaudio.service
-sudo systemctl --user start pulseaudio.service
+# Enable and start PulseAudio as a user service
+systemctl --user enable --now pulseaudio.service
 
 echo -e "\n------------------------------------------------------------------------\n"
 
