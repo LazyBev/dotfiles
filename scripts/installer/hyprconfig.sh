@@ -212,11 +212,11 @@ PSER
 mkdir -p ~/.config/pulse
 sudo tee ~/.config/pulse/default.pa <<DPA
 ### Load the integrated PulseAudio equalizer and D-Bus module
-load-module module-equalizer-sink
 load-module module-dbus-protocol
 load-module module-ladspa-sink
 load-module module-jack-sink
 load-module module-jack-source
+load-module module-suspend-on-idle
 DPA
 
 # Enable and start PulseAudio as a user service
