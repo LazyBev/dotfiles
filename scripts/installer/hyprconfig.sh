@@ -190,6 +190,10 @@ if [ ! -d /etc/mplayer ]; then
         sudo tee /etc/mplayer/mplayer.conf <<MPV
 ao=pulse
 MPV
+    else
+        sudo tee -a /etc/mplayer/mplayer.conf <<MPV
+ao=pulse
+MPV
     fi
 fi
 
