@@ -114,7 +114,7 @@ DHCP=yes
 NET
 
 sudo systemctl restart systemd-resolved 
-sudo systemctl restart sys#!/bin/bash
+sudo systemctl restart systemd-networkd
 
 EOF
 
