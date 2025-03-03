@@ -165,15 +165,17 @@ yay -Syu --needed --sudoloop --noconfirm \
 
 if lspci | grep -i nvidia &> /dev/null; then
     yay -Syu --needed \
-        nvidia-dkms \
-        nvidia-utils \
+        nvidia-beta-dkms \
+        nvidia-utils-beta \
         nvidia-settings \
         nvidia-prime \
-        lib32-nvidia-utils \
         xf86-video-nouveau \
         opencl-nvidia \
         lib32-opencl-nvidia \
         lib32-nvidia-utils-beta \
+        libva-nvidia-driver \
+        nvidia-hook \
+        nvidia-inst
 fi
 
 curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
