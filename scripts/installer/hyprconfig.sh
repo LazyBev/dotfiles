@@ -161,7 +161,8 @@ yay -Syu --needed --sudoloop --noconfirm \
     xorg-xwayland \
     yay \
     zip \
-    zsh
+    zsh \
+    fcitx5-im
 
 if lspci | grep -i nvidia &> /dev/null; then
     yay -Syu --needed \
