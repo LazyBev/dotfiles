@@ -163,6 +163,19 @@ yay -Syu --needed --sudoloop --noconfirm \
     zip \
     zsh
 
+if lspci | grep -i nvidia &> /dev/null; then
+    yay -Syu --needed \
+        nvidia-dkms \
+        nvidia-utils \
+        nvidia-settings \
+        nvidia-prime \
+        lib32-nvidia-utils \
+        xf86-video-nouveau \
+        opencl-nvidia \
+        lib32-opencl-nvidia \
+        lib32-nvidia-utils-beta \
+fi
+
 curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
 
 yay -S --noconfirm zsh-theme-powerlevel10k-git
@@ -233,18 +246,6 @@ echo -e "\n---------------------------------------------------------------------
 
 log_message "Installation started for utilities section"
 print_info "\nStarting utilities setup..."
-
-if lspci | grep -i nvidia &> /dev/null; then
-    yay -Syu --needed \
-        nvidia-dkms \
-        nvidia-utils \
-        nvidia-settings \
-        nvidia-prime \
-        lib32-nvidia-utils \
-        xf86-video-nouveau \
-        opencl-nvidia \
-        lib32-opencl-nvidia
-fi
 
 tempdir=$PWD; git clone https://github.com/hpjansson/chafa.git; cd chafa && ./autogen.sh; make && sudo make install; cd $HOME && python -m venv yt 
 
