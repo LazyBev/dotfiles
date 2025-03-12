@@ -29,7 +29,9 @@ sudo pacman -Rdd --noconfirm jack2
 
 yay -Syu --needed --sudoloop --noconfirm \
     acpi \
+    adobe-source-han-sans-cn-fonts \
     adobe-source-han-sans-jp-fonts \
+    adobe-source-han-sans-kr-fonts \
     ags \
     alsa-utils \
     arch-install-scripts \
