@@ -29,6 +29,7 @@ sudo pacman -Rdd --noconfirm jack2
 
 yay -Syu --needed --sudoloop --noconfirm \
     acpi \
+    adobe-source-han-sans-jp-fonts \
     ags \
     alsa-utils \
     arch-install-scripts \
@@ -162,7 +163,10 @@ yay -Syu --needed --sudoloop --noconfirm \
     yay \
     zip \
     zsh \
-    fcitx5-im
+    fcitx5-im \
+    fcitx5-gtk \
+    fcitx5-qt \
+    fcitx5-anthy \
 
 if lspci | grep -i nvidia &> /dev/null; then
     yay -Syu --needed \
