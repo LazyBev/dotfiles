@@ -200,54 +200,39 @@ fi
 
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
-# Create pulse user and group
-sudo useradd -r -M -s /usr/bin/nologin pulse
-sudo useradd -d /var/run/pulse -s /usr/bin/nologin -G audio pulse
-sudo groupadd pulse-access
-sudo usermod -aG pulse-access $USER
+echo "Installing PipeWire and dependencies..."
+sudo pacman -Syu --noconfirm pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber gst-plugin-pipewire helvum pavucontrol
 
-# Create necessary directories for PulseAudio and set permissions
-sudo mkdir -p /var/run/pulse
-sudo chmod 775 /var/run/pulse
-sudo chown -R pulse:pulse /var/run/pulse
+# Check if PulseAudio is installed
+if pacman -Q pulseaudio &>/dev/null; then
+    echo "PulseAudio detected! Checking if it's active..."
 
-# Configure ALSA default sound card
-sudo tee /etc/asound.conf <<ASOUND
-defaults.pcm.card 0
-defaults.ctl.card 0
-ASOUND
+    if systemctl --user is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
+        echo "PulseAudio is running. Stopping and disabling it..."
+        systemctl --user disable --now pulseaudio.service pulseaudio.socket
+    fi
 
-# Disable PulseAudio auto-suspend
-sudo sed -i "/load-module module-suspend-on-idle/c\# load-module module-suspend-on-idle" /etc/pulse/default.pa
+    echo "Removing PulseAudio and related packages..."
+    sudo pacman -Rns --noconfirm pulseaudio pulseaudio-alsa pulseaudio-bluetooth
+else
+    echo "PulseAudio is not installed. Skipping removal."
+fi
 
-# Configure MPlayer to use PulseAudio
-sudo mkdir -p /etc/mplayer
-echo "ao=pulse" | sudo tee /etc/mplayer/mplayer.conf
+# Enable PipeWire services if not already enabled
+echo "Enabling PipeWire systemd services..."
+systemctl --user enable --now pipewire.service
+systemctl --user enable --now pipewire-pulse.service
+systemctl --user enable --now wireplumber.service
 
-# Create PulseAudio systemd service
-sudo tee /etc/systemd/system/pulseaudio.service <<PSER
-[Unit]
-Description=Sound Service
+# Check if user is in 'audio' group (optional for JACK)
+if ! groups | grep -q audio; then
+    echo "Adding user to 'audio' group..."
+    sudo usermod -aG audio $USER
+fi
 
-[Service]
-Type=notify
-ExecStart=/usr/bin/pulseaudio --daemonize=no --exit-idle-time=-1 --disallow-exit=true
-Restart=always
-
-[Install]
-WantedBy=default.target
-PSER
-
-# Configure PulseAudio with equalizer and D-Bus support
-mkdir -p ~/.config/pulse
-sudo tee ~/.config/pulse/default.pa <<DPA
-### Load the integrated PulseAudio equalizer and D-Bus module
-load-module module-dbus-protocol
-load-module module-suspend-on-idle
-DPA
-
-# Enable and start PulseAudio as a user service
-systemctl --user enable --now pulseaudio.service
+# Restart user session to apply changes
+echo "Restarting PipeWire services..."
+systemctl --user restart pipewire pipewire-pulse wireplumber
 
 echo -e "\n------------------------------------------------------------------------\n"
 
