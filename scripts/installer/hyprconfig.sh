@@ -119,6 +119,8 @@ yay -Syu --needed --sudoloop --noconfirm \
     pulseaudio-rtp \
     pyprland \
     python \
+    python-pip \
+    python-pipx \
     qutebrowser \
     ranger \
     ripgrep \
@@ -292,9 +294,12 @@ sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
 echo "Installing PipeWire and dependencies..."
 sudo pacman -Syu --noconfirm \
-  alsa-utils alsa-plugins alsa-firmware alsa-tools \
-  pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
-  gst-plugin-pipewire helvum pavucontrol qpwgraph easyeffects
+    alsa-utils alsa-plugins alsa-firmware alsa-tools \
+    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
+    gst-plugin-pipewire helvum pavucontrol qpwgraph easyeffects \
+    lib32-libpipewire lib32-pipewire lib32-pipewire-jack \
+    lib32-pipewire-v4l2 libpipewire pipewire-v4l2 qemu-audio-pipewire \
+    wireplumber-docs libwireplumber
 
 # Check if PulseAudio is installed
 if pacman -Q pulseaudio &>/dev/null; then
