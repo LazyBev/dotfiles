@@ -1,5 +1,12 @@
 #!/bin/bash
 
+set -e
+
+if [[ $EUID -eq 0 ]]; then
+    echo "Please do not run this script as root."
+    exit 1
+fi
+
 # Get the directory of the current script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -83,7 +90,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     libevdev \
     libinput \
     librewolf-bin \
-    libva-nvidia-driver \
     libxkbcommon \
     make \
     mako \
@@ -168,21 +174,78 @@ yay -Syu --needed --sudoloop --noconfirm \
     fcitx5-im \
     fcitx5-gtk \
     fcitx5-qt \
-    fcitx5-anthy \
+    fcitx5-anthy
+
+# Detect CPU vendor
+VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}')
+
+if [[ "$VENDOR" == "GenuineIntel" ]]; then
+    echo "Detected Intel CPU. Installing intel-ucode..."
+    sudo pacman -S --noconfirm intel-ucode
+elif [[ "$VENDOR" == "AuthenticAMD" ]]; then
+    echo "Detected AMD CPU. Installing amd-ucode..."
+    sudo pacman -S --noconfirm amd-ucode
+else
+    echo "Unknown CPU vendor: $VENDOR"
+    exit 1
+fi
 
 if lspci | grep -i nvidia &> /dev/null; then
     yay -Syu --needed \
-        nvidia-beta-dkms \
+        nvidia-dkms \
         nvidia-utils-beta \
         nvidia-settings \
         nvidia-prime \
         xf86-video-nouveau \
         opencl-nvidia \
         lib32-opencl-nvidia \
-        lib32-nvidia-utils-beta \
+        lib32-nvidia-utils \
         libva-nvidia-driver \
         nvidia-hook \
-        nvidia-inst
+        nvidia-inst \
+        libva-nvidia-driver \
+        egl-wayland \
+        vulkan-mesa-layers \
+        lib32-vulkan-mesa-layers \
+
+    # Get NVIDIA vendor ID
+    NVIDIA_VENDOR="0x$(lspci -nn | grep -i nvidia | sed -n 's/.*\[\([0-9A-Fa-f]\+\):[0-9A-Fa-f]\+\].*/\1/p' | head -n 1)"
+        
+    # Create udev rules for NVIDIA power management
+    echo "# Enable runtime PM for NVIDIA VGA/3D controller devices on driver bind
+    ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+    ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+
+    # Disable runtime PM for NVIDIA VGA/3D controller devices on driver unbind
+    ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"on\"
+    ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"on\"
+
+    # Enable runtime PM for NVIDIA VGA/3D controller devices on adding device
+    ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+    ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"" | envsubst | sudo tee /etc/udev/rules.d/80-nvidia-pm.rules > /dev/null
+
+    # Set NVIDIA kernel module options
+    echo "options nvidia NVreg_UsePageAttributeTable=1
+    options nvidia_drm modeset=1
+    options nvidia NVreg_RegistryDwords="PerfLevelSrc=0x2222"
+    options nvidia NVreg_EnablePCIeGen3=1 NVreg_EnableMSI=1" | sudo tee /etc/modprobe.d/nvidia.conf > /dev/null
+        
+    # Apply NVIDIA settings
+    sudo nvidia-xconfig --cool-bits=28 
+        
+    # Disable auto-boost and set clock speeds
+    sudo nvidia-smi --auto-boost-default=0
+    sudo nvidia-smi -i 0 -ac 5001,2000
+        
+    # Enable and start NVIDIA persistence daemon
+    sudo systemctl enable nvidia-persistenced.service
+        
+    # Regenerate initramfs
+    sudo mkinitcpio -P
+        
+    # Apply udev rules immediately
+    sudo udevadm control --reload-rules && sudo udevadm trigger
+        
 fi
 
 curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
@@ -203,7 +266,10 @@ fi
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
 echo "Installing PipeWire and dependencies..."
-sudo pacman -Syu --noconfirm pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber gst-plugin-pipewire helvum pavucontrol
+sudo pacman -Syu --noconfirm \
+  alsa-utils alsa-plugins alsa-firmware alsa-tools \
+  pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
+  gst-plugin-pipewire helvum pavucontrol qpwgraph easyeffects
 
 # Check if PulseAudio is installed
 if pacman -Q pulseaudio &>/dev/null; then
@@ -284,6 +350,9 @@ print_info "\nEverything is recommended to change"
 # Define an array of config directories to copy
 CONFIG_DIRS=("waybar" "rofi" "wlogout" "hypr" "zsh" "swaync" "nvim" "mov-cli" "fcitx5")
 
+find "$HOME/.config" -type d -exec chmod 700 {} +
+find "$HOME/.config" -type f -exec chmod 600 {} +
+
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
     if [ -d $HOME/.config/dir ]; then 
@@ -295,5 +364,21 @@ done
 
 # Copy Pictures directory silently
 sudo cp -f -r "$HOME/simple-hyprland/configs/Pictures" "$HOME" &> /dev/null
+
+# Automatically determine CPU brand (AMD or Intel)
+CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
+echo "Detected CPU vendor: $CPU_VENDOR"
+
+# Add relevant kernel parameters to GRUB based on the CPU vendor
+GRUB_FILE="/etc/default/grub"
+if [[ "$CPU_VENDOR" == "AMD" ]]; then
+    echo "Configuring GRUB for AMD (amd_pstate=active and mitigations=off)..."
+    sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="\([^"]*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 amd_pstate=active mitigations=off"/' "$GRUB_FILE"
+elif [[ "$CPU_VENDOR" == "Intel" ]]; then
+    echo "Configuring GRUB for Intel (intel_pstate=active and mitigations=off)..."
+    sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="\([^"]*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 intel_pstate=active mitigations=off"/' "$GRUB_FILE"
+else
+    echo "Unknown CPU vendor. No specific configurations applied."
+fi
 
 echo -e "\n------------------------------------------------------------------------\n"
