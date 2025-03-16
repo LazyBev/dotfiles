@@ -100,6 +100,8 @@ yay -Syu --needed --sudoloop --noconfirm \
     hyprwayland-scanner \
     imagemagick \
     iwd \
+    kvantum \
+    kvantum-theme-catppuccin-git \
     kwayland \
     lib32-alsa-plugins \
     lib32-libpulse \
@@ -121,6 +123,7 @@ yay -Syu --needed --sudoloop --noconfirm \
     network-manager-applet \
     networkmanager \
     nm-connection-editor \
+    nwg-look \
     obsidian \
     pam_rundir \
     pamixer \
@@ -139,6 +142,8 @@ yay -Syu --needed --sudoloop --noconfirm \
     python \
     python-pip \
     python-pipx \
+    qt5ct \
+    qt6ct \
     qutebrowser \
     ranger \
     ripgrep \
@@ -191,10 +196,51 @@ yay -Syu --needed --sudoloop --noconfirm \
     yay \
     zip \
     zsh \
+    zsh-theme-powerlevel10k-git \
     fcitx5-im \
     fcitx5-gtk \
     fcitx5-qt \
     fcitx5-anthy
+
+echo "Installing PipeWire and dependencies..."
+sudo pacman -Syu --noconfirm \
+    alsa-utils alsa-plugins alsa-firmware alsa-tools \
+    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
+    gst-plugin-pipewire helvum pavucontrol qpwgraph easyeffects \
+    lib32-libpipewire lib32-pipewire lib32-pipewire-jack \
+    lib32-pipewire-v4l2 libpipewire pipewire-v4l2 qemu-audio-pipewire \
+    wireplumber-docs libwireplumber
+
+# Check if PulseAudio is installed
+if pacman -Q pulseaudio &>/dev/null; then
+    echo "PulseAudio detected! Checking if it's active..."
+
+    if systemctl --user is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
+        echo "PulseAudio is running. Stopping and disabling it..."
+        systemctl --user disable --now pulseaudio.service pulseaudio.socket
+    fi
+
+    echo "Removing PulseAudio and related packages..."
+    sudo pacman -Rns --noconfirm pulseaudio pulseaudio-alsa pulseaudio-bluetooth
+else
+    echo "PulseAudio is not installed. Skipping removal."
+fi
+
+# Enable PipeWire services if not already enabled
+echo "Enabling PipeWire systemd services..."
+systemctl --user enable --now pipewire.service
+systemctl --user enable --now pipewire-pulse.service
+systemctl --user enable --now wireplumber.service
+
+# Check if user is in 'audio' group (optional for JACK)
+if ! groups | grep -q audio; then
+    echo "Adding user to 'audio' group..."
+    sudo usermod -aG audio $USER
+fi
+
+# Restart user session to apply changes
+echo "Restarting PipeWire services..."
+systemctl --user restart pipewire pipewire-pulse wireplumber
 
 # Detect CPU vendor
 VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}')
@@ -211,7 +257,7 @@ else
 fi
 
 if lspci | grep -i nvidia &> /dev/null; then
-    yay -Syu --needed \
+    yay -Syu --needed --sudoloop --noconfirm \
         nvidia-dkms \
         nvidia-utils-beta \
         nvidia-settings \
@@ -293,14 +339,6 @@ if lspci | grep -i nvidia &> /dev/null; then
         
 fi
 
-curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
-
-yay -S --noconfirm zsh-theme-powerlevel10k-git
-echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
-
-sudo chsh -s /usr/bin/zsh
-zsh -c "p10k configure"
-
 XDG_RUNTIME_DIR=/run/user/$(id -u)
 
 # Ensure D-Bus is running
@@ -309,46 +347,6 @@ if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
 fi
 
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
-
-echo "Installing PipeWire and dependencies..."
-sudo pacman -Syu --noconfirm \
-    alsa-utils alsa-plugins alsa-firmware alsa-tools \
-    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
-    gst-plugin-pipewire helvum pavucontrol qpwgraph easyeffects \
-    lib32-libpipewire lib32-pipewire lib32-pipewire-jack \
-    lib32-pipewire-v4l2 libpipewire pipewire-v4l2 qemu-audio-pipewire \
-    wireplumber-docs libwireplumber
-
-# Check if PulseAudio is installed
-if pacman -Q pulseaudio &>/dev/null; then
-    echo "PulseAudio detected! Checking if it's active..."
-
-    if systemctl --user is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
-        echo "PulseAudio is running. Stopping and disabling it..."
-        systemctl --user disable --now pulseaudio.service pulseaudio.socket
-    fi
-
-    echo "Removing PulseAudio and related packages..."
-    sudo pacman -Rns --noconfirm pulseaudio pulseaudio-alsa pulseaudio-bluetooth
-else
-    echo "PulseAudio is not installed. Skipping removal."
-fi
-
-# Enable PipeWire services if not already enabled
-echo "Enabling PipeWire systemd services..."
-systemctl --user enable --now pipewire.service
-systemctl --user enable --now pipewire-pulse.service
-systemctl --user enable --now wireplumber.service
-
-# Check if user is in 'audio' group (optional for JACK)
-if ! groups | grep -q audio; then
-    echo "Adding user to 'audio' group..."
-    sudo usermod -aG audio $USER
-fi
-
-# Restart user session to apply changes
-echo "Restarting PipeWire services..."
-systemctl --user restart pipewire pipewire-pulse wireplumber
 
 echo -e "\n------------------------------------------------------------------------\n"
 
@@ -381,7 +379,12 @@ echo -e "\n---------------------------------------------------------------------
 log_message "Installation started for theming section"
 print_info "\nStarting theming setup..."
 
-yay -Sy --sudoloop --noconfirm kvantum-theme-catppuccin-git nwg-look qt5ct qt6ct kvantum
+curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
+
+echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
+
+sudo chsh -s /usr/bin/zsh
+zsh -c "p10k configure"
 
 tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
 
