@@ -7,6 +7,24 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
+# Refactor pacman.conf update
+declare -a pacman_conf=(
+    "s/#Color/Color/"
+    "s/#ParallelDownloads/ParallelDownloads/"
+    "s/#\\[multilib\\]/\\[multilib\\]/"
+    "s/#Include = \\/etc\\/pacman\\.d\\/mirrorlist/Include = \\/etc\\/pacman\\.d\\/mirrorlist/"
+    "/# Misc options/a ILoveCandy"
+)
+
+# Backup the pacman.conf before modifying
+echo "Backing up /etc/pacman.conf"
+sudo cp /etc/pacman.conf /etc/pacman.conf.bak || { echo "Failed to back up pacman.conf"; exit 1;}
+
+echo "Modifying /etc/pacman.conf"
+for change in "${pacman_conf[@]}"; do
+    sudo sed -i "$change" /etc/pacman.conf || { echo "Failed to update pacman.conf"; exit 1; }
+done
+
 # Get the directory of the current script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
