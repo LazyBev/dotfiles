@@ -104,8 +104,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     kvantum-theme-catppuccin-git \
     kwayland \
     lib32-alsa-plugins \
-    lib32-libpulse \
-    lib32-pulseaudio \
     lib32-vulkan-mesa-layers \
     libevdev \
     libinput \
@@ -130,14 +128,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     pavucontrol \
     polkit \
     polkit-kde-agent \
-    pulseaudio \
-    pulseaudio-alsa \
-    pulseaudio-bluetooth \
-    pulseaudio-equalizer \
-    pulseaudio-equalizer-ladspa \
-    pulseaudio-jack \
-    pulseaudio-lirc \
-    pulseaudio-rtp \
     pyprland \
     python \
     python-pip \
@@ -210,6 +200,8 @@ sudo pacman -Syu --noconfirm \
     lib32-libpipewire lib32-pipewire lib32-pipewire-jack \
     lib32-pipewire-v4l2 libpipewire pipewire-v4l2 qemu-audio-pipewire \
     wireplumber-docs libwireplumber
+
+sudo pacman -S --noconfirm ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
 
 # Check if PulseAudio is installed
 if pacman -Q pulseaudio &>/dev/null; then
