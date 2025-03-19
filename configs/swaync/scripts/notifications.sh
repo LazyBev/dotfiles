@@ -1,5 +1,6 @@
 #!/bin/bash
 
 if [ $(swaync-client -D) = "false" ]; then
-	paplay $HOME/.config/swaync/ding.wav --volume=35000
+	pw-play $HOME/.config/swaync/ding.wav
 fi
+
