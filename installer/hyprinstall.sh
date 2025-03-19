@@ -383,9 +383,12 @@ curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/instal
 
 echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
 
-sudo chsh -s /usr/bin/zsh
+sudo chsh -s /bin/zsh
 zsh -c "p10k configure"
+echo "export alias ls='ls --color=auto'" >> $HOME/.zshrc
+echo "export alias grep='grep --color=auto'" >> $HOME/.zshrc
 echo "export alias ls='eza -al'" >> $HOME/.zshrc
+echo "source ~/.zshrc; clear" >> $HOME/.bashrc
 
 tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
 
