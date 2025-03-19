@@ -385,6 +385,7 @@ echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zs
 
 sudo chsh -s /usr/bin/zsh
 zsh -c "p10k configure"
+echo "export alias ls='eza -al'" >> $HOME/.zshrc
 
 tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
 
