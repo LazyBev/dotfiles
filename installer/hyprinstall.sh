@@ -78,6 +78,7 @@ yay -Syu --needed --sudoloop --noconfirm \
     firefox-bin \
     flatpak \
     fzf \
+    gamescope \
     ghostty \
     git \
     grim \
@@ -110,7 +111,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     librewolf-bin \
     libxkbcommon \
     make \
-    mako \
     man-db \
     man-pages \
     mangohud \
@@ -121,6 +121,7 @@ yay -Syu --needed --sudoloop --noconfirm \
     network-manager-applet \
     networkmanager \
     nm-connection-editor \
+    noto-fonts-emoji \
     nwg-look \
     obsidian \
     pam_rundir \
@@ -194,14 +195,10 @@ yay -Syu --needed --sudoloop --noconfirm \
 
 echo "Installing PipeWire and dependencies..."
 sudo pacman -Syu --noconfirm \
-    alsa-utils alsa-plugins alsa-firmware alsa-tools \
-    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
-    gst-plugin-pipewire helvum pavucontrol qpwgraph easyeffects \
-    lib32-libpipewire lib32-pipewire lib32-pipewire-jack \
-    lib32-pipewire-v4l2 libpipewire pipewire-v4l2 qemu-audio-pipewire \
-    wireplumber-docs libwireplumber
-
-sudo pacman -S --noconfirm ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+    alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
+    gst-plugins-good gst-plugins-bad gst-plugin-pipewire gst-libav helvum pavucontrol qpwgraph easyeffects libwireplumber \
+    lib32-libpipewire lib32-pipewire lib32-pipewire-jack lib32-pipewire-v4l2 libpipewire pipewire-v4l2 qemu-audio-pipewire \
+    wireplumber-docs
 
 # Check if PulseAudio is installed
 if pacman -Q pulseaudio &>/dev/null; then
