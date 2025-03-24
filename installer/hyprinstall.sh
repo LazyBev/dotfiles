@@ -207,12 +207,6 @@ else
     echo "PulseAudio is not installed. Skipping removal."
 fi
 
-# Enable PipeWire services if not already enabled
-echo "Enabling PipeWire systemd services..."
-systemctl enable --now pipewire.service
-systemctl enable --now pipewire-pulse.service
-systemctl enable --now wireplumber.service
-
 # Check if user is in 'audio' group (optional for JACK)
 if ! groups | grep -q audio; then
     echo "Adding user to 'audio' group..."
