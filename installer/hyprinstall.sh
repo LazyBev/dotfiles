@@ -101,7 +101,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     lib32-vulkan-mesa-layers \
     libevdev \
     libinput \
-    librewolf-bin \
     libxkbcommon \
     make \
     man-db \
