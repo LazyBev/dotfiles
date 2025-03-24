@@ -47,8 +47,6 @@ if sudo pacman -Sy --noconfirm --needed git base-devel; then #
     cd yay-bin && makepkg --noconfirm -si && cd .. && rm -rf yay-bin
 fi
 
-sudo pacman -Rdd --noconfirm jack2
-
 yay -Syu --needed --sudoloop --noconfirm \
     acpi \
     adobe-source-han-sans-cn-fonts \
