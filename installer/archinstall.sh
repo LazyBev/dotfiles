@@ -112,7 +112,7 @@ sudo systemctl start seatd
 
 sudo tee /etc/systemd/network/20-wired.network <<NET
 [Match]
-name=$network
+Name=$network
 [Network]
 DHCP=yes
 NET
