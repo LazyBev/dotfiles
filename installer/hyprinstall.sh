@@ -282,10 +282,10 @@ if lspci | grep -i nvidia &> /dev/null; then
             fi
         done
         # Update MODULES line
-        sed -i "s/^MODULES=.*/MODULES=($CURRENT_MODULES)/" "$MODPROBE_CONF"
+        sudo sed -i "s/^MODULES=.*/MODULES=($CURRENT_MODULES)/" "$MODPROBE_CONF"
     else
         # Add MODULES line if not present
-        echo "MODULES=(${MODULES[*]})" >> "$MODPROBE_CONF"
+        sudo echo "MODULES=(${MODULES[*]})" >> "$MODPROBE_CONF"
     fi
 
     # Apply NVIDIA settings
