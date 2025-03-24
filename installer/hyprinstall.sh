@@ -37,11 +37,11 @@ print_info "\nStarting prerequisites setup..."
 
 sudo pacman -Syu --noconfirm
 
-#if ! command -v yay &> /dev/null; then
+if ! command -v yay &> /dev/null; then
     git clone https://aur.archlinux.org/yay-bin.git
     sudo chown "$USER:$USER" -R yay-bin
     cd yay-bin && makepkg -si && cd .. && rm -rf yay-bin
-#fi
+fi
 
 yay -Syu \
     acpi \
@@ -178,8 +178,13 @@ yay -Syu \
     fcitx5-im \
     fcitx5-gtk \
     fcitx5-qt \
-    fcitx5-anthy
-
+    fcitx5-anthy \
+    xorg-xev \
+    xf86-input-libinput \
+    playerctl \
+    xbindkeys \
+    xdotool \
+   
 if pacman -Q jack2 &>/dev/null; then
     sudo pacman -Rdd jack2
 fi
