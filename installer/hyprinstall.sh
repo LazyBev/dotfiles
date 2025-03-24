@@ -313,7 +313,7 @@ echo -e "\n---------------------------------------------------------------------
 print_info "\nStarting utilities setup..."
 
 sudo git clone https://github.com/hpjansson/chafa.git; cd chafa && sudo ./autogen.sh; sudo make && sudo make install; cd ..; sudo rm -rf chafa;
-cd $HOME && python -m venv yt; bash -c "source yt/bin/activate; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;"
+cd $HOME && python -m venv yt; bash -c "source yt/bin/activate; pip install --upgrade pip; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;"
 cd bev-hyprland/installer
 
 #sudo git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; sudo cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti
@@ -330,9 +330,9 @@ cd bev-hyprland/installer
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting theming setup..."
 
-tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
+#tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
 
-tar -xvf $HOME/simple-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
+#tar -xvf $HOME/simple-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
