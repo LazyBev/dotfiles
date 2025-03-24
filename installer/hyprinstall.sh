@@ -181,7 +181,9 @@ yay -Syu --needed --sudoloop --noconfirm \
     fcitx5-qt \
     fcitx5-anthy
 
-sudo pacman -Rdd jack2
+if pacman -Q jack2 &>/dev/null; then
+    sudo pacman -Rdd jack2
+fi
 
 echo "Installing PipeWire and dependencies..."
 sudo pacman -Syu --noconfirm \
