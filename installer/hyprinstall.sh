@@ -43,7 +43,7 @@ print_info "\nStarting prerequisites setup..."
 sudo pacman -Syyu --noconfirm
 
 if sudo pacman -Sy --noconfirm --needed git base-devel; then # 
-    git clone https://aur.archlinux.org/yay-bin.git && sudo chown $USER:$USER -R yay-bin
+    sudo git clone https://aur.archlinux.org/yay.git && sudo chown $USER:$USER -R yay-bin
     cd yay-bin && makepkg --noconfirm -si && cd .. && rm -rf yay-bin
 fi
 
