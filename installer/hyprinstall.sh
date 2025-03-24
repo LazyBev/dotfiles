@@ -221,7 +221,7 @@ fi
 
 # Restart user session to apply changes
 echo "Restarting PipeWire services..."
-systemctl --user restart pipewire pipewire-pulse wireplumber
+systemctl restart pipewire pipewire-pulse wireplumber
 
 # Detect CPU vendor
 VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}')
