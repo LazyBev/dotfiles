@@ -352,11 +352,11 @@ for dir in "${CONFIG_DIRS[@]}"; do
         sudo rm -rf $HOME/.config/$dir
     fi
 
-    sudo cp -f -r $HOME/simple-hyprland/configs/$dir $HOME/.config/
+    sudo cp -f -r ../configs/$dir $HOME/.config/
 done
 
 # Copy Pictures directory silently
-sudo cp -f -r "$HOME/simple-hyprland/configs/Pictures" "$HOME" &> /dev/null
+sudo cp -f -r "../configs/Pictures" "$HOME" &> /dev/null
 
 # Automatically determine CPU brand (AMD or Intel)
 CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
