@@ -217,11 +217,7 @@ systemctl enable --now wireplumber.service
 if ! groups | grep -q audio; then
     echo "Adding user to 'audio' group..."
     sudo usermod -aG audio $USER
-fi
-
-# Restart user session to apply changes
-echo "Restarting PipeWire services..."
-systemctl restart pipewire pipewire-pulse wireplumber
+fi 
 
 # Detect CPU vendor
 VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}')
