@@ -273,20 +273,23 @@ if lspci | grep -i nvidia &> /dev/null; then
     MODPROBE_CONF="/etc/modprobe.d/nvidia.conf"
     
     # Check if MODULES line exists
-    if grep -q "^MODULES=" "$MODPROBE_CONF"; then
+    if sudo grep -q "^MODULES=" "$MODPROBE_CONF"; then
         # Extract current modules
         CURRENT_MODULES=$(grep "^MODULES=" "$MODPROBE_CONF" | sed -E 's/MODULES=\((.*)\)/\1/')
+    
         for mod in "${MODULES[@]}"; do
             if ! echo "$CURRENT_MODULES" | grep -qw "$mod"; then
-                CURRENT_MODULES+=" $mod"
+                CURRENT_MODULES="$CURRENT_MODULES $mod"
             fi
         done
+
         # Update MODULES line
-        sudo sed -i "s/^MODULES=.*/MODULES=($CURRENT_MODULES)/" "$MODPROBE_CONF"
+        sudo sed -i "s|^MODULES=.*|MODULES=($CURRENT_MODULES)|" "$MODPROBE_CONF"
     else
         # Add MODULES line if not present
-        sudo echo "MODULES=(${MODULES[*]})" >> "$MODPROBE_CONF"
+        echo "MODULES=(${MODULES[*]})" | sudo tee -a "$MODPROBE_CONF" > /dev/null
     fi
+
 
     # Apply NVIDIA settings
     sudo nvidia-xconfig --cool-bits=28 
