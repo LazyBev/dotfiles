@@ -313,7 +313,7 @@ sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting utilities setup..."
 
-tempdir=$PWD; git clone https://github.com/hpjansson/chafa.git; cd chafa && ./autogen.sh; make && sudo make install; cd $HOME && python -m venv yt 
+tempdir=$PWD; sudo git clone https://github.com/hpjansson/chafa.git; cd chafa && ./autogen.sh; sudo make && sudo make install; cd $HOME && python -m venv yt 
 
 if [ -d tempdir ]; then
     cd $HOME && python -m venv yt
