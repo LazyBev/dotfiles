@@ -194,9 +194,9 @@ sudo pacman -Syu --noconfirm \
 if pacman -Q pulseaudio &>/dev/null; then
     echo "PulseAudio detected! Checking if it's active..."
 
-    if systemctl --user is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
+    if systemctl is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
         echo "PulseAudio is running. Stopping and disabling it..."
-        systemctl --user disable --now pulseaudio.service pulseaudio.socket
+        systemctl disable --now pulseaudio.service pulseaudio.socket
     fi
 
     echo "Removing PulseAudio and related packages..."
@@ -207,9 +207,9 @@ fi
 
 # Enable PipeWire services if not already enabled
 echo "Enabling PipeWire systemd services..."
-systemctl --user enable --now pipewire.service
-systemctl --user enable --now pipewire-pulse.service
-systemctl --user enable --now wireplumber.service
+systemctl enable --now pipewire.service
+systemctl enable --now pipewire-pulse.service
+systemctl enable --now wireplumber.service
 
 # Check if user is in 'audio' group (optional for JACK)
 if ! groups | grep -q audio; then
