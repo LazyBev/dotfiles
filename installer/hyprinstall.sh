@@ -321,7 +321,7 @@ if [ -d tempdir ]; then
     sudo cp -r $HOME/simple-hyprland/configs/mov-cli $HOME/.config/
 fi
 
-sudo git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti
+sudo git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; sudo cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti
 
 if command -v arti; then
     if ! -d $HOME/.config/arti; then
