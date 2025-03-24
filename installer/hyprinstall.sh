@@ -266,14 +266,14 @@ if lspci | grep -i nvidia &> /dev/null; then
 
     # Set NVIDIA kernel module options
     echo "options nvidia NVreg_UsePageAttributeTable=1
-    options nvidia_drm modeset=1
+    options nvidia_drm modeset=1 fbdev=1
     options nvidia NVreg_RegistryDwords="PerfLevelSrc=0x2222"
     options nvidia NVreg_EnablePCIeGen3=1 NVreg_EnableMSI=1" | sudo tee /etc/modprobe.d/nvidia.conf > /dev/null
     
     # Desired modules
     MODULES=("nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm")
 
-    MODPROBE_CONF="/etc/modprobe.d/nvidia.conf"
+    MODPROBE_CONF="/etc/mkinitcpio.conf"
     
     # Check if MODULES line exists
     if sudo grep -q "^MODULES=" "$MODPROBE_CONF"; then
