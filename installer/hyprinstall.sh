@@ -35,12 +35,9 @@ source $SCRIPT_DIR/helper.sh
 trap 'trap_message' INT TERM
 
 # Script start
-log_message "Installation started"
 print_bold_blue "\nSimple Hyprland"
 
 echo -e "\n------------------------------------------------------------------------\n"
-
-log_message "Installation started for prerequisites section"
 print_info "\nStarting prerequisites setup..."
 
 sudo pacman -Syyu --noconfirm
@@ -336,8 +333,6 @@ fi
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
 echo -e "\n------------------------------------------------------------------------\n"
-
-log_message "Installation started for utilities section"
 print_info "\nStarting utilities setup..."
 
 tempdir=$PWD; git clone https://github.com/hpjansson/chafa.git; cd chafa && ./autogen.sh; make && sudo make install; cd $HOME && python -m venv yt 
@@ -362,8 +357,6 @@ ART
 fi
 
 echo -e "\n------------------------------------------------------------------------\n"
-
-log_message "Installation started for theming section"
 print_info "\nStarting theming setup..."
 
 tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
@@ -373,8 +366,6 @@ tar -xvf $HOME/simple-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/s
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
 echo -e "\n------------------------------------------------------------------------\n"
-
-log_message "Installation started for Hyprland section"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 
