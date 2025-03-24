@@ -312,11 +312,9 @@ sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting utilities setup..."
 
-sudo git clone https://github.com/hpjansson/chafa.git; cd chafa && sudo ./autogen.sh; sudo make && sudo make install; cd $HOME && python -m venv yt 
-cd $HOME && python -m venv yt
-bash -c "source yt/bin/activate; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;"
-cd $tempdir
-
+sudo git clone https://github.com/hpjansson/chafa.git; cd chafa && sudo ./autogen.sh; sudo make && sudo make install; sudo rm -rf chafa;
+cd $HOME && python -m venv yt; bash -c "source yt/bin/activate; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;"
+cd bev-hyprland/installer
 
 sudo git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; sudo cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti
 if command -v arti; then
