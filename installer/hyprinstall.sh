@@ -289,14 +289,6 @@ if lspci | grep -i nvidia &> /dev/null; then
         # Add MODULES line if not present
         echo "MODULES=(${MODULES[*]})" | sudo tee -a "$MODPROBE_CONF" > /dev/null
     fi
-
-
-    # Apply NVIDIA settings
-    sudo nvidia-xconfig --cool-bits=28 
-        
-    # Disable auto-boost and set clock speeds
-    sudo nvidia-smi --auto-boost-default=0
-    sudo nvidia-smi -i 0 -ac 5001,2000
         
     # Enable and start NVIDIA persistence daemon
     sudo systemctl enable nvidia-persistenced.service
