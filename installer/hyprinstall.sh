@@ -184,6 +184,7 @@ yay -Syu \
     playerctl \
     xbindkeys \
     xdotool \
+    wev \
    
 if pacman -Q jack2 &>/dev/null; then
     sudo pacman -Rdd jack2
