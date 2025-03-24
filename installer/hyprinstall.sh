@@ -181,6 +181,8 @@ yay -Syu --needed --sudoloop --noconfirm \
     fcitx5-qt \
     fcitx5-anthy
 
+sudo pacman -Rdd jack2
+
 echo "Installing PipeWire and dependencies..."
 sudo pacman -Syu --noconfirm \
     alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
