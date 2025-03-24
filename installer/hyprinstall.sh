@@ -186,8 +186,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     xorg-xwayland \
     yay \
     zip \
-    zsh \
-    zsh-theme-powerlevel10k-git \
     fcitx5-im \
     fcitx5-gtk \
     fcitx5-qt \
@@ -368,17 +366,6 @@ echo -e "\n---------------------------------------------------------------------
 log_message "Installation started for theming section"
 print_info "\nStarting theming setup..."
 
-curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
-
-echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
-
-sudo chsh -s /bin/zsh
-zsh -c "p10k configure"
-echo "export alias ls='ls --color=auto'" >> $HOME/.zshrc
-echo "export alias grep='grep --color=auto'" >> $HOME/.zshrc
-echo "export alias ls='eza -al'" >> $HOME/.zshrc
-echo "source ~/.zshrc; clear" >> $HOME/.bashrc
-
 tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
 
 tar -xvf $HOME/simple-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
@@ -392,7 +379,7 @@ print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "rofi" "wlogout" "hypr" "zsh" "swaync" "nvim" "mov-cli" "fcitx5")
+CONFIG_DIRS=("waybar" "rofi" "wlogout" "hypr" "swaync" "nvim" "mov-cli" "fcitx5")
 
 find "$HOME/.config" -type d -exec chmod 700 {} +
 find "$HOME/.config" -type f -exec chmod 600 {} +
