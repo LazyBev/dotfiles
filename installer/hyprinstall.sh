@@ -38,9 +38,9 @@ print_info "\nStarting prerequisites setup..."
 sudo pacman -Syyu --noconfirm
 
 if ! command -v yay &> /dev/null; then
-    git clone https://aur.archlinux.org/yay.git && cd yay
-    makepkg --noconfirm -si
-    cd .. && rm -rf yay
+    git clone https://aur.archlinux.org/yay-bin.git
+    sudo chown "$USER:$USER" -R $HOME/yay-bin
+    cd yay-bin && makepkg -si && cd .. && rm -rf yay-bin
 else
     yay -Syu
 fi
