@@ -266,12 +266,6 @@ if lspci | grep -i nvidia &> /dev/null; then
     options nvidia_drm modeset=1
     options nvidia NVreg_RegistryDwords="PerfLevelSrc=0x2222"
     options nvidia NVreg_EnablePCIeGen3=1 NVreg_EnableMSI=1" | sudo tee /etc/modprobe.d/nvidia.conf > /dev/null
-
-    # Path to the NVIDIA modprobe configuration file
-    MODPROBE_CONF="/etc/modprobe.d/nvidia.conf"
-    
-    # Ensure the file exists
-    touch "$MODPROBE_CONF"
     
     # Desired modules
     MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)
