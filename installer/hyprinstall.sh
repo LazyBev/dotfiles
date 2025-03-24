@@ -230,7 +230,7 @@ fi
 if lspci | grep -i nvidia &> /dev/null; then
     yay -Syu --needed --sudoloop --noconfirm \
         nvidia-dkms \
-        nvidia-utils-beta \
+        nvidia-utils\
         nvidia-settings \
         nvidia-prime \
         xf86-video-nouveau \
