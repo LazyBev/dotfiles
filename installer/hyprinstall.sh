@@ -133,7 +133,6 @@ yay -Syu --needed --sudoloop --noconfirm \
     rofi \
     sddm \
     slurp \
-    spotify \
     stow \
     stremio \
     sudo \
