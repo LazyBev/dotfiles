@@ -2,11 +2,6 @@
 
 set -e
 
-if [[ $EUID -eq 0 ]]; then
-    echo "Please do not run this script as root."
-    exit 1
-fi
-
 # Refactor pacman.conf update
 declare -a pacman_conf=(
     "s/#Color/Color/"
@@ -44,7 +39,7 @@ sudo pacman -Syyu --noconfirm
 
 if sudo pacman -Sy --noconfirm --needed git base-devel; then # 
     sudo git clone https://aur.archlinux.org/yay.git && sudo chown $USER:$USER -R yay
-    cd yay && makepkg --noconfirm -si && cd .. && rm -rf yay
+    cd yay && makepkg --noconfirm -si && cd .. && sudo rm -rf yay
 fi
 
 yay -Syu --needed --sudoloop --noconfirm \
