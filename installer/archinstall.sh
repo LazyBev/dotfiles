@@ -52,7 +52,7 @@ else
 fi
 
 echo "Installing base system..."
-pacstrap -K /mnt base base-devel sudo linux linux-headers linux-firmware sof-firmware grub efibootmgr iwd grep git sed "$cpu"-ucode networkmanager 
+pacstrap -K /mnt base base-devel sudo linux linux-headers linux-firmware sof-firmware grub efibootmgr iwd grep git sed "$cpu"-ucode networkmanager seatd
 
 echo "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab 
@@ -107,6 +107,8 @@ sudo systemctl enable systemd-resolved
 sudo systemctl start systemd-resolved
 sudo systemctl enable NetworkManager
 sudo systemctl start NetworkManager
+sudo systemctl enable seatd
+sudo systemctl start seatd
 
 sudo tee /etc/systemd/network/20-wired.network <<NET
 [Match]
