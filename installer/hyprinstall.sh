@@ -44,7 +44,7 @@ sudo pacman -Syyu --noconfirm
 
 if sudo pacman -Sy --noconfirm --needed git base-devel; then # 
     sudo git clone https://aur.archlinux.org/yay.git && sudo chown $USER:$USER -R yay
-    cd yay-bin && makepkg --noconfirm -si && cd .. && rm -rf yay-bin
+    cd yay && makepkg --noconfirm -si && cd .. && rm -rf yay
 fi
 
 yay -Syu --needed --sudoloop --noconfirm \
