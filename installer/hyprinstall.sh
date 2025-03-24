@@ -35,7 +35,7 @@ print_bold_blue "\nSimple Hyprland"
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting prerequisites setup..."
 
-sudo pacman -Syyu --noconfirm
+sudo pacman -Syu --noconfirm
 
 if ! command -v yay &> /dev/null; then
     git clone https://aur.archlinux.org/yay-bin.git
