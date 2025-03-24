@@ -41,11 +41,9 @@ if ! command -v yay &> /dev/null; then
     git clone https://aur.archlinux.org/yay-bin.git
     sudo chown "$USER:$USER" -R yay-bin
     cd yay-bin && makepkg -si && cd .. && rm -rf yay-bin
-else
-    yay -Syu
 fi
 
-yay -Syu --needed --sudoloop --noconfirm \
+yay -Sy --needed --sudoloop --noconfirm \
     acpi \
     adobe-source-han-sans-cn-fonts \
     adobe-source-han-sans-jp-fonts \
