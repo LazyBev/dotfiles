@@ -75,7 +75,7 @@ yay -Syu --needed --sudoloop --noconfirm \
     dmenu \
     eza \
     fastfetch \
-    brave-bin \
+    zen-browser-bin \
     flatpak \
     fzf \
     gamescope \
