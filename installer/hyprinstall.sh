@@ -322,17 +322,17 @@ if [ -d tempdir ]; then
     cp -r $HOME/simple-hyprland/configs/mov-cli $HOME/.config/
 fi
 
-git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti
+# git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti
 
-if command -v arti; then
-    if ! -d $HOME/.config/arti; then
-        mkdir $HOME/.config/arti
-    fi
-    sudo tee $HOME/.config/arti/arti-config.toml <<ART
-[network]
-socks_port = 9050
-ART
-fi
+# if command -v arti; then
+#    if ! -d $HOME/.config/arti; then
+#        mkdir $HOME/.config/arti
+#    fi
+#    sudo tee $HOME/.config/arti/arti-config.toml <<ART
+#[network]
+#socks_port = 9050
+#ART
+#fi
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting theming setup..."
