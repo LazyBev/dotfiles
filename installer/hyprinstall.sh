@@ -43,7 +43,7 @@ if ! command -v yay &> /dev/null; then
     cd yay-bin && makepkg -si && cd .. && rm -rf yay-bin
 fi
 
-yay -Sy --needed --sudoloop --noconfirm \
+yay -Sy --needed --sudoloop \
     acpi \
     adobe-source-han-sans-cn-fonts \
     adobe-source-han-sans-jp-fonts \
