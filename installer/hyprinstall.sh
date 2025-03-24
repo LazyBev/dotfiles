@@ -43,7 +43,7 @@ sudo pacman -Syu --noconfirm
     cd yay-bin && makepkg -si && cd .. && rm -rf yay-bin
 #fi
 
-yay -Sy --sudoloop \
+yay -Syu \
     acpi \
     adobe-source-han-sans-cn-fonts \
     adobe-source-han-sans-jp-fonts \
