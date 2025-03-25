@@ -361,8 +361,8 @@ for dir in "${CONFIG_DIRS[@]}"; do
     sudo cp -f -r ../configs/$dir $HOME/.config/
 done
 
-sudo find "$HOME/.config" -type d -exec chmod 600 {} +
-sudo find "$HOME/.config" -type f -exec chmod 700 {} +
+sudo find "$HOME/.config" -type d -exec chmod 755 {} +
+sudo find "$HOME/.config" -type f -exec chmod 755 {} +
 
 # Copy Pictures directory silently
 sudo cp -f -r "../configs/Pictures" "$HOME" &> /dev/null
