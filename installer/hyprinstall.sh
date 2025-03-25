@@ -337,9 +337,9 @@ print_info "\nStarting theming setup..."
 
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
 
-tar -xvf $HOME/bev-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
+sudo tar -xvf $HOME/bev-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
 
-tar -xvf $HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
+sudo tar -xvf $HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
