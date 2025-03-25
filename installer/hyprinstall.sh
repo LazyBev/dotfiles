@@ -137,8 +137,7 @@ yay -Syu \
     swaync \
     swww \
     tar \
-    thunar \
-    thunar-archive-plugin \
+    dolphin \
     tlp \
     tmux \
     ttf-dejavu \
@@ -336,21 +335,25 @@ cd bev-hyprland/installer
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting theming setup..."
 
-#tar -xvf $HOME/simple-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
 
-#tar -xvf $HOME/simple-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
+tar -xvf $HOME/bev-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
+
+tar -xvf $HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
+
+echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "rofi" "wlogout" "hypr" "swaync" "nvim" "mov-cli" "fcitx5")
+CONFIG_DIRS=("waybar" "rofi" "dunst" "wlogout" "hypr" "swaync" "nvim" "mov-cli" "fcitx5")
 
-find "$HOME/.config" -type d -exec chmod 700 {} +
-find "$HOME/.config" -type f -exec chmod 600 {} +
+find "$HOME/.config" -type d -exec chmod 600 {} +
+find "$HOME/.config" -type f -exec chmod 700 {} +
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
