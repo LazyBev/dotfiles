@@ -352,9 +352,6 @@ print_info "\nEverything is recommended to change"
 # Define an array of config directories to copy
 CONFIG_DIRS=("waybar" "rofi" "dunst" "wlogout" "hypr" "swaync" "nvim" "mov-cli" "fcitx5")
 
-find "$HOME/.config" -type d -exec chmod 600 {} +
-find "$HOME/.config" -type f -exec chmod 700 {} +
-
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
     if [ -d $HOME/.config/dir ]; then 
@@ -363,6 +360,9 @@ for dir in "${CONFIG_DIRS[@]}"; do
 
     sudo cp -f -r ../configs/$dir $HOME/.config/
 done
+
+sudo find "$HOME/.config" -type d -exec chmod 600 {} +
+sudo find "$HOME/.config" -type f -exec chmod 700 {} +
 
 # Copy Pictures directory silently
 sudo cp -f -r "../configs/Pictures" "$HOME" &> /dev/null
