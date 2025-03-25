@@ -1,10 +1,9 @@
 [global]
 monitor = 1
-frame_width = 1
-frame_color = "#b4befe"
+frame_width = 4
+frame_color = "#5A2D79"
 separator_color= frame
-highlight = "#74c7ec"
-background = "#1e1e2e"
+background = "#9B5EBF"
 foreground = "#cdd6f4"
 corner_radius = 5
 progress_bar_corner_radius = 5
@@ -15,13 +14,13 @@ gap_size = 5
 format = "<b>󰁕 %a</b>\n%s\n<i>%b</i>"
 
 [urgency_low]
-foreground = "#a6e3a1"
+foreground = "#FFFFFF"
 frame_color = "#a6e3a1"
 default_icon = "~/.config/dunst/icons/bell-badge-low.svg"
 
 [urgency_normal]
-foreground = "#74c7ec"
-frame_color = "#74c7ec"
+foreground = "#FFFFFF"
+frame_color = "#5A2D79"
 default_icon = "~/.config/dunst/icons/bell-badge.svg"
 
 [urgency_critical]
