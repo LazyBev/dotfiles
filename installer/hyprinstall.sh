@@ -197,7 +197,7 @@ sudo pacman -Syu --noconfirm \
     wireplumber-docs
 
 # Check if PulseAudio is installed
-if pacman -Q pulseaudio &>/dev/null; then
+if pacman -Q | grep -E '^pulseaudio' &>/dev/null; then
     echo "PulseAudio detected! Checking if it's active..."
 
     if systemctl is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
@@ -205,8 +205,14 @@ if pacman -Q pulseaudio &>/dev/null; then
         systemctl disable --now pulseaudio.service pulseaudio.socket
     fi
 
-    echo "Removing PulseAudio and related packages..."
-    sudo pacman -Rns --noconfirm pulseaudio pulseaudio-alsa pulseaudio-bluetooth
+    echo "Finding and removing all PulseAudio-related packages..."
+    packages=$(pacman -Q | awk '{print $1}' | grep -E '^pulseaudio')
+
+    if [[ -n "$packages" ]]; then
+        sudo pacman -Rns --noconfirm $packages
+    else
+        echo "No PulseAudio packages found to remove."
+    fi
 else
     echo "PulseAudio is not installed. Skipping removal."
 fi
