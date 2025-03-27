@@ -63,6 +63,7 @@ yay -Syu \
     curl \
     dbus \
     discord \
+    dunst \
     dmenu \
     eza \
     fastfetch \
@@ -134,7 +135,6 @@ yay -Syu \
     stow \
     stremio \
     sudo \
-    swaync \
     swww \
     tar \
     dolphin \
