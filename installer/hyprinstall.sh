@@ -341,8 +341,6 @@ cd bev-hyprland/installer
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting theming setup..."
 
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
-
 sudo tar -xvf $HOME/bev-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
 
 sudo tar -xvf $HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
@@ -388,5 +386,7 @@ elif [[ "$CPU_VENDOR" == "Intel" ]]; then
 else
     echo "Unknown CPU vendor. No specific configurations applied."
 fi
+
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
 
 echo -e "\n------------------------------------------------------------------------\n"
