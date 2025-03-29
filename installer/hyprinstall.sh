@@ -190,6 +190,8 @@ if pacman -Q jack2 &>/dev/null; then
     sudo pacman -Rdd jack2
 fi
 
+sudo systemctl enable --now NetworkManager
+
 echo "Installing PipeWire and dependencies..."
 sudo pacman -Syu --noconfirm \
     alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
