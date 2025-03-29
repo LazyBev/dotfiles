@@ -363,14 +363,14 @@ for dir in "${CONFIG_DIRS[@]}"; do
         sudo rm -rf $HOME/.config/$dir
     fi
 
-    sudo cp -f -r ../configs/$dir $HOME/.config/
+    sudo cp -f -r $HOME/bev-hyprland/configs/$dir $HOME/.config/
 done
 
 sudo find "$HOME/.config" -type d -exec chmod 755 {} +
 sudo find "$HOME/.config" -type f -exec chmod 755 {} +
 
 # Copy Pictures directory silently
-sudo cp -f -r "../configs/Pictures" "$HOME" &> /dev/null
+sudo cp -f -r $HOME/bev-hyprland/configs/Pictures $HOME &> /dev/null
 
 # Automatically determine CPU brand (AMD or Intel)
 CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
