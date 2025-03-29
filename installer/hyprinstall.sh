@@ -173,6 +173,7 @@ yay -Syu \
     xdotool \
     xorg-xwayland \
     yay \
+    ranger \
     zip \
     fcitx5-im \
     fcitx5-gtk \
