@@ -50,11 +50,11 @@ yay -Syu \
     adobe-source-han-sans-kr-fonts \
     ags \
     alsa-utils \
-    arch-install-scripts \
     aquamarine \
+    arch-install-scripts \
+    blueman \
     bluez \
     bluez-utils \
-    blueman \
     brightnessctl \
     btop \
     cargo \
@@ -63,11 +63,15 @@ yay -Syu \
     curl \
     dbus \
     discord \
-    dunst \
     dmenu \
+    dolphin \
+    dunst \
     eza \
     fastfetch \
-    zen-browser-bin \
+    fcitx5-anthy \
+    fcitx5-gtk \
+    fcitx5-im \
+    fcitx5-qt \
     flatpak \
     fzf \
     gamescope \
@@ -80,11 +84,11 @@ yay -Syu \
     hyprcursor \
     hyprgraphics \
     hypridle \
-    hyprlang \
     hyprland \
     hyprland-protocols \
     hyprland-qt-support \
     hyprland-qtutils \
+    hyprlang \
     hyprlock \
     hyprpaper \
     hyprpicker \
@@ -118,6 +122,7 @@ yay -Syu \
     pam_rundir \
     pamixer \
     pavucontrol \
+    playerctl \
     polkit \
     polkit-kde-agent \
     pyprland \
@@ -128,6 +133,7 @@ yay -Syu \
     qt6ct \
     qutebrowser \
     ranger \
+    ranger \
     ripgrep \
     rofi \
     sddm \
@@ -137,54 +143,47 @@ yay -Syu \
     sudo \
     swww \
     tar \
-    dolphin \
     tlp \
     tmux \
     ttf-dejavu \
     ttf-fira-code \
+    ttf-fira-code-nerd \
     ttf-fira-mono \
     ttf-fira-sans \
+    ttf-hack-nerd \
     ttf-jetbrains-mono \
+    ttf-jetbrains-mono-nerd \
     ttf-joypixels \
     ttf-liberation \
     ttf-meslo-nerd \
-    ttf-fira-code-nerd \
-    ttf-jetbrains-mono-nerd \
-    ttf-hack-nerd \
-    ttf-source-code-pro-nerd \
     ttf-roboto-mono-nerd \
+    ttf-source-code-pro-nerd \
     unzip \
     vulkan-mesa-layers \
     waybar \
     wayland \
     wayland-protocols \
     waypaper \
-    wget \
     wdisplays \
+    wev \
+    wget \
     wine \
     winetricks \
     wireless_tools \
-    wlroots \
     wlr-randr \
+    wlroots \
     xarchiver \
+    xbindkeys \
     xdg-desktop-portal \
     xdg-desktop-portal-gtk \
     xdg-desktop-portal-hyprland \
     xdotool \
-    xorg-xwayland \
-    yay \
-    ranger \
-    zip \
-    fcitx5-im \
-    fcitx5-gtk \
-    fcitx5-qt \
-    fcitx5-anthy \
-    xorg-xev \
-    xf86-input-libinput \
-    playerctl \
-    xbindkeys \
     xdotool \
-    wev \
+    xf86-input-libinput \
+    xorg-xev \
+    xorg-xwayland \
+    zen-browser-bin \
+    zip \
 
 sudo systemctl enable --now dbus
    
@@ -329,19 +328,19 @@ echo -e "\n---------------------------------------------------------------------
 print_info "\nStarting utilities setup..."
 
 sudo git clone https://github.com/hpjansson/chafa.git; cd chafa && sudo ./autogen.sh; sudo make && sudo make install; cd ..; sudo rm -rf chafa;
-cd $HOME && python -m venv yt; bash -c "source yt/bin/activate; pip install --upgrade pip; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;"
+cd $HOME && python -m venv yt; source yt/bin/activate; pip install --upgrade pip; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;
 cd bev-hyprland/installer
 
-#sudo git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; sudo cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && rm -rf arti
-#if command -v arti; then
-#    if ! -d $HOME/.config/arti; then
-#        sudo mkdir $HOME/.config/arti
-#    fi
-#    sudo tee $HOME/.config/arti/arti-config.toml <<ART
-#[network]
-#socks_port = 9050
-#ART
-#fi
+sudo git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; sudo cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && sudo rm -rf arti
+if command -v arti; then
+    if ! -d $HOME/.config/arti; then
+        sudo mkdir $HOME/.config/arti
+    fi
+    sudo tee $HOME/.config/arti/arti-config.toml <<ART
+[network]
+socks_port = 9050
+ART
+fi
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting theming setup..."
