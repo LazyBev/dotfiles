@@ -93,7 +93,6 @@ yay -Syu --noconfirm \
     hyprutils \
     hyprwayland-scanner \
     imagemagick \
-    iwd \
     kvantum \
     kvantum-theme-catppuccin-git \
     kwayland \
@@ -180,8 +179,12 @@ yay -Syu --noconfirm \
     xorg-xwayland \
     zen-browser-bin \
     zip \
-    zram-generator \
-   
+    zram-generator
+
+if ! command -v iwctl &> /dev/null; then
+    yay -Syu iwd
+fi
+
 if pacman -Q jack2 &>/dev/null; then
     sudo pacman -Rdd jack2
 fi
