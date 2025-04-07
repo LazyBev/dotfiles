@@ -185,6 +185,8 @@ yay -Syu \
     xbindkeys \
     xdotool \
     wev \
+
+sudo systemctl enable --now dbus
    
 if pacman -Q jack2 &>/dev/null; then
     sudo pacman -Rdd jack2
