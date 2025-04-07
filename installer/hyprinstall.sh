@@ -327,19 +327,48 @@ sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting utilities setup..."
 
-sudo git clone https://github.com/hpjansson/chafa.git; cd chafa && sudo ./autogen.sh; sudo make && sudo make install; cd ..; sudo rm -rf chafa;
-cd $HOME && python -m venv yt; source yt/bin/activate; pip install --upgrade pip; pip install lxml; pip install mov-cli -U; pip install mov-cli-youtube;
-cd bev-hyprland/installer
+read -p "Do you want extra unneeded packages? (y/n): " yn
+if [[ "$yn" == "yes" || "$yn" == "y" ]]; then
+    # Install chafa
+    sudo git clone https://github.com/hpjansson/chafa.git
+    cd chafa || exit
+    sudo ./autogen.sh
+    sudo make
+    sudo make install
+    cd .. && sudo rm -rf chafa
 
-sudo git clone https://gitlab.torproject.org/tpo/core/arti.git; cd arti; sudo cargo build -p arti --release; sudo mv -f /target/release/arti /usr/bin; cd .. && sudo rm -rf arti
-if command -v arti; then
-    if ! -d $HOME/.config/arti; then
-        sudo mkdir $HOME/.config/arti
-    fi
-    sudo tee $HOME/.config/arti/arti-config.toml <<ART
+    # Set up mov-cli and lxml in a virtual environment
+    cd "$HOME" || exit
+    python -m venv yt
+    source yt/bin/activate
+    pip install --upgrade pip
+    pip install lxml mov-cli -U mov-cli-youtube
+    deactivate
+
+    # Go back to installer directory
+    cd bev-hyprland/installer || exit
+
+    # Build and install arti
+    sudo git clone https://gitlab.torproject.org/tpo/core/arti.git
+    cd arti || exit
+    sudo cargo build -p arti --release
+    sudo mv -f target/release/arti /usr/bin/
+    cd .. && sudo rm -rf arti
+
+    # Create arti config if not exists
+    if command -v arti &> /dev/null; then
+        if [[ ! -d "$HOME/.config/arti" ]]; then
+            mkdir -p "$HOME/.config/arti"
+        fi
+        tee "$HOME/.config/arti/arti-config.toml" > /dev/null <<ART
 [network]
 socks_port = 9050
 ART
+    fi
+
+    # Install flatpak and Sober
+    sudo pacman -Syu --noconfirm flatpak
+    flatpak install --user -y flathub org.vinegarhq.Sober
 fi
 
 echo -e "\n------------------------------------------------------------------------\n"
