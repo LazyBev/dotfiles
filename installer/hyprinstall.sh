@@ -43,7 +43,7 @@ if ! command -v yay &> /dev/null; then
     cd yay-bin && makepkg -si && cd .. && rm -rf yay-bin
 fi
 
-yay -Syu \
+yay -Syu --noconfirm \
     acpi \
     adobe-source-han-sans-cn-fonts \
     adobe-source-han-sans-jp-fonts \
@@ -62,7 +62,6 @@ yay -Syu \
     cmake \
     curl \
     dbus \
-    discord \
     dmenu \
     dolphin \
     dunst \
@@ -72,9 +71,7 @@ yay -Syu \
     fcitx5-gtk \
     fcitx5-im \
     fcitx5-qt \
-    flatpak \
     fzf \
-    gamescope \
     ghostty \
     git \
     grim \
@@ -108,7 +105,6 @@ yay -Syu \
     make \
     man-db \
     man-pages \
-    mangohud \
     mesa \
     meson \
     mpv \
@@ -133,13 +129,11 @@ yay -Syu \
     qt6ct \
     qutebrowser \
     ranger \
-    ranger \
     ripgrep \
     rofi \
     sddm \
     slurp \
     stow \
-    stremio \
     sudo \
     swww \
     tar \
@@ -162,10 +156,13 @@ yay -Syu \
     vulkan-mesa-layers \
     waybar \
     wayland \
+    wayland-debug \
     wayland-protocols \
+    wayland-utils \
     waypaper \
     wdisplays \
     wev \
+    wf-recorder \
     wget \
     wine \
     winetricks \
@@ -178,12 +175,12 @@ yay -Syu \
     xdg-desktop-portal-gtk \
     xdg-desktop-portal-hyprland \
     xdotool \
-    xdotool \
     xf86-input-libinput \
     xorg-xev \
     xorg-xwayland \
     zen-browser-bin \
     zip \
+    zram-generator \
 
 sudo systemctl enable --now dbus
    
@@ -311,7 +308,7 @@ if lspci | grep -i nvidia &> /dev/null; then
     sudo mkinitcpio -P
         
     # Apply udev rules immediately
-    sudo udevadm control --reload-rules && sudo udevadm trigger
+    sudo udevadm control --reload-rules && sudo udevadm trigger stremio spotify
         
 fi
 
@@ -369,6 +366,9 @@ ART
     # Install flatpak and Sober
     sudo pacman -Syu --noconfirm flatpak
     flatpak install --user -y flathub org.vinegarhq.Sober
+
+    # For the funnies
+    yay -Syu figlet lolcat protontricks vkbasalt discord spotify mangohud steam-native-runtime
 fi
 
 echo -e "\n------------------------------------------------------------------------\n"
