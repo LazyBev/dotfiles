@@ -181,14 +181,13 @@ yay -Syu --noconfirm \
     zen-browser-bin \
     zip \
     zram-generator \
-
-sudo systemctl enable --now dbus
    
 if pacman -Q jack2 &>/dev/null; then
     sudo pacman -Rdd jack2
 fi
 
 sudo systemctl enable --now NetworkManager
+sudo systemctl enable --now dbus
 
 echo "Installing PipeWire and dependencies..."
 sudo pacman -Syu --noconfirm \
