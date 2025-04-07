@@ -422,6 +422,6 @@ else
     echo "Unknown CPU vendor. No specific configurations applied."
 fi
 
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" && reboot
 
 echo -e "\n------------------------------------------------------------------------\n"
