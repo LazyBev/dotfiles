@@ -370,7 +370,7 @@ ART
     flatpak install --user -y flathub org.vinegarhq.Sober
 
     # For the funnies
-    yay -Syu figlet lolcat protontricks vkbasalt discord spotify mangohud steam-native-runtime
+    yay -Syu figlet lolcat protontricks vkbasalt discord spotify mangohud steam-native-runtime code
 fi
 
 echo -e "\n------------------------------------------------------------------------\n"
