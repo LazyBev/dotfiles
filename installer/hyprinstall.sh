@@ -369,7 +369,7 @@ ART
     flatpak install --user -y flathub org.vinegarhq.Sober
 
     # For the funnies
-    yay -Syu figlet lolcat protontricks vkbasalt discord spotify mangohud steam-native-runtime code lua luajit love rust cargo
+    yay -Syu figlet lolcat protontricks vkbasalt discord spotify mangohud steam-native-runtime code lua luajit love rust cargo sdl3
 fi
 
 echo -e "\n------------------------------------------------------------------------\n"
