@@ -31,6 +31,7 @@ read -p "Enter your CPU brand: " cpu
 ip addr
 read -p "Enter what network device you wanna use: " network
 
+wipefs -af
 cfdisk ${disk}
 
 if [[ "$disk" == "/dev/nvme0n1" ]]; then
