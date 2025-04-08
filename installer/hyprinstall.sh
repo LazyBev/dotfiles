@@ -339,21 +339,23 @@ if [[ "$yn" == "yes" || "$yn" == "y" ]]; then
     python -m venv yt
     source yt/bin/activate
     pip install --upgrade pip
-    pip install lxml mov-cli -U mov-cli-youtube
+    pip install lxml 
+    pip install mov-cli -U
+    pip install mov-cli-youtube
     deactivate
 
     # Go back to installer directory
     cd bev-hyprland/installer || exit
 
     # Build and install arti
-    sudo git clone https://gitlab.torproject.org/tpo/core/arti.git
-    cd arti || exit
-    sudo cargo build -p arti --release
-    sudo mv -f target/release/arti /usr/bin/
-    cd .. && sudo rm -rf arti
-
-    # Create arti config if not exists
-    if command -v arti &> /dev/null; then
+    if ! command -v arti &> /dev/null; then
+        sudo git clone https://gitlab.torproject.org/tpo/core/arti.git
+        cd arti || exit
+        sudo cargo build -p arti --release
+        sudo mv -f target/release/arti /usr/bin/
+        cd .. && sudo rm -rf arti
+    
+        # Create arti config if not exists
         if [[ ! -d "$HOME/.config/arti" ]]; then
             mkdir -p "$HOME/.config/arti"
         fi
@@ -365,10 +367,11 @@ ART
 
     # Install flatpak and Sober
     sudo pacman -Syu --noconfirm flatpak
-    flatpak install --user -y flathub org.vinegarhq.Sober
+    # flatpak install --user -y flathub org.vinegarhq.Sober
 
     # For the funnies
-    yay -Syu figlet lolcat protontricks vkbasalt discord spotify mangohud steam-native-runtime code lua luajit love rust cargo sdl3
+    yay -Syu lolcat discord steam-native-runtime code lua luajit love rust cargo sdl3
+    # yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
 fi
 
 echo -e "\n------------------------------------------------------------------------\n"
@@ -380,6 +383,7 @@ sudo tar -xvf $HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
+touch ~/.config/Kvantum/kvantum.kvconfig
 echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
 
 echo -e "\n------------------------------------------------------------------------\n"
