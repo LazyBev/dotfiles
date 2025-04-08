@@ -309,7 +309,7 @@ if lspci | grep -i nvidia &> /dev/null; then
     sudo mkinitcpio -P
         
     # Apply udev rules immediately
-    sudo udevadm control --reload-rules && sudo udevadm trigger stremio spotify
+    sudo udevadm control --reload-rules && sudo udevadm trigger
         
 fi
 
