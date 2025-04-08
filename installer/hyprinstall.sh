@@ -48,7 +48,6 @@ yay -Syu --noconfirm \
     adobe-source-han-sans-cn-fonts \
     adobe-source-han-sans-jp-fonts \
     adobe-source-han-sans-kr-fonts \
-    ags \
     alsa-utils \
     aquamarine \
     arch-install-scripts \
