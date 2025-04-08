@@ -189,7 +189,6 @@ if pacman -Q jack2 &>/dev/null; then
 fi
 
 sudo systemctl enable --now NetworkManager
-sudo systemctl enable --now dbus
 
 echo "Installing PipeWire and dependencies..."
 sudo pacman -Syu --noconfirm \
