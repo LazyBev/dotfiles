@@ -1,12 +1,9 @@
 THIS IS MY STEAM LAUNCH OPTIONS (these are for performance)
 
 
-# For VRChat           # DXVK_HUD is optional
-unset SDL_VIDEODRIVER; DXVK_HUD=1 PROTON_USE_WINED3D=0 %command% -DX11 -novid -nojoy -nohltv -noipx -noforcemparms -noforcemspd -softparticlesdefaultoff -noaafonts -noasync -noborder -low -threads $(nproc) +cl_forcepreload 1 +mat_queue_mode 2 +r_dynamic 0
+# For VRChat
+unset SDL_VIDEODRIVER; PROTON_USE_WINED3D=0 %command% -DX11 -novid -nojoy -nohltv -noipx -noforcemparms -noforcemspd -softparticlesdefaultoff -noaafonts -noasync -noborder -low -threads $(nproc) +cl_forcepreload 1 +mat_queue_mode 2 +r_dynamic 0
 
 
-# Using Direct X11 (DXVK_HUD is optional)         # Use -F fsr if you have AMD gpu
-DXVK_HUD=1 PROTON_USE_WINED3D=0 gamescope -f -r 0 -F nis --adaptive-sync -e --expose-wayland --rt --force-grab-cursor --mangoapp %command% -DX11 -novid -nojoy -nohltv -noipx -noforcemparms -noforcemspd -softparticlesdefaultoff -noaafonts -noasync -noborder -low -threads $(nproc) +cl_forcepreload 1 +mat_queue_mode 2 +r_dynamic 0
-
-# Using Vulkan    # Use -F fsr if you have AMD gpu                                                        # Install mangoapp(mangoapp is optional)
-gamescope -f -r 0 -F nis --adaptive-sync -e --expose-wayland --rt --steam --force-grab-cursor --threads $(nproc) --mangoapp %command% -vulkan -novid -nojoy -nohltv -noipx -noforcemparms -noforcemspd -softparticlesdefaultoff -noaafonts -noasync -noborder -low -threads $(nproc) +cl_forcepreload 1 +mat_queue_mode 2 +r_dynamic 0
+# Linux                                # Use -F fsr if you have AMD gpu
+PROTON_USE_WINED3D=0 gamescope -f -r 0 -F nis --adaptive-sync -e --expose-wayland --rt --force-grab-cursor --mangoapp %command% -novid -nojoy -nohltv -noipx -noforcemparms -noforcemspd -softparticlesdefaultoff -noaafonts -noasync -noborder -high -threads $(nproc) +cl_forcepreload 1 +mat_queue_mode 2 +r_dynamic 0
