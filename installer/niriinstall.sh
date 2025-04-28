@@ -49,7 +49,6 @@ yay -Syu --noconfirm \
     adobe-source-han-sans-jp-fonts \
     adobe-source-han-sans-kr-fonts \
     alsa-utils \
-    aquamarine \
     arch-install-scripts \
     blueman \
     bluez \
@@ -70,6 +69,8 @@ yay -Syu --noconfirm \
     fcitx5-gtk \
     fcitx5-im \
     fcitx5-qt \
+    floorp-bin \
+    fuzzel \
     fzf \
     ghostty \
     git \
@@ -77,20 +78,6 @@ yay -Syu --noconfirm \
     grimblast \
     gvfs \
     hwinfo \
-    hyprcursor \
-    hyprgraphics \
-    hypridle \
-    hyprland \
-    hyprland-protocols \
-    hyprland-qt-support \
-    hyprland-qtutils \
-    hyprlang \
-    hyprlock \
-    hyprpaper \
-    hyprpicker \
-    hyprpolkitagent \
-    hyprutils \
-    hyprwayland-scanner \
     imagemagick \
     kvantum \
     kvantum-theme-catppuccin-git \
@@ -109,6 +96,7 @@ yay -Syu --noconfirm \
     neovim \
     network-manager-applet \
     networkmanager \
+    niri \
     nm-connection-editor \
     noto-fonts-emoji \
     nwg-look \
@@ -128,11 +116,12 @@ yay -Syu --noconfirm \
     qutebrowser \
     ranger \
     ripgrep \
-    rofi \
     sddm \
     slurp \
     stow \
     sudo \
+    swayidle \ 
+    swaylock \
     swww \
     tar \
     tlp \
@@ -171,12 +160,14 @@ yay -Syu --noconfirm \
     xbindkeys \
     xdg-desktop-portal \
     xdg-desktop-portal-gtk \
+    xdg-desktop-portal-gnome \
     xdg-desktop-portal-hyprland \
     xdotool \
     xf86-input-libinput \
     xorg-xev \
     xorg-xwayland \
-    zen-browser-bin \
+    xwayland-run \
+    xwayland-satellite \
     zip \
     zram-generator
 
