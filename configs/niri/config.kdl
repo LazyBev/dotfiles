@@ -363,6 +363,7 @@ binds {
     Alt+D { spawn "fuzzel"; }
     Alt+S { spawn "steam"; }
     Alt+T { spawn "dolphin"; }
+    Alt+E { spawn "bash" "-c" "~/.config/emacs/bin/doom run"; }
     // Alt+U { spawn "bash" "-c" "waybar" "-c" "~/.config/niri/waybar"; }
     // Alt+Y { spawn "bash" "-c" "swaybg -i ~/Pictures/jodio.jpg"; }
 
