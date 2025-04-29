@@ -380,10 +380,6 @@ echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvco
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
-
-git clone --depth 1 https://github.com/doomemacs/doomemacs ~/.config/emacs; ~/.config/emacs/bin/doom install
-~/.config/emacs/bin/doom sync
-
 # Define an array of config directories to copy
 CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "nvim" "mov-cli" "fuzzel" "fcitx5")
 
@@ -394,6 +390,18 @@ for dir in "${CONFIG_DIRS[@]}"; do
     fi
 
     sudo cp -f -r $HOME/bev-hyprland/configs/$dir $HOME/.config/
+done
+
+# Define an array of emacs directories to copy
+EMACS_DIRS=(".emacs.local" ".emacs.ec")
+
+# Loop through and copy each emacs directory
+for dir in "${EMACS_DIRS[@]}"; do
+    if [ -d $HOME/$dir ]; then 
+        sudo rm -rf $HOME/$dir
+    fi
+
+    sudo cp -f -r $HOME/bev-hyprland/$dir $HOME/
 done
 
 sudo find "$HOME/.config" -type d -exec chmod 755 {} +
