@@ -10,6 +10,7 @@ input {
     keyboard {
         xkb {
             layout "gb"
+	    options "numpad:mac"
         }
     }
 
@@ -63,14 +64,16 @@ input {
 /-output "eDP-1" {
     // Uncomment this line to disable this output.
     // off
+    variable-refresh-rate
+    focus-at-startup
 
     // Resolution and, optionally, refresh rate of the output.
     // The format is "<width>x<height>" or "<width>x<height>@<refresh rate>".
     // If the refresh rate is omitted, niri will pick the highest refresh rate
     // for the resolution.
-    // If the mode is omitted altogether or is invalid, niri will pick one automatically.
-    // Run `niri msg outputs` while inside a niri instance to list all outputs and their modes.
-    mode "1920x1080@120.030"
+    // If the Alte is omitted altogether or is invalid, niri will pick one automatically.
+    // Run `niri msg outputs` while inside a niri instance to list all outputs and their Altes.
+    Alte "1920x1080@120.030"
 
     // You can use integer or fractional scale, for example use 1.5 for 150% scale.
     scale 2
@@ -96,7 +99,7 @@ input {
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Layout
 layout {
     // Set gaps around windows in logical pixels.
-    gaps 16
+    gaps 10
 
     // When to center a column when changing focus, options are:
     // - "never", default behavior, focusing an off-screen column will keep at the left
@@ -106,7 +109,7 @@ layout {
     //   together with the previously focused column.
     center-focused-column "never"
 
-    // You can customize the widths that "switch-preset-column-width" (Mod+R) toggles between.
+    // You can customize the widths that "switch-preset-column-width" (Alt+R) toggles between.
     preset-column-widths {
         // Proportion sets the width as a fraction of the output width, taking gaps into account.
         // For example, you can perfectly fit four windows sized "proportion 0.25" on an output.
@@ -119,7 +122,7 @@ layout {
         // fixed 1920
     }
 
-    // You can also customize the heights that "switch-preset-window-height" (Mod+Shift+R) toggles between.
+    // You can also customize the heights that "switch-preset-window-height" (Alt+Shift+R) toggles between.
     // preset-window-heights { }
 
     // You can change the default width of the new windows.
@@ -144,7 +147,7 @@ layout {
         // off
 
         // How many logical pixels the ring extends out from the windows.
-        width 4
+        width 2
 
         // Colors can be set in a variety of ways:
         // - CSS named colors: "red"
@@ -248,7 +251,7 @@ layout {
 // Additionally, clients will be informed that they are tiled, removing some client-side rounded corners.
 // This option will also fix border/focus ring drawing behind some semitransparent windows.
 // After enabling or disabling this, you need to restart the apps for this to take effect.
-// prefer-no-csd
+prefer-no-csd
 
 // You can change the path where screenshots are saved.
 // A ~ at the front will be expanded to the home directory.
@@ -307,40 +310,67 @@ window-rule {
 // Example: enable rounded corners for all windows.
 // (This example rule is commented out with a "/-" in front.)
 window-rule {
-    geometry-corner-radius 12
+    geometry-corner-radius 8
     clip-to-geometry true
+}
+
+workspace "unused"
+workspace "main"
+workspace "chat"
+
+window-rule {
+    match app-id="discord"
+    open-on-workspace "chat"
+    open-maximized true
+}
+
+window-rule {
+    match app-id="floorp"
+    open-on-workspace "main"
+    open-maximized true
+}
+
+window-rule {
+    match app-id="code"
+    open-on-workspace "main"
+    open-maximized true
 }
 
 spawn-at-startup "xwayland-satellite"
 spawn-at-startup "dunst"
-spawn-at-startup "waybar"
-spawn-at-startup "swww-daemon"
-spawn-at-startup "swww img ~/Pictures/jodio.png"
+spawn-at-startup "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1"
+spawn-at-startup "bash" "-c" "waybar" "-c" "~/.config/waybar"
+spawn-at-startup "bash" "-c" "swaybg -i ~/Pictures/jodio.jpg"
 
 binds {
-    // Keys consist of modifiers separated by + signs, followed by an XKB key name
+    // Keys consist of Altifiers separated by + signs, followed by an XKB key name
     // in the end. To find an XKB name for a particular key, you may use a program
     // like wev.
     //
-    // "Mod" is a special modifier equal to Super when running on a TTY, and to Alt
+    // "Alt" is a special Altifier equal to Super when running on a TTY, and to Alt
     // when running as a winit window.
     //
     // Most actions that you can bind here can also be invoked programmatically with
     // `niri msg action do-something`.
 
-    // Mod-Shift-/, which is usually the same as Mod-?,
+    // Alt-Shift-/, which is usually the same as Alt-?,
     // shows a list of important hotkeys.
-    Mod+Shift+Slash { show-hotkey-overlay; }
+    Alt+Shift+Slash { show-hotkey-overlay; }
 
     // Suggested binds for running programs: terminal, app launcher, screen locker.
-    Mod+Return { spawn "ghostty"; }
-    Mod+B { spawn "floorp"; }
-    Mod+D { spawn "fuzzel"; }
+    Alt+Return { spawn "ghostty"; }
+    Alt+B { spawn "floorp"; }
+    Alt+D { spawn "fuzzel"; }
+    Alt+S { spawn "steam"; }
+    Alt+T { spawn "dolphin"; }
+    // Alt+U { spawn "bash" "-c" "waybar" "-c" "~/.config/niri/waybar"; }
+    // Alt+Y { spawn "bash" "-c" "swaybg -i ~/Pictures/jodio.jpg"; }
+
     Mod+Shift+X { spawn "swaylock"; }
 
     // You can also use a shell. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument in the end.
-    // Mod+T { spawn "bash" "-c" "notify-send hello && exec alacritty"; }
+    // Alt+T { spawn "bash" "-c" "notify-send hello && exec alacritty"; }
 
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
@@ -349,57 +379,58 @@ binds {
     XF86AudioMute        allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
     XF86AudioMicMute     allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
 
-    Mod+Q { close-window; }
+    Alt+Q { close-window; }
 
-    Mod+J     { focus-column-left; }
-    Mod+K     { focus-window-down; }
-    Mod+I     { focus-window-up; }
-    Mod+L     { focus-column-right; }
-    Mod+Shift+J     { move-column-left; }
-    Mod+Shift+K     { move-window-down; }
-    Mod+Shift+I     { move-window-up; }
-    Mod+Shift+L     { move-column-right; }
+    Alt+J     { focus-column-left; }
+    Alt+K     { focus-window-down; }
+    Alt+I     { focus-window-up; }
+    Alt+L     { focus-column-right; }
+
+    Alt+Shift+J     { move-column-left; }
+    Alt+Shift+K     { move-window-down; }
+    Alt+Shift+I     { move-window-up; }
+    Alt+Shift+L     { move-column-right; }
+
+    Alt+Ctrl+M         { move-workspace-down; }
+    Alt+Ctrl+N         { move-workspace-up; }
+
+    Alt+Home { focus-column-first; }
+    Alt+End  { focus-column-last; }
+    Alt+Shift+Home { move-column-to-first; }
+    Alt+Shift+End  { move-column-to-last; }
+
+    Alt+M              { focus-workspace-down; }
+    Alt+N              { focus-workspace-up; }
+    Alt+Shift+M         { move-column-to-workspace-down; }
+    Alt+Shift+N         { move-column-to-workspace-up; }
 
     // Alternative commands that move across workspaces when reaching
     // the first or last window in a column.
-    // Mod+J     { focus-window-or-workspace-down; }
-    // Mod+K     { focus-window-or-workspace-up; }
-    // Mod+Ctrl+J     { move-window-down-or-to-workspace-down; }
-    // Mod+Ctrl+K     { move-window-up-or-to-workspace-up; }
+    // Alt+J     { focus-window-or-workspace-down; }
+    // Alt+K     { focus-window-or-workspace-up; }
+    // Alt+Ctrl+J     { move-window-down-or-to-workspace-down; }
+    // Alt+Ctrl+K     { move-window-up-or-to-workspace-up; }
 
-    Mod+Home { focus-column-first; }
-    Mod+End  { focus-column-last; }
-    Mod+Ctrl+Home { move-column-to-first; }
-    Mod+Ctrl+End  { move-column-to-last; }
+    // Alt+Shift+J     { focus-monitor-left; }
+    // Alt+Shift+K     { focus-monitor-down; }
+    // Alt+Shift+I     { focus-monitor-up; }
+    // Alt+Shift+L     { focus-monitor-right; }
 
-    // Mod+Shift+J     { focus-monitor-left; }
-    // Mod+Shift+K     { focus-monitor-down; }
-    // Mod+Shift+I     { focus-monitor-up; }
-    // Mod+Shift+L     { focus-monitor-right; }
-
-    // Mod+Shift+Ctrl+J     { move-column-to-monitor-left; }
-    // Mod+Shift+Ctrl+K     { move-column-to-monitor-down; }
-    // Mod+Shift+Ctrl+I     { move-column-to-monitor-up; }
-    // Mod+Shift+Ctrl+L     { move-column-to-monitor-right; }
+    // Alt+Shift+Ctrl+J     { move-column-to-monitor-left; }
+    // Alt+Shift+Ctrl+K     { move-column-to-monitor-down; }
+    // Alt+Shift+Ctrl+I     { move-column-to-monitor-up; }
+    // Alt+Shift+Ctrl+L     { move-column-to-monitor-right; }
 
     // Alternatively, there are commands to move just a single window:
-    // Mod+Shift+Ctrl+Left  { move-window-to-monitor-left; }
+    // Alt+Shift+Ctrl+Left  { move-window-to-monitor-left; }
     // ...
     // And you can also move a whole workspace to another monitor:
-    // Mod+Shift+Ctrl+Left  { move-workspace-to-monitor-left; }
+    // Alt+Shift+Ctrl+Left  { move-workspace-to-monitor-left; }
     // ...
-
-    Mod+M              { focus-workspace-down; }
-    Mod+N              { focus-workspace-up; }
-    Mod+Shift+M         { move-column-to-workspace-down; }
-    Mod+Shift+N         { move-column-to-workspace-up; }
 
     // Alternatively, there are commands to move just a single window:
-    // Mod+Ctrl+Page_Down { move-window-to-workspace-down; }
+    // Alt+Ctrl+Page_Down { move-window-to-workspace-down; }
     // ...
-
-    Mod+Ctrl+M         { move-workspace-down; }
-    Mod+Ctrl+N         { move-workspace-up; }
 
     // You can bind mouse wheel scroll ticks using the following syntax.
     // These binds will change direction based on the natural-scroll setting.
@@ -407,22 +438,22 @@ binds {
     // To avoid scrolling through workspaces really fast, you can use
     // the cooldown-ms property. The bind will be rate-limited to this value.
     // You can set a cooldown on any bind, but it's most useful for the wheel.
-    Mod+WheelScrollDown      cooldown-ms=150 { focus-workspace-down; }
-    Mod+WheelScrollUp        cooldown-ms=150 { focus-workspace-up; }
-    Mod+Ctrl+WheelScrollDown cooldown-ms=150 { move-column-to-workspace-down; }
-    Mod+Ctrl+WheelScrollUp   cooldown-ms=150 { move-column-to-workspace-up; }
+    Alt+WheelScrollDown      cooldown-ms=150 { focus-workspace-down; }
+    Alt+WheelScrollUp        cooldown-ms=150 { focus-workspace-up; }
+    Alt+Ctrl+WheelScrollDown cooldown-ms=150 { move-column-to-workspace-down; }
+    Alt+Ctrl+WheelScrollUp   cooldown-ms=150 { move-column-to-workspace-up; }
 
-    Mod+WheelScrollRight      { focus-column-right; }
-    Mod+WheelScrollLeft       { focus-column-left; }
-    Mod+Ctrl+WheelScrollRight { move-column-right; }
-    Mod+Ctrl+WheelScrollLeft  { move-column-left; }
+    Alt+WheelScrollRight      { focus-column-right; }
+    Alt+WheelScrollLeft       { focus-column-left; }
+    Alt+Ctrl+WheelScrollRight { move-column-right; }
+    Alt+Ctrl+WheelScrollLeft  { move-column-left; }
 
     // Usually scrolling up and down with Shift in applications results in
     // horizontal scrolling; these binds replicate that.
-    Mod+Shift+WheelScrollDown      { focus-column-right; }
-    Mod+Shift+WheelScrollUp        { focus-column-left; }
-    Mod+Ctrl+Shift+WheelScrollDown { move-column-right; }
-    Mod+Ctrl+Shift+WheelScrollUp   { move-column-left; }
+    Alt+Shift+WheelScrollDown      { focus-column-right; }
+    Alt+Shift+WheelScrollUp        { focus-column-left; }
+    Alt+Ctrl+Shift+WheelScrollDown { move-column-right; }
+    Alt+Ctrl+Shift+WheelScrollUp   { move-column-left; }
 
     // Similarly, you can bind touchpad scroll "ticks".
     // Touchpad scrolling is continuous, so for these binds it is split into
@@ -430,8 +461,8 @@ binds {
     // These binds are also affected by touchpad's natural-scroll, so these
     // example binds are "inverted", since we have natural-scroll enabled for
     // touchpads by default.
-    // Mod+TouchpadScrollDown { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.02+"; }
-    // Mod+TouchpadScrollUp   { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.02-"; }
+    // Alt+TouchpadScrollDown { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.02+"; }
+    // Alt+TouchpadScrollUp   { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.02-"; }
 
     // You can refer to workspaces by index. However, keep in mind that
     // niri is a dynamic workspace system, so these commands are kind of
@@ -441,53 +472,54 @@ binds {
     //
     // For example, with 2 workspaces + 1 empty, indices 3, 4, 5 and so on
     // will all refer to the 3rd workspace.
-    Mod+1 { focus-workspace 1; }
-    Mod+2 { focus-workspace 2; }
-    Mod+3 { focus-workspace 3; }
-    Mod+4 { focus-workspace 4; }
-    Mod+5 { focus-workspace 5; }
-    Mod+6 { focus-workspace 6; }
-    Mod+7 { focus-workspace 7; }
-    Mod+8 { focus-workspace 8; }
-    Mod+9 { focus-workspace 9; }
-    Mod+Shift+1 { move-column-to-workspace 1; }
-    Mod+Shift+2 { move-column-to-workspace 2; }
-    Mod+Shift+3 { move-column-to-workspace 3; }
-    Mod+Shift+4 { move-column-to-workspace 4; }
-    Mod+Shift+5 { move-column-to-workspace 5; }
-    Mod+Shift+6 { move-column-to-workspace 6; }
-    Mod+Shift+7 { move-column-to-workspace 7; }
-    Mod+Shift+8 { move-column-to-workspace 8; }
-    Mod+Shift+9 { move-column-to-workspace 9; }
+    Alt+1 { focus-workspace 1; }
+    Alt+2 { focus-workspace 2; }
+    Alt+3 { focus-workspace 3; }
+    Alt+4 { focus-workspace 4; }
+    Alt+5 { focus-workspace 5; }
+    Alt+6 { focus-workspace 6; }
+    Alt+7 { focus-workspace 7; }
+    Alt+8 { focus-workspace 8; }
+    Alt+9 { focus-workspace 9; }
+    Alt+O { toggle-window-rule-opacity; }
+    Alt+Shift+1 { move-column-to-workspace 1; }
+    Alt+Shift+2 { move-column-to-workspace 2; }
+    Alt+Shift+3 { move-column-to-workspace 3; }
+    Alt+Shift+4 { move-column-to-workspace 4; }
+    Alt+Shift+5 { move-column-to-workspace 5; }
+    Alt+Shift+6 { move-column-to-workspace 6; }
+    Alt+Shift+7 { move-column-to-workspace 7; }
+    Alt+Shift+8 { move-column-to-workspace 8; }
+    Alt+Shift+9 { move-column-to-workspace 9; }
 
     // Alternatively, there are commands to move just a single window:
-    // Mod+Ctrl+1 { move-window-to-workspace 1; }
+    // Alt+Ctrl+1 { move-window-to-workspace 1; }
 
     // Switches focus between the current and the previous workspace.
-    // Mod+Tab { focus-workspace-previous; }
+    // Alt+Tab { focus-workspace-previous; }
 
     // The following binds move the focused window in and out of a column.
     // If the window is alone, they will consume it into the nearby column to the side.
     // If the window is already in a column, they will expel it out.
-    Mod+BracketLeft  { consume-or-expel-window-left; }
-    Mod+BracketRight { consume-or-expel-window-right; }
+    Alt+BracketLeft  { consume-or-expel-window-left; }
+    Alt+BracketRight { consume-or-expel-window-right; }
 
     // Consume one window from the right to the bottom of the focused column.
-    Mod+Comma  { consume-window-into-column; }
+    Alt+Comma  { consume-window-into-column; }
     // Expel the bottom window from the focused column to the right.
-    Mod+Period { expel-window-from-column; }
+    Alt+Period { expel-window-from-column; }
 
-    Mod+R { switch-preset-column-width; }
-    Mod+Shift+R { switch-preset-window-height; }
-    Mod+Ctrl+R { reset-window-height; }
-    Mod+W { maximize-column; }
-    Mod+F { fullscreen-window; }
+    // Alt+R { reset-window-height;}
+    // Alt+Ctrl+R { switch-preset-column-width; }
+    // Alt+Shift+R { switch-preset-window-height; }
+    Alt+W { maximize-column; }
+    Alt+F { fullscreen-window; }
 
     // Expand the focused column to space not taken up by other fully visible columns.
     // Makes the column "fill the rest of the space".
-    Mod+Ctrl+F { expand-column-to-available-width; }
+    Alt+Ctrl+F { expand-column-to-available-width; }
 
-    Mod+C { center-column; }
+    Alt+C { center-column; }
 
     // Finer width adjustments.
     // This command can also:
@@ -497,33 +529,32 @@ binds {
     // * adjust width as a percentage of screen width: "-10%" or "+10%"
     // Pixel sizes use logical, or scaled, pixels. I.e. on an output with scale 2.0,
     // set-column-width "100" will make the column occupy 200 physical screen pixels.
-    Mod+Minus { set-column-width "-10%"; }
-    Mod+Equal { set-column-width "+10%"; }
+    Alt+Minus { set-column-width "-10%"; }
+    Alt+Equal { set-column-width "+10%"; }
 
     // Finer height adjustments when in column with other windows.
-    Mod+Shift+Minus { set-window-height "-10%"; }
-    Mod+Shift+Equal { set-window-height "+10%"; }
+    Alt+Shift+Minus { set-window-height "-10%"; }
+    Alt+Shift+Equal { set-window-height "+10%"; }
 
     // Move the focused window between the floating and the tiling layout.
-    Mod+V       { toggle-window-floating; }
-    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
+    Alt+V   { toggle-window-floating; }
+    Alt+Tab { switch-focus-between-floating-and-tiling; }
 
-    // Toggle tabbed column display mode.
+    // Toggle tabbed column display Alte.
     // Windows in this column will appear as vertical tabs,
     // rather than stacked on top of each other.
-    Mod+T { toggle-column-tabbed-display; }
 
     // Actions to switch layouts.
     // Note: if you uncomment these, make sure you do NOT have
     // a matching layout switch hotkey configured in xkb options above.
     // Having both at once on the same hotkey will break the switching,
     // since it will switch twice upon pressing the hotkey (once by xkb, once by niri).
-    // Mod+Space       { switch-layout "next"; }
-    // Mod+Shift+Space { switch-layout "prev"; }
+    // Alt+Space       { switch-layout "next"; }
+    // Alt+Shift+Space { switch-layout "prev"; }
 
-    Mod+X { screenshot; }
-    Mod+Ctrl+X { screenshot-screen; }
-    Mod+Alt+X { screenshot-window; }
+    Alt+X { screenshot; }
+    Alt+Shift+X { screenshot-screen; }
+    Alt+Ctrl+X { screenshot-window; }
 
     // Applications such as remote-desktop clients and software KVM switches may
     // request that niri stops processing the keyboard shortcuts defined here
@@ -533,14 +564,14 @@ binds {
     //
     // The allow-inhibiting=false property can be applied to other binds as well,
     // which ensures niri always processes them, even when an inhibitor is active.
-    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Alt+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 
     // The quit action will show a confirmation dialog to avoid accidental exits.
-    Mod+Shift+Backspace { quit; }
+    Alt+Shift+Backspace { quit; }
 
     // Powers off the monitors. To turn them back on, do any input like
     // moving the mouse or pressing any other key.
-    Mod+P { power-off-monitors; }
+    Alt+P { power-off-monitors; }
 }
 
 environment {
