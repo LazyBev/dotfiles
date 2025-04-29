@@ -55,7 +55,6 @@ yay -Syu --noconfirm \
     bluez-utils \
     brightnessctl \
     btop \
-    cargo \
     cliphist \
     cmake \
     curl \
@@ -74,8 +73,6 @@ yay -Syu --noconfirm \
     fzf \
     ghostty \
     git \
-    grim \
-    grimblast \
     gvfs \
     hwinfo \
     imagemagick \
@@ -361,7 +358,7 @@ ART
     # flatpak install --user -y flathub org.vinegarhq.Sober
 
     # For the funnies
-    yay -Syu lolcat discord steam-native-runtime code lua luajit love rust cargo sdl3
+    yay -Syu lolcat discord steam-native-runtime code love sdl3 raylib
     # yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
 fi
 
