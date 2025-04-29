@@ -132,6 +132,7 @@ yay -Syu --noconfirm \
     ttf-jetbrains-mono-nerd \
     ttf-joypixels \
     ttf-liberation \
+    ttf-material-design-iconic-font
     ttf-meslo-nerd \
     ttf-roboto-mono-nerd \
     ttf-source-code-pro-nerd \
