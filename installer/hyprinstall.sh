@@ -369,8 +369,12 @@ ART
     sudo pacman -Syu --noconfirm flatpak
     # flatpak install --user -y flathub org.vinegarhq.Sober
 
-    # For the funnies
-    yay -Syu lolcat discord steam-native-runtime code lua luajit love rust cargo sdl3
+    # For development
+    read -p "Do you want extra packages for 10X developers :3 (y/n)" YN
+    if [ $YN == "y" || $YN == "Y" ]; then
+        ./$HOME/bev-dotfiles/installer/langs.sh
+        yay -Syu lolcat discord steam-native-runtime code love sdl3 raylib
+    fi
     # yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
 fi
 
