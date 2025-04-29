@@ -10,7 +10,7 @@ input {
     keyboard {
         xkb {
             layout "gb"
-	    options "numpad:mac"
+                  options "numpad:mac"
         }
     }
 
@@ -202,13 +202,13 @@ layout {
         // radius. It has to assume that windows have square corners, leading to
         // shadow artifacts inside the CSD rounded corners. This setting fixes
         // those artifacts.
-        // 
+        //
         // However, instead you may want to set prefer-no-csd and/or
         // geometry-corner-radius. Then, niri will know the corner radius and
         // draw the shadow correctly, without having to draw it behind the
         // window. These will also remove client-side shadows if the window
         // draws any.
-        // 
+        //
         // draw-behind-window true
 
         // You can change how shadows look. The values below are in logical
@@ -238,6 +238,27 @@ layout {
         // top 64
         // bottom 64
     }
+}
+
+layer-rule {
+    match namespace="waybar"
+    match at-startup=true
+
+    // Properties that apply continuously.
+    opacity 0.9
+
+    shadow {
+        on
+        // off
+        softness 40
+        spread 5
+        offset x=0 y=5
+        draw-behind-window true
+        color "#00000064"
+        // inactive-color "#00000064"
+    }
+
+    geometry-corner-radius 10
 }
 
 // Add lines like this to spawn processes at startup.
@@ -339,7 +360,6 @@ window-rule {
 spawn-at-startup "xwayland-satellite"
 spawn-at-startup "dunst"
 spawn-at-startup "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1"
-spawn-at-startup "bash" "-c" "waybar" "-c" "~/.config/waybar"
 spawn-at-startup "bash" "-c" "swaybg -i ~/Pictures/jodio.jpg"
 
 binds {
@@ -364,10 +384,10 @@ binds {
     Alt+S { spawn "steam"; }
     Alt+T { spawn "dolphin"; }
     Alt+E { spawn "bash" "-c" "~/.config/emacs/bin/doom run"; }
-    // Alt+U { spawn "bash" "-c" "waybar" "-c" "~/.config/niri/waybar"; }
-    // Alt+Y { spawn "bash" "-c" "swaybg -i ~/Pictures/jodio.jpg"; }
+    Alt+U { spawn "bash" "-c" "pgrep waybar && killall waybar || waybar &"; }
+    Alt+Y { spawn "bash" "-c" "waypaper"; }
 
-    Mod+Shift+X { spawn "swaylock"; }
+    Mod+X { spawn "swaylock"; }
 
     // You can also use a shell. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument in the end.
