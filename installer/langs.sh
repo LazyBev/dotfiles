@@ -332,7 +332,7 @@ select_languages() {
   
   echo
   echo -e "${YELLOW}Enter the numbers of languages you want to install compilers/interpreters for${NC}"
-  echo -e "${YELLOW}(separated by spaces), 'A' for all, or '0' to return:${NC}"
+  echo -e "${YELLOW}(separated by spaces), 'A' for all, Enter for none, or '0' to return:${NC}"
   read -r selections
   
   # Process selections
@@ -382,7 +382,7 @@ select_languages_installers() {
   
   echo
   echo -e "${YELLOW}Enter the numbers of compilers you want to install (separated by spaces),${NC}"
-  echo -e "${YELLOW}'A' for all, or '0' to return:${NC}"
+  echo -e "${YELLOW}'A' for all, Enter for none, or '0' to return:${NC}"
   read -r selections
   
   # Process selections
@@ -447,7 +447,7 @@ install_package_managers() {
   
   echo
   echo -e "${YELLOW}Would you like to install any external package managers for $language?${NC}"
-  echo -e "${YELLOW}Enter the numbers (separated by spaces), 'A' for all, or '0' to skip:${NC}"
+  echo -e "${YELLOW}Enter the numbers (separated by spaces), 'A' for all, Enter for none, or '0' to skip:${NC}"
   read -r selections
   
   # Process selections
