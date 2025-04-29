@@ -103,8 +103,6 @@ yay -Syu --noconfirm \
     pavucontrol \
     playerctl \
     polkit \
-    polkit-kde-agent \
-    pyprland \
     python \
     python-pip \
     python-pipx \
