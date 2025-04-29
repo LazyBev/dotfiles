@@ -372,7 +372,7 @@ ART
     # For development
     read -p "Do you want extra packages for 10X developers :3 (y/n)" YN
     if [ $YN == "y" || $YN == "Y" ]; then
-        ./$HOME/bev-dotfiles/installer/langs.sh
+        chmod +x $HOME/bev-dotfiles/installer/langs.sh; ./$HOME/bev-dotfiles/installer/langs.sh
         yay -Syu lolcat discord steam-native-runtime code love sdl3 raylib
     fi
     # yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
