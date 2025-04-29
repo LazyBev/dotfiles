@@ -381,11 +381,11 @@ print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "nvim" "mov-cli" "fcitx5")
+CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "nvim" "mov-cli" "fuzzel" "fcitx5")
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
-    if [ -d $HOME/.config/dir ]; then 
+    if [ -d $HOME/.config/$dir ]; then 
         sudo rm -rf $HOME/.config/$dir
     fi
 
