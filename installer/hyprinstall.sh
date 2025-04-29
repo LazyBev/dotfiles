@@ -395,7 +395,7 @@ CONFIG_DIRS=("waybar" "rofi" "dunst" "wlogout" "hypr" "swaync" "nvim" "mov-cli" 
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
-    if [ -d $HOME/.config/dir ]; then 
+    if [ -d $HOME/.config/$dir ]; then 
         sudo rm -rf $HOME/.config/$dir
     fi
 
