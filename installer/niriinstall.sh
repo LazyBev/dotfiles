@@ -62,6 +62,7 @@ yay -Syu --noconfirm \
     dmenu \
     dolphin \
     dunst \
+    emacs \
     eza \
     fastfetch \
     fcitx5-anthy \
@@ -379,6 +380,9 @@ echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvco
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
+
+git clone --depth 1 https://github.com/doomemacs/doomemacs ~/.config/emacs; ~/.config/emacs/bin/doom install
+~/.config/emacs/bin/doom sync
 
 # Define an array of config directories to copy
 CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "nvim" "mov-cli" "fuzzel" "fcitx5")
