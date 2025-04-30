@@ -1,9 +1,9 @@
 THIS IS MY STEAM LAUNCH OPTIONS (these are for performance)
 
 
-# For VRChat
-unset SDL_VIDEODRIVER; PROTON_USE_WINED3D=0 %command% -DX11 -novid -nojoy -nohltv -noipx -noforcemparms -noforcemspd -softparticlesdefaultoff -noaafonts -noasync -noborder -low -threads $(nproc) +cl_forcepreload 1 +mat_queue_mode 2 +r_dynamic 0
+# For VRChat (Might need WAYLAND_DISPLAY="")
+unset SDL_VIDEODRIVER; PROTON_USE_WINED3D=0 %command%
 
 
 # Linux                                # Use -F fsr if you have AMD gpu
-PROTON_USE_WINED3D=0 gamescope -f -r 0 -F nis --adaptive-sync -e --expose-wayland --rt --force-grab-cursor --mangoapp %command% -novid -nojoy -nohltv -noipx -noforcemparms -noforcemspd -softparticlesdefaultoff -noaafonts -noasync -noborder -high -threads $(nproc) +cl_forcepreload 1 +mat_queue_mode 2 +r_dynamic 0
+PROTON_USE_WINED3D=0 mangohud %command%
