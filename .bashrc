@@ -156,6 +156,3 @@ if [ -d "$HOME"/.bash_completion.d ]; then
         source "$file"
     done
 fi
-                
-
-[ -f "/home/lazybev/.ghcup/env" ] && . "/home/lazybev/.ghcup/env" # ghcup-env
