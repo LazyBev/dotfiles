@@ -24,7 +24,7 @@ done
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Source helper file
-source $SCRIPT_DIR/helper.sh
+source "$SCRIPT_DIR/helper.sh"
 
 # Trap for unexpected exits
 trap 'trap_message' INT TERM
@@ -198,7 +198,7 @@ if pacman -Q | grep -E '^pulseaudio' &>/dev/null; then
     packages=$(pacman -Q | awk '{print $1}' | grep -E '^pulseaudio')
 
     if [[ -n "$packages" ]]; then
-        sudo pacman -Rns --noconfirm $packages
+        sudo pacman -Rns --noconfirm "$packages"
     else
         echo "No PulseAudio packages found to remove."
     fi
@@ -209,7 +209,7 @@ fi
 # Check if user is in 'audio' group (optional for JACK)
 if ! groups | grep -q audio; then
     echo "Adding user to 'audio' group..."
-    sudo usermod -aG audio $USER
+    sudo usermod -aG audio "$USER"
 fi 
 
 # Detect CPU vendor
@@ -312,66 +312,60 @@ sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting utilities setup..."
 
-read -p "Do you want extra unneeded packages? (y/n): " yn
-if [[ "$yn" == "yes" || "$yn" == "y" ]]; then
-    # Install chafa
-    sudo git clone https://github.com/hpjansson/chafa.git
-    cd chafa || exit
-    sudo ./autogen.sh
-    sudo make
-    sudo make install
-    cd .. && sudo rm -rf chafa
+# Install chafa
+sudo git clone https://github.com/hpjansson/chafa.git
+cd chafa || exit
+sudo ./autogen.sh
+sudo make
+sudo make install
+cd .. && sudo rm -rf chafa
 
-    # Set up mov-cli and lxml in a virtual environment
-    cd "$HOME" || exit
-    python -m venv yt
-    source yt/bin/activate
-    pip install --upgrade pip
-    pip install lxml 
-    pip install mov-cli -U
-    pip install mov-cli-youtube
-    deactivate
+# Set up mov-cli and lxml in a virtual environment
+cd "$HOME" || exit
+python -m venv yt
+source yt/bin/activate
+pip install --upgrade pip
+pip install lxml 
+pip install mov-cli -U
+pip install mov-cli-youtube
+deactivate
 
-    # Go back to installer directory
-    cd bev-hyprland/installer || exit
+# Go back to installer directory
+cd bev-hyprland/installer || exit
 
-    # Build and install arti
-    if ! command -v arti &> /dev/null; then
-        sudo git clone https://gitlab.torproject.org/tpo/core/arti.git
-        cd arti || exit
-        sudo cargo build -p arti --release
-        sudo mv -f target/release/arti /usr/bin/
-        cd .. && sudo rm -rf arti
+# Build and install arti
+if ! command -v arti &> /dev/null; then
+    sudo git clone https://gitlab.torproject.org/tpo/core/arti.git
+    cd arti || exit
+    sudo cargo build -p arti --release
+    sudo mv -f target/release/arti /usr/bin/
+    cd .. && sudo rm -rf arti
     
-        # Create arti config if not exists
-        if [[ ! -d "$HOME/.config/arti" ]]; then
-            mkdir -p "$HOME/.config/arti"
-        fi
-        tee "$HOME/.config/arti/arti-config.toml" > /dev/null <<ART
+    # Create arti config if not exists
+    if [[ ! -d "$HOME/.config/arti" ]]; then
+        mkdir -p "$HOME/.config/arti"
+    fi
+    tee "$HOME/.config/arti/arti-config.toml" > /dev/null <<ART
 [network]
 socks_port = 9050
 ART
-    fi
-
-    # Install flatpak and Sober
-    sudo pacman -Syu --noconfirm flatpak
-    # flatpak install --user -y flathub org.vinegarhq.Sober
-
-    # For development
-    read -p "Do you want extra packages for 10X developers :3 (y/n)" YN
-    if [ $YN == "y" || $YN == "Y" ]; then
-        ./$HOME/bev-dotfiles/installer/langs.sh
-        yay -Syu lolcat discord steam-native-runtime code love sdl3 raylib
-    fi
-    # yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
 fi
+
+# Install flatpak and Sober
+sudo pacman -Syu --noconfirm flatpak
+# flatpak install --user -y flathub org.vinegarhq.Sober
+
+# For development
+"$HOME/bev-dotfiles/installer/langs.sh"
+yay -Syu lolcat discord steam-native-runtime code love sdl3 raylib
+# yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting theming setup..."
 
-sudo tar -xvf $HOME/bev-hyprland/assets/themes/Catppuccin-Mocha.tar.xz -C /usr/share/themes/
+sudo tar -xvf "$HOME/bev-hyprland/assets/themes/Catppuccin-Mocha.tar.xz" -C /usr/share/themes/
 
-sudo tar -xvf $HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz -C /usr/share/icons/
+sudo tar -xvf "$HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz" -C /usr/share/icons/
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
@@ -382,34 +376,41 @@ echo -e "\n---------------------------------------------------------------------
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "nvim" "mov-cli" "fuzzel" "fcitx5")
+CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "mov-cli" "fuzzel" "fcitx5")
+
+sudo cp -f "$HOME/bev-hyprland/.bashrc" "$HOME/" || {
+    sudo rm -f "$HOME/.bashrc"
+    sudo cp -f "$HOME/bev-hyprland/.bashrc" "$HOME/"
+} 
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
-    if [ -d $HOME/.config/$dir ]; then 
-        sudo rm -rf $HOME/.config/$dir
+    if [ -d "$HOME/.config/$dir" ]; then 
+        sudo rm -rf "$HOME/.config/$dir"
     fi
 
-    sudo cp -f -r $HOME/bev-hyprland/configs/$dir $HOME/.config/
+    sudo cp -f -r "$HOME/bev-hyprland/configs/$dir" "$HOME/.config/"
 done
 
 # Define an array of emacs directories to copy
-EMACS_DIRS=(".emacs.local" ".emacs.ec")
+EMACS_DIRS=(".emacs.local" ".emacs.rc")
+
+sudo cp -f -r "$HOME/bev-hyprland/.emacs" "$HOME/"
 
 # Loop through and copy each emacs directory
 for dir in "${EMACS_DIRS[@]}"; do
-    if [ -d $HOME/$dir ]; then 
-        sudo rm -rf $HOME/$dir
+    if [ -d "$HOME/$dir" ]; then 
+        sudo rm -rf "$HOME/$dir"
     fi
 
-    sudo cp -f -r $HOME/bev-hyprland/$dir $HOME/
+    sudo cp -f -r "$HOME/bev-hyprland/$dir" "$HOME/"
 done
 
 sudo find "$HOME/.config" -type d -exec chmod 755 {} +
 sudo find "$HOME/.config" -type f -exec chmod 755 {} +
 
 # Copy Pictures directory silently
-sudo cp -f -r $HOME/bev-hyprland/configs/Pictures $HOME &> /dev/null
+sudo cp -f -r "$HOME/bev-hyprland/configs/Pictures" "$HOME/" &> /dev/null
 
 # Automatically determine CPU brand (AMD or Intel)
 CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
