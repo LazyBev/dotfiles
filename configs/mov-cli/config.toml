@@ -6,18 +6,18 @@ version = 1
 debug = false
 player = "mpv"
 quality = "auto"
-# parser = "lxml"
-# editor = "nano"
+parser = "lxml"
+editor = "emacs"
 skip_update_checker = false
 auto_try_next_scraper = false
 hide_ip = true
 
-# [mov-cli.quality]
-# resolution = 720
+[mov-cli.quality]
+resolution = 1080
 
 [mov-cli.ui]
-# fzf = true
-# limit = 20
+fzf = true
+limit = 20
 preview = true
 watch_options = true
 display_quality = false
@@ -27,16 +27,16 @@ test = "mov-cli-test"
 youtube = "mov-cli-youtube"
 
 [mov-cli.scrapers]
-# default = "youtube"
+default = "youtube"
 test = "test.DEFAULT"
 
 [mov-cli.http] # Don't mess with it if you don't know what you are doing!
 timeout = 15
 # headers = { User-Agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/117.0" }
 
-# [mov-cli.downloads] # Do not use backslashes use forward slashes
-# save_path = "~/Downloads"
-# yt_dlp = true
+[mov-cli.downloads] # Do not use backslashes use forward slashes
+save_path = "~/Downloads"
+yt_dlp = true
 
-# [mov-cli.subtitles] # See this page: https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
-# language = "en"
+[mov-cli.subtitles] # See this page: https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
+language = "en"
