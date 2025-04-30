@@ -12,8 +12,8 @@ skip_update_checker = false
 auto_try_next_scraper = false
 hide_ip = true
 
-[mov-cli.quality]
-resolution = 1080
+# [mov-cli.quality]
+# resolution = 1080
 
 [mov-cli.ui]
 fzf = true
@@ -27,7 +27,7 @@ test = "mov-cli-test"
 youtube = "mov-cli-youtube"
 
 [mov-cli.scrapers]
-default = "youtube"
+youtube = "youtube.DEFAULT"
 test = "test.DEFAULT"
 
 [mov-cli.http] # Don't mess with it if you don't know what you are doing!
