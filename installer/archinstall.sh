@@ -70,7 +70,7 @@ timedatectl set-ntp true
 loadkeys "$keyboard"
 
 # Dotfiles
-git clone https://github.com/LazyBev/bev-hyprland
+git clone https://github.com/LazyBev/bev-dotfiles
 
 # Set timezone
 ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
