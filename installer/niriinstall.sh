@@ -250,59 +250,59 @@ if lspci | grep -i nvidia &> /dev/null; then
         lib32-vulkan-mesa-layers \
         
 : <<'END_COMMENT'
-    # Get NVIDIA vendor ID
-    NVIDIA_VENDOR="0x$(lspci -nn | grep -i nvidia | sed -n 's/.*\[\([0-9A-Fa-f]\+\):[0-9A-Fa-f]\+\].*/\1/p' | head -n 1)"
+# Get NVIDIA vendor ID
+NVIDIA_VENDOR="0x$(lspci -nn | grep -i nvidia | sed -n 's/.*\[\([0-9A-Fa-f]\+\):[0-9A-Fa-f]\+\].*/\1/p' | head -n 1)"
         
-    # Create udev rules for NVIDIA power management
-    echo "# Enable runtime PM for NVIDIA VGA/3D controller devices on driver bind
-    ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
-    ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+# Create udev rules for NVIDIA power management
+echo "# Enable runtime PM for NVIDIA VGA/3D controller devices on driver bind
+ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
 
-    # Disable runtime PM for NVIDIA VGA/3D controller devices on driver unbind
-    ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"on\"
-    ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"on\"
+# Disable runtime PM for NVIDIA VGA/3D controller devices on driver unbind
+ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"on\"
+ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"on\"
 
-    # Enable runtime PM for NVIDIA VGA/3D controller devices on adding device
-    ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
-    ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"" | envsubst | sudo tee /etc/udev/rules.d/80-nvidia-pm.rules > /dev/null
+# Enable runtime PM for NVIDIA VGA/3D controller devices on adding device
+ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"" | envsubst | sudo tee /etc/udev/rules.d/80-nvidia-pm.rules > /dev/null
 
-    # Set NVIDIA kernel module options
-    echo "options nvidia NVreg_UsePageAttributeTable=1
-    options nvidia_drm modeset=1 fbdev=1
-    options nvidia NVreg_RegistryDwords="PerfLevelSrc=0x2222"
-    options nvidia NVreg_EnablePCIeGen3=1 NVreg_EnableMSI=1" | sudo tee /etc/modprobe.d/nvidia.conf > /dev/null
+# Set NVIDIA kernel module options
+echo "options nvidia NVreg_UsePageAttributeTable=1
+options nvidia_drm modeset=1 fbdev=1
+options nvidia NVreg_RegistryDwords="PerfLevelSrc=0x2222"
+options nvidia NVreg_EnablePCIeGen3=1 NVreg_EnableMSI=1" | sudo tee /etc/modprobe.d/nvidia.conf > /dev/null
     
-    # Desired modules
-    MODULES=("nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm")
+# Desired modules
+MODULES=("nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm")
 
-    MODPROBE_CONF="/etc/mkinitcpio.conf"
+MODPROBE_CONF="/etc/mkinitcpio.conf"
     
-    # Check if MODULES line exists
-    if sudo grep -q "^MODULES=" "$MODPROBE_CONF"; then
-        # Extract current modules
-        CURRENT_MODULES=$(grep "^MODULES=" "$MODPROBE_CONF" | sed -E 's/MODULES=\((.*)\)/\1/')
+# Check if MODULES line exists
+if sudo grep -q "^MODULES=" "$MODPROBE_CONF"; then
+    # Extract current modules
+    CURRENT_MODULES=$(grep "^MODULES=" "$MODPROBE_CONF" | sed -E 's/MODULES=\((.*)\)/\1/')
     
-        for mod in "${MODULES[@]}"; do
-            if ! echo "$CURRENT_MODULES" | grep -qw "$mod"; then
-                CURRENT_MODULES="$CURRENT_MODULES $mod"
-            fi
-        done
+    for mod in "${MODULES[@]}"; do
+        if ! echo "$CURRENT_MODULES" | grep -qw "$mod"; then
+            CURRENT_MODULES="$CURRENT_MODULES $mod"
+        fi
+    done
 
-        # Update MODULES line
-        sudo sed -i "s|^MODULES=.*|MODULES=($CURRENT_MODULES)|" "$MODPROBE_CONF"
-    else
-        # Add MODULES line if not present
-        echo "MODULES=(${MODULES[*]})" | sudo tee -a "$MODPROBE_CONF" > /dev/null
-    fi
+    # Update MODULES line
+    sudo sed -i "s|^MODULES=.*|MODULES=($CURRENT_MODULES)|" "$MODPROBE_CONF"
+else
+    # Add MODULES line if not present
+    echo "MODULES=(${MODULES[*]})" | sudo tee -a "$MODPROBE_CONF" > /dev/null
+fi
         
-    # Enable and start NVIDIA persistence daemon
-    sudo systemctl enable nvidia-persistenced.service
+# Enable and start NVIDIA persistence daemon
+sudo systemctl enable nvidia-persistenced.service
         
-    # Regenerate initramfs
-    sudo mkinitcpio -P
+# Regenerate initramfs
+sudo mkinitcpio -P
         
-    # Apply udev rules immediately
-    sudo udevadm control --reload-rules && sudo udevadm trigger
+# Apply udev rules immediately
+sudo udevadm control --reload-rules && sudo udevadm trigger
 END_COMMENT
         
 fi
@@ -346,6 +346,80 @@ echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvco
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
+
+mkdir -p "$HOME/.config/arti" && cat > "$HOME/.config/arti/arti.toml" <<EOF
+# Arti Configuration File
+# Created on May 1, 2025
+
+# Basic application behavior
+[application]
+watch_configuration = true
+permit_debugging = false
+allow_running_as_root = false
+
+# SOCKS proxy setup
+[proxy]
+socks_listen = 9150  # Standard Tor Browser port
+
+# Configure logging
+[logging]
+console = "info"
+log_sensitive_information = false
+time_granularity = "1s"
+
+# Files for storing stuff on disk
+[storage]
+cache_dir = "${ARTI_CACHE}"
+state_dir = "${ARTI_LOCAL_DATA}"
+
+[storage.permissions]
+dangerously_trust_everyone = false
+trust_user = ":current"
+trust_group = ":username"
+
+# Circuit configuration for better anonymity
+[path_rules]
+ipv4_subnet_family_prefix = 16
+ipv6_subnet_family_prefix = 32
+reachable_addrs = ["*:80", "*:443"]  # Common ports for better connectivity
+long_lived_ports = [22, 80, 443, 6667, 8300]
+
+# Preemptive circuit settings for better performance
+[preemptive_circuits]
+disable_at_threshold = 8
+initial_predicted_ports = [80, 443]
+prediction_lifetime = "30 mins"
+min_exit_circs_for_port = 2
+
+# Channel padding for enhanced security
+[channel]
+padding = "normal"
+
+# Circuit timing settings
+[circuit_timing]
+max_dirtiness = "10 minutes"
+request_timeout = "30 sec"
+request_max_retries = 8
+request_loyalty = "50 msec"
+
+# Address filtering
+[address_filter]
+allow_local_addrs = false
+allow_onion_addrs = true
+
+# Stream timeout configuration
+[stream_timeouts]
+connect_timeout = "15 sec"
+resolve_timeout = "10 sec"
+resolve_ptr_timeout = "10 sec"
+
+# System resource configuration
+[system]
+max_files = 8192
+
+[vanguards]
+mode = "lite"
+EOF
 
 # Define an array of config directories to copy
 CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "mov-cli" "fuzzel" "fcitx5")
