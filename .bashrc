@@ -119,7 +119,7 @@ plugins=(
 
 source "$OSH"/oh-my-bash.sh
 export PATH="$HOME/.emacs.d/bin:$PATH"
-
+alias yt="ytfzf"
 
 # User configuration
 # export MANPATH="/usr/local/man:$MANPATH"
