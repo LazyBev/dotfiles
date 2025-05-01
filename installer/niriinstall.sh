@@ -328,7 +328,7 @@ sudo pacman -Syu --noconfirm flatpak
 
 # For development
 "$HOME/bev-dotfiles/installer/langs.sh"
-yay -Syu lolcat discord steam-native-runtime code love sdl3 raylib
+yay -Syu lolcat vesktop-bin steam-native-runtime code love sdl3 raylib
 # yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
 
 echo -e "\n------------------------------------------------------------------------\n"
