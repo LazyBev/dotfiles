@@ -167,11 +167,12 @@ yay -Syu --noconfirm \
     xf86-input-libinput \
     xorg-xev \
     xorg-xwayland \
+    xwayland \
     xwayland-run \
     xwayland-satellite \
     ytfzf \
     zip \
-    zram-generator
+    zram-generator 
 
 if ! command -v iwctl &> /dev/null; then
     yay -Syu iwd
