@@ -16,6 +16,7 @@ yay -S \
     hyprland-per-window-layout \
     hyprlang \
     hyprpm \
+    pyprland \
     waybar \
     eww \
     nautilus \
