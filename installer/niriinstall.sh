@@ -30,7 +30,7 @@ source "$SCRIPT_DIR/helper.sh"
 trap 'trap_message' INT TERM
 
 # Script start
-print_bold_blue "\nSimple Hyprland"
+print_bold_blue "\nBev's niri config"
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting prerequisites setup..."
@@ -50,11 +50,13 @@ yay -Syu --noconfirm \
     adobe-source-han-sans-kr-fonts \
     alsa-utils \
     arch-install-scripts \
+    arti \
     blueman \
     bluez \
     bluez-utils \
     brightnessctl \
     btop \
+    chafa \
     cliphist \
     cmake \
     curl \
@@ -90,6 +92,7 @@ yay -Syu --noconfirm \
     man-pages \
     mesa \
     meson \
+    mov-cli \
     mpv \
     neovim \
     network-manager-applet \
@@ -105,6 +108,8 @@ yay -Syu --noconfirm \
     playerctl \
     polkit \
     python \
+    python-chafapy \
+    python-mov-cli-youtube \
     python-pip \
     python-pipx \
     qt5ct \
@@ -158,7 +163,6 @@ yay -Syu --noconfirm \
     xdg-desktop-portal \
     xdg-desktop-portal-gtk \
     xdg-desktop-portal-gnome \
-    xdg-desktop-portal-hyprland \
     xdotool \
     xf86-input-libinput \
     xorg-xev \
@@ -243,7 +247,8 @@ if lspci | grep -i nvidia &> /dev/null; then
         egl-wayland \
         vulkan-mesa-layers \
         lib32-vulkan-mesa-layers \
-
+        
+: <<'END_COMMENT'
     # Get NVIDIA vendor ID
     NVIDIA_VENDOR="0x$(lspci -nn | grep -i nvidia | sed -n 's/.*\[\([0-9A-Fa-f]\+\):[0-9A-Fa-f]\+\].*/\1/p' | head -n 1)"
         
@@ -297,6 +302,7 @@ if lspci | grep -i nvidia &> /dev/null; then
         
     # Apply udev rules immediately
     sudo udevadm control --reload-rules && sudo udevadm trigger
+END_COMMENT
         
 fi
 
@@ -312,44 +318,8 @@ sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting utilities setup..."
 
-# Install chafa
-sudo git clone https://github.com/hpjansson/chafa.git
-cd chafa || exit
-sudo ./autogen.sh
-sudo make
-sudo make install
-cd .. && sudo rm -rf chafa
-
-# Set up mov-cli and lxml in a virtual environment
-cd "$HOME" || exit
-python -m venv yt
-source yt/bin/activate
-pip install --upgrade pip
-pip install lxml 
-pip install mov-cli -U
-pip install mov-cli-youtube
-deactivate
-
 # Go back to installer directory
-cd bev-hyprland/installer || exit
-
-# Build and install arti
-if ! command -v arti &> /dev/null; then
-    sudo git clone https://gitlab.torproject.org/tpo/core/arti.git
-    cd arti || exit
-    sudo cargo build -p arti --release
-    sudo mv -f target/release/arti /usr/bin/
-    cd .. && sudo rm -rf arti
-    
-    # Create arti config if not exists
-    if [[ ! -d "$HOME/.config/arti" ]]; then
-        mkdir -p "$HOME/.config/arti"
-    fi
-    tee "$HOME/.config/arti/arti-config.toml" > /dev/null <<ART
-[network]
-socks_port = 9050
-ART
-fi
+cd bev-dotfiles/installer || exit
 
 # Install flatpak and Sober
 sudo pacman -Syu --noconfirm flatpak
@@ -363,9 +333,9 @@ yay -Syu lolcat discord steam-native-runtime code love sdl3 raylib
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting theming setup..."
 
-sudo tar -xvf "$HOME/bev-hyprland/assets/themes/Catppuccin-Mocha.tar.xz" -C /usr/share/themes/
+sudo tar -xvf "$HOME/bev-dotfiles/assets/themes/Catppuccin-Mocha.tar.xz" -C /usr/share/themes/
 
-sudo tar -xvf "$HOME/bev-hyprland/assets/icons/Tela-circle-dracula.tar.xz" -C /usr/share/icons/
+sudo tar -xvf "$HOME/bev-dotfiles/assets/icons/Tela-circle-dracula.tar.xz" -C /usr/share/icons/
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
@@ -375,13 +345,20 @@ echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvco
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
+
 # Define an array of config directories to copy
 CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "mov-cli" "fuzzel" "fcitx5")
 
-sudo cp -f "$HOME/bev-hyprland/.bashrc" "$HOME/" || {
+sudo cp -f "$HOME/bev-dotfiles/.bashrc" "$HOME/" || {
     sudo rm -f "$HOME/.bashrc"
-    sudo cp -f "$HOME/bev-hyprland/.bashrc" "$HOME/"
+    sudo cp -f "$HOME/bev-dotfiles/.bashrc" "$HOME/"
 } 
+
+if sudo rm -rf "/root/.config/mov-cli"; then
+    sudo cp -f -r "$HOME/bev-dotfiles/configs/mov-cli" "/root/.config/"
+else
+    sudo cp -f -r "$HOME/bev-dotfiles/configs/mov-cli" "/root/.config/"
+fi
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
@@ -389,13 +366,13 @@ for dir in "${CONFIG_DIRS[@]}"; do
         sudo rm -rf "$HOME/.config/$dir"
     fi
 
-    sudo cp -f -r "$HOME/bev-hyprland/configs/$dir" "$HOME/.config/"
+    sudo cp -f -r "$HOME/bev-dotfiles/configs/$dir" "$HOME/.config/"
 done
 
 # Define an array of emacs directories to copy
 EMACS_DIRS=(".emacs.local" ".emacs.rc")
 
-sudo cp -f -r "$HOME/bev-hyprland/.emacs" "$HOME/"
+sudo cp -f -r "$HOME/bev-dotfiles/.emacs" "$HOME/"
 
 # Loop through and copy each emacs directory
 for dir in "${EMACS_DIRS[@]}"; do
@@ -403,14 +380,14 @@ for dir in "${EMACS_DIRS[@]}"; do
         sudo rm -rf "$HOME/$dir"
     fi
 
-    sudo cp -f -r "$HOME/bev-hyprland/$dir" "$HOME/"
+    sudo cp -f -r "$HOME/bev-dotfiles/$dir" "$HOME/"
 done
 
 sudo find "$HOME/.config" -type d -exec chmod 755 {} +
 sudo find "$HOME/.config" -type f -exec chmod 755 {} +
 
 # Copy Pictures directory silently
-sudo cp -f -r "$HOME/bev-hyprland/configs/Pictures" "$HOME/" &> /dev/null
+sudo cp -f -r "$HOME/bev-dotfiles/configs/Pictures" "$HOME/" &> /dev/null
 
 # Automatically determine CPU brand (AMD or Intel)
 CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
