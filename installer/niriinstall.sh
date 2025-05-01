@@ -169,6 +169,7 @@ yay -Syu --noconfirm \
     xorg-xwayland \
     xwayland-run \
     xwayland-satellite \
+    ytfzf \
     zip \
     zram-generator
 
