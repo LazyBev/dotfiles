@@ -1,7 +1,7 @@
 THIS IS MY STEAM LAUNCH OPTIONS (these are for performance)
 
 
-# For VRChat (Might need WAYLAND_DISPLAY="")
+# For VRChat (Might need WAYLAND_DISPLAY="" for VR)
 unset SDL_VIDEODRIVER; PROTON_USE_WINED3D=0 %command%
 
 
