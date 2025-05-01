@@ -6,7 +6,7 @@
         "themeLinks": [],
         "eagerPatches": false,
         "enabledThemes": [
-            "midnight.theme.css"
+            "https://raw.githubusercontent.com/warrayquipsome/Chillax/refs/heads/main/chillax.theme.css"
         ],
         "enableReactDevtools": false,
         "frameless": false,
