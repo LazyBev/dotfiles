@@ -107,6 +107,7 @@ yay -Syu --noconfirm \
     pavucontrol \
     playerctl \
     polkit \
+    polkit-kde-agent \
     python \
     python-chafapy \
     python-mov-cli-youtube \
