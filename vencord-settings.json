@@ -3,7 +3,7 @@
         "autoUpdate": true,
         "autoUpdateNotification": true,
         "useQuickCss": true,
-        "themeLinks": [],
+        "themeLinks": ["https://marda33.github.io/SkeuoCord/SkeuoCord.theme.css"],
         "eagerPatches": false,
         "enabledThemes": [
             "https://marda33.github.io/SkeuoCord/SkeuoCord.theme.css"
