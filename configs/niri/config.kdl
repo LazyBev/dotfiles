@@ -312,9 +312,8 @@ window-rule {
 // Open the Firefox picture-in-picture player as floating by default.
 window-rule {
     // This app-id regular expression will work for both:
-    // - host Firefox (app-id is "firefox")
-    // - Flatpak Firefox (app-id is "org.mozilla.firefox")
-    match app-id=r#"floorp$"# title="^Picture-in-Picture$"
+    match app-id="floorp$" title="^Picture-in-Picture$"
+    match app-id="firefox$" title="^Picture-in-Picture$"
     open-floating true
 }
 
@@ -344,6 +343,24 @@ workspace "chat"
 window-rule {
     match app-id="discord"
     open-on-workspace "chat"
+    open-maximized true
+}
+
+window-rule {
+    match app-id="vesktop"
+    open-on-workspace "chat"
+    open-maximized true
+}
+
+window-rule {
+    match app-id="spotify"
+    open-on-workspace "chat"
+    open-maximized true
+}
+
+window-rule {
+    match app-id="emacs"
+    open-on-workspace "main"
     open-maximized true
 }
 
@@ -393,49 +410,50 @@ binds {
     Alt+G { spawn "ghostty" "-e" "read -p 'Search: ' query; sudo mov-cli -s youtube \"$query\""; }
     Alt+Ctrl+P { spawn "bash" "-c" "reboot"; }
     Alt+Shift+P { spawn "bash" "-c" "shutdown now"; }
-    Mod+X { spawn "swaylock"; }
 
+    Mod+Shift+L { spawn "swaylock"; }
+
+    Alt+X { screenshot; }
+    Alt+Shift+X { screenshot-screen; }
+    Alt+Ctrl+X { screenshot-window; }
+    
+    Alt+Q { close-window; }
+    
+    Alt+J { focus-column-left; }
+    Alt+K { focus-window-down; }
+    Alt+I { focus-window-up; }
+    Alt+L { focus-column-right; }
+    Alt+Shift+J { move-column-left; }
+    Alt+Shift+K { move-window-down; }
+    Alt+Shift+I { move-window-up; }
+    Alt+Shift+L { move-column-right; }
+    
+    Alt+Home { focus-column-first; }
+    Alt+End { focus-column-last; }
+    Alt+Shift+Home { move-column-to-first; }
+    Alt+Shift+End { move-column-to-last; }
+    
+    Alt+M { focus-workspace-down; }
+    Alt+N { focus-workspace-up; }
+    Alt+Shift+M { move-column-to-workspace-down; }
+    Alt+Shift+N { move-column-to-workspace-up; }
+    Alt+Ctrl+M { move-workspace-down; }
+    Alt+Ctrl+N { move-workspace-up; }
+    
     Alt+P { power-off-monitors; }
-            
+    
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }        
+
     // You can also use a shell. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument in the end.
     // Alt+T { spawn "bash" "-c" "notify-send hello && exec alacritty"; }
 
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
-    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
-    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
-    XF86AudioMute        allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
-    XF86AudioMicMute     allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
-
-    Alt+Q { close-window; }
-
-    Alt+J     { focus-column-left; }
-    Alt+K     { focus-window-down; }
-    Alt+I     { focus-window-up; }
-    Alt+L     { focus-column-right; }
-
-    Alt+Shift+J     { move-column-left; }
-    Alt+Shift+K     { move-window-down; }
-    Alt+Shift+I     { move-window-up; }
-    Alt+Shift+L     { move-column-right; }
-
-    Alt+Home { focus-column-first; }
-    Alt+End  { focus-column-last; }
-    Alt+Shift+Home { move-column-to-first; }
-    Alt+Shift+End  { move-column-to-last; }
-
-    Alt+M              { focus-workspace-down; }
-    Alt+N              { focus-workspace-up; }
-    Alt+Shift+M         { move-column-to-workspace-down; }
-    Alt+Shift+N         { move-column-to-workspace-up; }
-    Alt+Ctrl+M         { move-workspace-down; }
-    Alt+Ctrl+N         { move-workspace-up; }
-
-    Alt+X { screenshot; }
-    Alt+Shift+X { screenshot-screen; }
-    Alt+Ctrl+X { screenshot-window; }
-
+    
     // Alternative commands that move across workspaces when reaching
     // the first or last window in a column.
     // Alt+J     { focus-window-or-workspace-down; }
