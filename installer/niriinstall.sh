@@ -40,7 +40,7 @@ sudo pacman -Syu --noconfirm
 if ! command -v yay &> /dev/null; then
     sudo git clone https://aur.archlinux.org/yay-bin.git
     sudo chown "$USER:$USER" -R yay-bin
-    cd yay-bin && makepkg -si && cd .. && rm -rf sudo yay-bin
+    cd yay-bin && makepkg -si && cd .. && sudo rm -rf yay-bin
 fi
 
 yay -Syu --noconfirm \
