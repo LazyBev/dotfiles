@@ -121,12 +121,12 @@ yay -Syu acpi \
     slurp \
     stow \
     sudo \
-    swayidle \ 
+    swayidle
 yay -Syu swaylock \
     swww \
     tar \
     tlp \
-    tmux \
+    tmux
 yay -Syu ttf-dejavu \
     ttf-fira-code \
     ttf-fira-code-nerd \
