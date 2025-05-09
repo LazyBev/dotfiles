@@ -324,7 +324,7 @@ sudo pacman -Syu --noconfirm flatpak
 # flatpak install --user -y flathub org.vinegarhq.Sober
 
 # For development
-"$HOME/bev-dotfiles/installer/langs.sh"
+chmod +x "$HOME/bev-dotfiles/installer/langs.sh" && "$HOME/bev-dotfiles/installer/langs.sh"
 yay -Syu lolcat vesktop-bin steam-native-runtime code love sdl3 raylib
 # yay -Syu vkbasalt protontricks mangohud figlet stremio spotify
 
