@@ -13,7 +13,7 @@ trap 'trap_message' INT TERM
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
-touch ~/.config/Kvantum/kvantum.kvconfig
+mkdir -p ~/.config/Kvantum/ && touch ~/.config/Kvantum/kvantum.kvconfig
 echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
 
 echo -e "\n------------------------------------------------------------------------\n"
