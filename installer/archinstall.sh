@@ -104,8 +104,9 @@ grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable iwd.service
 sudo systemctl enable --now systemd-networkd
 sudo systemctl enable --now systemd-resolved 
-sudo systemctl enable --now NetworkManager
-sudo systemctl enable --now seatd
+sudo systemctl enable --now NetworkManager 
+pacman -Sy seatd
+systemctl enable --now seatd
 
 sudo tee /etc/systemd/network/20-wired.network <<NET
 [Match]
