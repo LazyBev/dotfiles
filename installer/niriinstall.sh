@@ -122,7 +122,7 @@ yay -Syu acpi \
     stow \
     sudo \
     swayidle \ 
-    swaylock \
+yay -Syu swaylock \
     swww \
     tar \
     tlp \
