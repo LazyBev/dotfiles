@@ -69,9 +69,6 @@ trap 'echo "An error occurred. Exiting..."; exit 1;' ERR
 timedatectl set-ntp true
 loadkeys "$keyboard"
 
-# Dotfiles
-git clone https://github.com/LazyBev/bev-dotfiles
-
 # Set timezone
 ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
 hwclock --systohc
@@ -98,7 +95,11 @@ else
     echo "%wheel ALL=(ALL) ALL" | tee -a /etc/sudoers > /dev/null
     usermod -aG audio,video,lp,input "$user"
     echo "User $user created and configured."
-fi
+fi 
+
+# Dotfiles
+git clone https://github.com/LazyBev/bev-dotfiles "/home/$user/"
+
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable iwd.service
