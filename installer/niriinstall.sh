@@ -149,7 +149,6 @@ yay -Syu acpi \
     wayland-protocols \
     wayland-utils \
     waypaper \
-    wdisplays \
     wev \
     wf-recorder \
     wget \
