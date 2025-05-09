@@ -127,7 +127,7 @@ yay -Syu acpi \
     tar \
     tlp \
     tmux \
-    ttf-dejavu \
+yay -Syu ttf-dejavu \
     ttf-fira-code \
     ttf-fira-code-nerd \
     ttf-fira-mono \
@@ -138,8 +138,8 @@ yay -Syu acpi \
     ttf-joypixels \
     ttf-liberation \
     ttf-material-design-iconic-font
-    ttf-meslo-nerd \
-    ttf-roboto-mono-nerd \
+yay -Syu ttf-meslo-nerd
+yay -Syu ttf-roboto-mono-nerd \
     ttf-source-code-pro-nerd \
     unzip \
     vulkan-mesa-layers \
@@ -318,9 +318,6 @@ sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting utilities setup..."
-
-# Go back to installer directory
-cd bev-dotfiles/installer || exit
 
 # Install flatpak and Sober
 sudo pacman -Syu --noconfirm flatpak
