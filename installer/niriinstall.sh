@@ -334,6 +334,8 @@ sudo pacman -Syu --noconfirm flatpak
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
+curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-dirs -o ./advcpmv/install.sh && (cd advcpmv && sh install.sh)
+
 mkdir -p ~/.config/Kvantum/ && touch ~/.config/Kvantum/kvantum.kvconfig
 echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
 
