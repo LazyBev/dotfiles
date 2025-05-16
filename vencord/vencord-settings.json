@@ -339,10 +339,10 @@
                 "enabled": false
             },
             "NoPendingCount": {
-                "enabled": true,
-                "hideFriendRequestsCount": true,
-                "hideMessageRequestsCount": true,
-                "hidePremiumOffersCount": true
+                "enabled": false,
+                "hideFriendRequestsCount": false,
+                "hideMessageRequestsCount": false,
+                "hidePremiumOffersCount": false
             },
             "NoProfileThemes": {
                 "enabled": false
