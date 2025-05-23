@@ -161,8 +161,6 @@ yay -Syu ttf-roboto-mono-nerd \
     wev \
     wf-recorder \
     wget \
-    wine \
-    winetricks \
     wireless_tools \
     wlr-randr \
     wlroots \
@@ -181,7 +179,15 @@ yay -Syu ttf-roboto-mono-nerd \
     ytfzf \
     zip \
     zram-generator 
-
+yay -Syu wine-git \
+    wine-mono \
+    wine-staging-wow64 \
+    wine-wow64 \
+    wine-stable \
+    winegui \
+    winetricks
+    fl-studio-integrator
+    
 if ! command -v iwctl &> /dev/null; then
     yay -Syu iwd
 fi
