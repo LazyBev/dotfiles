@@ -376,9 +376,9 @@ window-rule {
     open-maximized true
 }
 
-spawn-at-startup "xwayland-satellite &"
-spawn-at-startup "dunst &"
-spawn-at-startup "/usr/lib/polkit-kde-authentication-agent-1 &"
+spawn-at-startup "bash" "-c" "xwayland-satellite"
+spawn-at-startup "bash" "-c" "dunst"
+spawn-at-startup "bash" "-c" "/usr/lib/polkit-kde-authentication-agent-1"
 spawn-at-startup "bash" "-c" "swaybg -i ~/Pictures/jodio.jpg"
 
 binds {
@@ -408,7 +408,7 @@ binds {
     Alt+U { spawn "bash" "-c" "pgrep waybar && killall waybar || waybar &"; }
     Alt+Y { spawn "bash" "-c" "waypaper"; }
     Alt+A { spawn "bash" "-c" "waypaper"; }
-    Alt+G { spawn "ghostty" "-e" "read -p 'Search: ' query; sudo mov-cli -s youtube \"$query\""; }
+    // Alt+G { }
     Alt+Ctrl+P { spawn "bash" "-c" "reboot"; }
     Alt+Shift+P { spawn "bash" "-c" "shutdown now"; }
 
