@@ -10,7 +10,7 @@ input {
     keyboard {
         xkb {
             layout "gb"
-	          options "numpad:mac"
+                  options "numpad:mac"
         }
     }
 
@@ -202,13 +202,13 @@ layout {
         // radius. It has to assume that windows have square corners, leading to
         // shadow artifacts inside the CSD rounded corners. This setting fixes
         // those artifacts.
-        // 
+        //
         // However, instead you may want to set prefer-no-csd and/or
         // geometry-corner-radius. Then, niri will know the corner radius and
         // draw the shadow correctly, without having to draw it behind the
         // window. These will also remove client-side shadows if the window
         // draws any.
-        // 
+        //
         // draw-behind-window true
 
         // You can change how shadows look. The values below are in logical
@@ -306,7 +306,7 @@ window-rule {
     match app-id=r#"^com\.mitchellh\.ghostty$"#
     default-column-width {}
     open-maximized true
-    
+
 }
 
 // Open the Firefox picture-in-picture player as floating by default.
@@ -376,9 +376,9 @@ window-rule {
     open-maximized true
 }
 
-spawn-at-startup "xwayland-satellite"
-spawn-at-startup "dunst"
-spawn-at-startup "/usr/lib/polkit-kde-authentication-agent-1"
+spawn-at-startup "xwayland-satellite &"
+spawn-at-startup "dunst &"
+spawn-at-startup "/usr/lib/polkit-kde-authentication-agent-1 &"
 spawn-at-startup "bash" "-c" "swaybg -i ~/Pictures/jodio.jpg"
 
 binds {
@@ -404,6 +404,7 @@ binds {
     Alt+T { spawn "bash" "-c" "dolphin"; }
     Alt+E { spawn "bash" "-c" "emacs"; }
     Alt+C { spawn "bash" "-c" "emacs ~/.config/niri/config.kdl"; }
+    Alt+V { spawn "bash" "-c" "vesktop --enable-features=UseOzonePlatform --ozone-platform=wayland"; }
     Alt+U { spawn "bash" "-c" "pgrep waybar && killall waybar || waybar &"; }
     Alt+Y { spawn "bash" "-c" "waypaper"; }
     Alt+A { spawn "bash" "-c" "waypaper"; }
@@ -416,9 +417,9 @@ binds {
     Alt+X { screenshot; }
     Alt+Shift+X { screenshot-screen; }
     Alt+Ctrl+X { screenshot-window; }
-    
+
     Alt+Q { close-window; }
-    
+
     Alt+J { focus-column-left; }
     Alt+K { focus-window-down; }
     Alt+I { focus-window-up; }
@@ -427,25 +428,25 @@ binds {
     Alt+Shift+K { move-window-down; }
     Alt+Shift+I { move-window-up; }
     Alt+Shift+L { move-column-right; }
-    
+
     Alt+Home { focus-column-first; }
     Alt+End { focus-column-last; }
     Alt+Shift+Home { move-column-to-first; }
     Alt+Shift+End { move-column-to-last; }
-    
+
     Alt+M { focus-workspace-down; }
     Alt+N { focus-workspace-up; }
     Alt+Shift+M { move-column-to-workspace-down; }
     Alt+Shift+N { move-column-to-workspace-up; }
     Alt+Ctrl+M { move-workspace-down; }
     Alt+Ctrl+N { move-workspace-up; }
-    
+
     Alt+P { power-off-monitors; }
-    
+
     XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
     XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
     XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
-    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }        
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
 
     // You can also use a shell. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument in the end.
@@ -453,7 +454,7 @@ binds {
 
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
-    
+
     // Alternative commands that move across workspaces when reaching
     // the first or last window in a column.
     // Alt+J     { focus-window-or-workspace-down; }
@@ -567,9 +568,9 @@ binds {
 
     // Expand the focused column to space not taken up by other fully visible columns.
     // Makes the column "fill the rest of the space".
-    Alt+Ctrl+F { expand-column-to-available-width; }
+    // Alt+Ctrl+F { expand-column-to-available-width; }
     // Alt+C { center-column; }
-    
+
     // Finer width adjustments.
     // This command can also:
     // * set width in pixels: "1000"
@@ -586,8 +587,8 @@ binds {
     Alt+Shift+Equal { set-window-height "+10%"; }
 
     // Move the focused window between the floating and the tiling layout.
-    Alt+V   { toggle-window-floating; }
-    Alt+Tab { switch-focus-between-floating-and-tiling; }
+    Alt+Tab   { toggle-window-floating; }
+    Alt+Shift+Tab { switch-focus-between-floating-and-tiling; }
 
     // Toggle tabbed column display Alte.
     // Windows in this column will appear as vertical tabs,
@@ -619,5 +620,5 @@ binds {
 }
 
 environment {
-    DISPLAY ":1"
+    DISPLAY ":0"
 }
