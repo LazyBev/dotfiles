@@ -110,73 +110,12 @@ yay -Syu acpi \
     noto-fonts-emoji \
     nwg-look \
     obsidian \
-    pam_rundir \
-    pamixer \
-    pavucontrol \
-    playerctl \
-    polkit \
-    polkit-kde-agent \
-    python \
-    python-pip \
-    python-pipx \
-    qt5ct \
-    qt6ct \
-    qutebrowser \
-    ranger \
-    ripgrep \
-    sddm \
-    slurp \
-    stow \
-    sudo \
-    swayidle
-yay -Syu swaylock \
-    swww \
-    tar \
-    tlp \
-    tmux
-yay -Syu ttf-dejavu \
-    ttf-fira-code \
-    ttf-fira-code-nerd \
-    ttf-fira-mono \
-    ttf-fira-sans \
-    ttf-hack-nerd \
-    ttf-jetbrains-mono \
-    ttf-jetbrains-mono-nerd \
-    ttf-joypixels \
-    ttf-liberation \
-    ttf-material-design-iconic-font
-yay -Syu ttf-meslo-nerd
-yay -Syu ttf-roboto-mono-nerd \
-    ttf-source-code-pro-nerd \
-    unzip \
-    vulkan-mesa-layers \
-    waybar \
-    wayland \
-    wayland-debug \
-    wayland-protocols \
-    wayland-utils \
-    waypaper \
-    wev \
-    wf-recorder \
-    wget \
-    wireless_tools \
-    wlr-randr \
-    wlroots \
-    xarchiver \
-    xbindkeys \
-    xdg-desktop-portal \
-    xdg-desktop-portal-gtk \
-    xdg-desktop-portal-gnome \
-    xdotool \
-    xf86-input-libinput \
-    xorg-xev \
-    xorg-xwayland \
-    xwayland \
-    xwayland-run \
-    xwayland-satellite \
-    ytfzf \
-    zip \
-    zram-generator
+    pam_rundir 
+
+yay -Syu pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip python-pipx qt5ct qt6ct qutebrowser ranger ripgrep sddm sddm slurp stow sudo swayidle swaylock swww tar tlp tmux
+yay -Syu ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-joypixels ttf-liberation ttf-material-design-iconic-font ttf-meslo-nerd
+yay -Syu ttf-roboto-mono-nerd unzip vulkan-mesa-layers waybar wayland wayland-debug wayland-protocols wayland-utils waypaper wev wf-recorder wget wireless_tools wlr-randr wlroots xarchiver xbindkeys
+yay -Syu xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdotool xf86-input-libinput xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
     
 if ! command -v iwctl &> /dev/null; then
     yay -Syu iwd
