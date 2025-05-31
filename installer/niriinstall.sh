@@ -337,6 +337,7 @@ print_info "\nStarting utilities setup..."
 # Install flatpak and Sober
 sudo pacman -Syu --noconfirm flatpak
 # flatpak install --user -y flathub org.vinegarhq.Sober
+# flatpak install flathub com.stremio.Stremio
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
