@@ -3,6 +3,7 @@ You can install my dotfiles with the provided ```install.sh``` in the ```install
 
 ### Window Manager of choice
 I use Niri. Learn about [Niri](https://github.com/YaLTeR/niri)
+
 also learn about Niri via this video: ([Video](https://youtu.be/z57ocWJ9jeo?si=sM1FtuB73GN_DB-a))
 
 ### Screenshot
