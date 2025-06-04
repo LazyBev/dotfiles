@@ -39,7 +39,7 @@ source "$SCRIPT_DIR/helper.sh"
 trap 'trap_message' INT TERM
 
 # Script start
-print_bold_blue "\nBev's niri config"
+print_bold_blue "\nBev's dotfiles"
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting prerequisites setup..."
@@ -52,70 +52,14 @@ if ! command -v yay &> /dev/null; then
     cd yay-bin && makepkg -si && cd .. && sudo rm -rf yay-bin
 fi
 
-yay -Syu acpi \
-    adobe-source-han-sans-cn-fonts \
-    adobe-source-han-sans-jp-fonts \
-    adobe-source-han-sans-kr-fonts \
-    alsa-utils \
-    arch-install-scripts \
-    acpi \
-    blueman \
-    bluez \
-    bluez-utils \
-    brightnessctl \
-    btop \
-    chafa \
-    cliphist \
-    cmake \
-    curl \
-    dbus \
-    dmenu \
-    dolphin \
-    dunst \
-    emacs \
-    eza \
-    fastfetch \
-    fcitx5-anthy \
-    fcitx5-gtk \
-    fcitx5-im \
-    fcitx5-qt \
-    floorp-bin \
-    fuzzel \
-    fzf \
-    ghostty \
-    git \
-    gvfs \
-    hwinfo \
-    imagemagick \
-    kvantum \
-    kvantum-theme-catppuccin-git \
-    kwayland \
-    lib32-alsa-plugins \
-    lib32-vulkan-mesa-layers \
-    libevdev \
-    libinput \
-    libxkbcommon \
-    make \
-    man-db \
-    man-pages \
-    mesa \
-    meson \
-    mov-cli \
-    mpv \
-    neovim \
-    network-manager-applet \
-    networkmanager \
-    niri \
-    nm-connection-editor \
-    noto-fonts-emoji \
-    nwg-look \
-    obsidian \
-    pam_rundir 
-
-yay -Syu pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip python-pipx qt5ct qt6ct qutebrowser ranger ripgrep sddm sddm slurp stow sudo swayidle swaylock swww tar tlp tmux
-yay -Syu ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-joypixels ttf-liberation ttf-material-design-iconic-font ttf-meslo-nerd
-yay -Syu ttf-roboto-mono-nerd unzip vulkan-mesa-layers waybar wayland wayland-debug wayland-protocols wayland-utils waypaper wev wf-recorder wget wireless_tools wlr-randr wlroots xarchiver xbindkeys
-yay -Syu xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdotool xf86-input-libinput xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
+yay -Syu --noconfirm acpi adobe-source-han-sans-cn-fonts adobe-source-han-sans-jp-fonts adobe-source-han-sans-kr-fonts alsa-utils arch-install-scripts acpi blueman bluez bluez-utils brightnessctl btop chafa 
+yay -Syu --noconfirm cliphist cmake curl dbus dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im fcitx5-qt firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo imagemagick kvantum
+yay -Syu --noconfirm kvantum-theme-catppuccin-git kwayland lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput libxkbcommon make man-db man-pages mesa meson mov-cli mpv neovim network-manager-applet 
+yay -Syu --noconfirm noto-fonts-emoji nwg-look obsidian pam_rundir networkmanager niri nm-connection-editor pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip python-pipx qt5ct qt6ct 
+yay -Syu --noconfirm qutebrowser ranger ripgrep sddm sddm slurp stow sudo swayidle swaylock swww tar tlp tmux ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd ttf-jetbrains-mono
+yay -Syu --noconfirm ttf-jetbrains-mono-nerd ttf-joypixels ttf-liberation ttf-material-design-iconic-font ttf-meslo-nerd ttf-roboto-mono-nerd unzip vulkan-mesa-layers waybar wayland wayland-debug 
+yay -Syu --noconfirm wayland-protocols wayland-utils waypaper wev wf-recorder wget wireless_tools wlr-randr wlroots xarchiver xbindkeys xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdotool
+yay -Syu --noconfirm xf86-input-libinput xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
     
 if ! command -v iwctl &> /dev/null; then
     yay -Syu iwd
@@ -128,11 +72,9 @@ fi
 sudo systemctl enable --now NetworkManager
 
 echo "Installing PipeWire and dependencies..."
-sudo pacman -Syu --noconfirm \
-    alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
-    gst-plugins-good gst-plugins-bad gst-plugin-pipewire gst-libav helvum pavucontrol qpwgraph easyeffects libwireplumber \
-    lib32-libpipewire lib32-pipewire lib32-pipewire-jack lib32-pipewire-v4l2 libpipewire pipewire-v4l2 qemu-audio-pipewire \
-    wireplumber-docs
+yay -Syu --noconfirm alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber gst-plugins-good gst-plugins-bad gst-plugin-pipewire 
+yay -Syu --noconfirm gst-libav helvum pavucontrol qpwgraph easyeffects libwireplumber lib32-libpipewire lib32-pipewire lib32-pipewire-jack lib32-pipewire-v4l2 libpipewire pipewire-v4l2 
+yay -Syu --noconfirm qemu-audio-pipewire wireplumber-docs
 
 # Check if PulseAudio is installed
 if pacman -Q | grep -E '^pulseaudio' &>/dev/null; then
@@ -176,22 +118,8 @@ else
 fi
 
 if lspci | grep -i nvidia &> /dev/null; then
-    yay -Syu --needed --sudoloop --noconfirm \
-        nvidia-dkms \
-        nvidia-utils\
-        nvidia-settings \
-        nvidia-prime \
-        xf86-video-nouveau \
-        opencl-nvidia \
-        lib32-opencl-nvidia \
-        lib32-nvidia-utils \
-        libva-nvidia-driver \
-        nvidia-hook \
-        nvidia-inst \
-        libva-nvidia-driver \
-        egl-wayland \
-        vulkan-mesa-layers \
-        lib32-vulkan-mesa-layers \
+    yay -Syu --needed --sudoloop --noconfirm nvidia-dkms nvidia-utils nvidia-settings nvidia-prime xf86-video-nouveau opencl-nvidia lib32-opencl-nvidia lib32-nvidia-utils libva-nvidia-driver
+    yay -Syu --needed --sudoloop --noconfirm nvidia-hook nvidia-inst libva-nvidia-driver egl-wayland vulkan-mesa-layers lib32-vulkan-mesa-layers
         
 : <<'NOT_NEEDED'
 # Get NVIDIA vendor ID
@@ -265,18 +193,12 @@ print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "mov-cli" "fuzzel" "fcitx5")
+CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5")
 
-sudo cp -f "$HOME/bev-dotfiles/.bashrc" "$HOME/" || {
+sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/" || {
     sudo rm -f "$HOME/.bashrc"
-    sudo cp -f "$HOME/bev-dotfiles/.bashrc" "$HOME/"
+    sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/"
 } 
-
-if sudo rm -rf "/root/.config/mov-cli"; then
-    sudo cp -f -r "$HOME/bev-dotfiles/configs/mov-cli" "/root/.config/"
-else
-    sudo cp -f -r "$HOME/bev-dotfiles/configs/mov-cli" "/root/.config/"
-fi
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
@@ -284,13 +206,13 @@ for dir in "${CONFIG_DIRS[@]}"; do
         sudo rm -rf "$HOME/.config/$dir"
     fi
 
-    sudo cp -f -r "$HOME/bev-dotfiles/configs/$dir" "$HOME/.config/"
+    sudo cp -f -r "$HOME/dotfiles/configs/$dir" "$HOME/.config/"
 done
 
 # Define an array of emacs directories to copy
 EMACS_DIRS=(".emacs.local" ".emacs.rc")
 
-sudo cp -f -r "$HOME/bev-dotfiles/.emacs" "$HOME/"
+sudo cp -f -r "$HOME/dotfiles/.emacs" "$HOME/"
 
 # Loop through and copy each emacs directory
 for dir in "${EMACS_DIRS[@]}"; do
@@ -298,14 +220,13 @@ for dir in "${EMACS_DIRS[@]}"; do
         sudo rm -rf "$HOME/$dir"
     fi
 
-    sudo cp -f -r "$HOME/bev-dotfiles/$dir" "$HOME/"
+    sudo cp -f -r "$HOME/dotfiles/$dir" "$HOME/"
 done
 
-sudo find "$HOME/.config" -type d -exec chmod 755 {} +
-sudo find "$HOME/.config" -type f -exec chmod 755 {} +
+sudo chmod -R u+rwx,go-rwx "$HOME"
 
 # Copy Pictures directory silently
-sudo cp -f -r "$HOME/bev-dotfiles/configs/Pictures" "$HOME/" &> /dev/null
+sudo cp -f -r "$HOME/dotfiles/configs/Pictures" "$HOME/" &> /dev/null
 
 # Automatically determine CPU brand (AMD or Intel)
 CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
