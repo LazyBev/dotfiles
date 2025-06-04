@@ -225,7 +225,6 @@ done
 
 sudo chmod -R u+rwx,go-rwx "$HOME"
 
-# Copy Pictures directory silently
 sudo cp -f -r "$HOME/dotfiles/configs/Pictures" "$HOME/" &> /dev/null
 
 # Automatically determine CPU brand (AMD or Intel)
