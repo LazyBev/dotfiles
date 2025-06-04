@@ -1,6 +1,6 @@
 #!/bin/bash
 
-bash -c "~/bev-dotfiles/installer/niriinstall.sh"
+bash -c "~/bev-dotfiles/installer/install.sh"
 
 yay -S \
     aquamarine \
