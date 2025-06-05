@@ -62,11 +62,11 @@ yay -Syu --noconfirm wayland-protocols wayland-utils waypaper wev wf-recorder wg
 yay -Syu --noconfirm xf86-input-libinput xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
     
 if ! command -v iwctl &> /dev/null; then
-    yay -Syu iwd
+    yay -Syu --noconfirm iwd
 fi
 
 if pacman -Q jack2 &>/dev/null; then
-    sudo pacman -Rdd jack2
+    sudo pacman -Rdd --noconfirm jack2
 fi
 
 sudo systemctl enable --now NetworkManager
