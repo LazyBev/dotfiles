@@ -223,7 +223,7 @@ for dir in "${EMACS_DIRS[@]}"; do
     sudo cp -f -r "$HOME/dotfiles/$dir" "$HOME/"
 done
 
-sudo chown -R $USER:$USER /home/lazybev/
+sudo chown -R $USER:$USER $HOME
 
 sudo cp -f -r "$HOME/dotfiles/configs/Pictures" "$HOME/" &> /dev/null
 
