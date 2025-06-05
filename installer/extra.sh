@@ -24,7 +24,7 @@ echo -e "\n---------------------------------------------------------------------
 print_info "\nStarting utilities setup..."
 
 # Install flatpak and Sober
-yay -Syu --noconfirm arti flatpak wine-git wine-mono wine-staging-wow64 wine-wow64 wine-stable lutris winegui winetricks protonplus
+yay -Syu --noconfirm arti flatpak wine lutris winegui winetricks protonplus
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
