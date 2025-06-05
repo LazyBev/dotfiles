@@ -97,15 +97,12 @@ else
     echo "User $user created and configured."
 fi 
 
-# Dotfiles
-git clone https://github.com/LazyBev/dotfiles "/home/$user/"
-
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable iwd.service
 sudo systemctl enable --now systemd-networkd
 sudo systemctl enable --now systemd-resolved 
-sudo systemctl enable --now NetworkManager 
+# sudo systemctl enable --now NetworkManager 
 pacman -Sy seatd
 systemctl enable --now seatd
 
