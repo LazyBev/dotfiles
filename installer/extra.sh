@@ -26,8 +26,6 @@ print_info "\nStarting utilities setup..."
 # Install flatpak and Sober
 yay -Syu --noconfirm arti flatpak wine lutris winegui winetricks protonplus
 
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
-
 curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-dirs -o ./advcpmv/install.sh && (cd advcpmv && sh install.sh)
 
 mkdir -p ~/.config/Kvantum/ && touch ~/.config/Kvantum/kvantum.kvconfig
