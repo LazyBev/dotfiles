@@ -100,10 +100,10 @@ fi
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable iwd.service
-sudo systemctl enable --now systemd-networkd
-sudo systemctl enable --now systemd-resolved 
-# sudo systemctl enable --now NetworkManager 
-# systemctl enable --now seatd
+sudo systemctl enable systemd-networkd
+sudo systemctl enable systemd-resolved 
+systemctl enable NetworkManager 
+systemctl enable seatd
 
 sudo tee /etc/systemd/network/20-wired.network <<NET
 [Match]
@@ -111,9 +111,6 @@ Name=$network
 [Network]
 DHCP=yes
 NET
-
-sudo systemctl restart systemd-resolved 
-sudo systemctl restart systemd-networkd
 
 EOF
 
