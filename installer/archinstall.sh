@@ -103,7 +103,7 @@ systemctl enable iwd.service
 sudo systemctl enable --now systemd-networkd
 sudo systemctl enable --now systemd-resolved 
 # sudo systemctl enable --now NetworkManager 
-systemctl enable --now seatd
+# systemctl enable --now seatd
 
 sudo tee /etc/systemd/network/20-wired.network <<NET
 [Match]
