@@ -31,7 +31,7 @@ curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-
 mkdir -p ~/.config/Kvantum/ && touch ~/.config/Kvantum/kvantum.kvconfig
 echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
 
-flatpak install --user -y flathub org.vinegarhq.Sober
+flatpak install flathub org.vinegarhq.Sober
 flatpak install flathub com.stremio.Stremio
 flatpak install flathub io.github.equicord.equibop
 flatpak install flathub com.usebottles.bottles
