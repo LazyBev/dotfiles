@@ -188,6 +188,8 @@ fi
 
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
+
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
