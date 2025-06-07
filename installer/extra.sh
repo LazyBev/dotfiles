@@ -24,7 +24,7 @@ echo -e "\n---------------------------------------------------------------------
 print_info "\nStarting utilities setup..."
 
 # Install flatpak and Sober
-yay -Syu --noconfirm arti flatpak wine lutris winegui winetricks protonplus steam-native-runtime yabridge fl-studio-integrator
+yay -Syu --noconfirm arti flatpak wine lutris winegui winetricks protonplus steam-native-runtime yabridge fl-studio-integrator spotify ardour
 
 curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-dirs -o ./advcpmv/install.sh && (cd advcpmv && sh install.sh)
 
