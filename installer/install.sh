@@ -56,10 +56,10 @@ yay -Syu --noconfirm acpi adobe-source-han-sans-cn-fonts adobe-source-han-sans-j
 yay -Syu --noconfirm cliphist cmake curl dbus dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im fcitx5-qt firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo imagemagick kvantum
 yay -Syu --noconfirm kvantum-theme-catppuccin-git kitty kwayland lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput libxkbcommon make man-db man-pages mesa meson mov-cli mpv neovim network-manager-applet 
 yay -Syu --noconfirm noto-fonts-emoji nwg-look obsidian pam_rundir networkmanager niri nm-connection-editor pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip python-pipx qt5ct qt6ct 
-yay -Syu --noconfirm qutebrowser ranger ripgrep sddm sddm slurp stow sudo swayidle swaylock swww tar tlp tmux ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd ttf-jetbrains-mono
-yay -Syu --noconfirm ttf-jetbrains-mono-nerd ttf-joypixels ttf-liberation ttf-material-design-iconic-font ttf-meslo-nerd ttf-roboto-mono-nerd unzip vulkan-mesa-layers waybar wayland
-yay -Syu --noconfirm wayland-protocols wayland-utils waypaper wev wf-recorder wget wireless_tools wlr-randr wlroots xarchiver xbindkeys xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdotool
-yay -Syu --noconfirm xf86-input-libinput xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
+yay -Syu --noconfirm qutebrowser ranger ripgrep sddm sddm slurp stow sudo swayidle swaylock swww tar themix-full-git tlp tmux ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd ttf-jetbrains-mono
+yay -Syu --noconfirm ttf-jetbrains-mono-nerd ttf-joypixels ttf-liberation ttf-material-design-iconic-font ttf-meslo-nerd ttf-roboto-mono-nerd unzip vulkan-mesa-layers waybar wayland wayland-protocols 
+yay -Syu --noconfirm wayland-utils waypaper wev wf-recorder wget wireless_tools wlr-randr wlroots xarchiver xbindkeys xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdotool xf86-input-libinput
+yay -Syu --noconfirm xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
     
 if ! command -v iwctl &> /dev/null; then
     yay -Syu --noconfirm iwd
