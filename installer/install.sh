@@ -188,9 +188,6 @@ fi
 
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
-gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
-
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
@@ -229,6 +226,12 @@ done
 sudo chown -R $USER:$USER $HOME
 
 sudo cp -f -r "$HOME/dotfiles/configs/Pictures" "$HOME/" &> /dev/null
+
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
+
+sudo mv "~/dotfiles/configs/diinki-retro-dark" /usr/share/themes
+
+gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
 
 # Automatically determine CPU brand (AMD or Intel)
 CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
