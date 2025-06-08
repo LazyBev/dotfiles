@@ -189,6 +189,7 @@ fi
 sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
+gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
