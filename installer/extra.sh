@@ -24,14 +24,14 @@ echo -e "\n---------------------------------------------------------------------
 print_info "\nStarting utilities setup..."
 
 # Install flatpak and Sober
-yay -Syu --noconfirm arti flatpak wine lutris winegui winetricks protonplus yabridge fl-studio-integrator spotify ardour
+yay -Syu --noconfirm arti flatpak wine lutris winegui winetricks protonplus yabridge fl-studio-integrator spotify ardour waydroid
 
 curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-dirs -o ./advcpmv/install.sh && (cd advcpmv && sh install.sh)
 
 mkdir -p ~/.config/Kvantum/ && touch ~/.config/Kvantum/kvantum.kvconfig
 echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
 
-flatpak install flathub com.valvesoftware.Steam
+# flatpak install flathub com.valvesoftware.Steam
 flatpak install flathub org.vinegarhq.Sober
 flatpak install flathub com.stremio.Stremio
 flatpak install flathub io.github.equicord.equibop
