@@ -38,6 +38,7 @@ flatpak install flathub io.github.equicord.equibop
 flatpak install flathub com.usebottles.bottles
 flatpak install flathub com.github.tchx84.Flatseal
 flatpak install flathub com.obsproject.Studio
+flatpak install flathub com.obsproject.Studio.Plugin.DroidCam 
 
 mkdir -p "$HOME/.config/arti" && cat > "$HOME/.config/arti/arti.toml" <<EOF
 # Arti Configuration File
