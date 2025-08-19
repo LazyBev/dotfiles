@@ -314,6 +314,7 @@ window-rule {
     // This app-id regular expression will work for both:
     match app-id="floorp$" title="^Picture-in-Picture$"
     match app-id="firefox$" title="^Picture-in-Picture$"
+    match app-id="zen$" title="^Picture-in-Picture$"
     open-floating true
 }
 
