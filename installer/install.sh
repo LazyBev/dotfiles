@@ -229,7 +229,7 @@ sudo cp -f -r "$HOME/dotfiles/configs/Pictures" "$HOME/" &> /dev/null
 
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
 
-sudo mv "~/dotfiles/configs/diinki-retro-dark" /usr/share/themes
+sudo mv "$HOME/dotfiles/configs/diinki-retro-dark" /usr/share/themes
 
 gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
 
