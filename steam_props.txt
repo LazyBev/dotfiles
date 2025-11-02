@@ -1,9 +1,7 @@
 THIS IS MY STEAM LAUNCH OPTIONS (these are for performance)
 
-
 # For VRChat (Might need WAYLAND_DISPLAY="" for VR)
-unset SDL_VIDEODRIVER; PROTON_USE_WINED3D=0 %command%
+WAYLAND_DISPLAY="" unset SDL_VIDEODRIVER; PROTON_USE_WINED3D=0 %command%
 
-
-# Linux                                # Use -F fsr if you have AMD gpu
-PROTON_USE_WINED3D=0 mangohud %command%
+# In-General (Use -F fsr if you have AMD gpu)
+PROTON_USE_DXVK=1 PROTON_ENABLE_VKD3D=1 RADV_PERFTEST=aco DXVK_ASYNC=1 mangohud %command% -F fsr
