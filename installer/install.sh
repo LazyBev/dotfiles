@@ -56,7 +56,7 @@ yay -Syu --noconfirm acpi adobe-source-han-sans-cn-fonts adobe-source-han-sans-j
 yay -Syu --noconfirm cliphist cmake curl dbus dconf-editor dconf dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im fcitx5-qt firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo
 yay -Syu --noconfirm imagemagick kvantum kvantum-theme-catppuccin-git kitty kwayland lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput libxkbcommon make man-db man-pages mesa meson mov-cli mpv neovim
 yay -Syu --noconfirm network-manager-applet noto-fonts-emoji nwg-look obsidian pam_rundir networkmanager niri nm-connection-editor pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip python-pipx
-yay -Syu --noconfirm qt5ct qt6ct qutebrowser ranger ripgrep sddm sddm slurp stow sudo swayidle swaylock swww tar themix-full-git tlp tmux ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd
+yay -Syu --noconfirm qt5ct qt6ct qutebrowser ranger ripgrep rtl88x2ce-dkms-git sddm sddm slurp stow sudo swayidle swaylock swww tar themix-full-git tlp tmux ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd
 yay -Syu --noconfirm ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-joypixels ttf-liberation ttf-material-design-iconic-font ttf-meslo-nerd ttf-roboto-mono-nerd unzip vulkan-mesa-layers waybar wayland wayland-protocols 
 yay -Syu --noconfirm wayland-utils waypaper wev wf-recorder wget wireless_tools wlr-randr wlroots xarchiver xbindkeys xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdotool xf86-input-libinput
 yay -Syu --noconfirm xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
@@ -249,6 +249,13 @@ else
     echo "Unknown CPU vendor. No specific configurations applied."
 fi
 
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" && reboot
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" 
 
-echo -e "\n------------------------------------------------------------------------\n"
+sudo tee /etc/modprobe.d/blacklist-rtw88.conf <<EOF
+blacklist rtw88_8822ce
+blacklist rtw88_8822c
+blacklist rtw88_core
+blacklist rtw88_pci
+EOF
+
+sudo mkinitcpio -P && sudo reboot
