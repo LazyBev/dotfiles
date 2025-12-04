@@ -5,6 +5,7 @@ You can install my dotfiles with the provided ```install.sh``` in the ```install
 I use Niri. Learn about [Niri](https://github.com/YaLTeR/niri). Also learn about Niri via this [Video](https://youtu.be/z57ocWJ9jeo?si=sM1FtuB73GN_DB-a)
 
 ### Screenshots
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/e3dd435b-852c-4851-9b07-aff33e7730ba" />
-<img width="1920" height="1078" alt="image" src="https://github.com/user-attachments/assets/be8a5c0f-3aea-4aa6-aba8-490bc5a92fcf" />
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/10ed5697-2e60-418c-8f55-5d3aeecf63d0" />
+
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/de4853b5-5769-406f-8fd5-a764b26492f9" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/97aa5a1d-6bd9-4e81-b5b1-b9bb5e500218" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/a0fc493d-5b11-4abf-8072-18947dbc0b1f" />
