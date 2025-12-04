@@ -6,7 +6,7 @@
     "spacing": 5,
     "modules-left": [
       "custom/launcher",
-      "hyprland/window",
+      "niri/window",
       "custom/texttwo",
       "custom/textthree",
       "custom/textfour",
@@ -30,7 +30,7 @@
       "tray",
       "clock"
     ],
-    "hyprland/window": {
+    "niri/window": {
       "format": "{class}",
       "max-length": 20,
       "rewrite": {
@@ -39,7 +39,7 @@
     },
     "custom/launcher": {
       "format": "🔍",
-      "on-click": "wofi --show drun",
+      "on-click": "fuzzel",
       "tooltip": false
     },
     "custom/texttwo": {
@@ -228,7 +228,7 @@
     },
     "custom/os_button": {
       "format": "🔍",
-      "on-click": "wofi --show drun",
+      "on-click": "fuzzel",
       "tooltip": false
     },
     "wlr/taskbar": {
