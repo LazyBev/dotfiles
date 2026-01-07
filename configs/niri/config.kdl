@@ -1,7 +1,3 @@
-// =======================
-// NIRI CONFIG — DOOM OS
-// =======================
-
 // -----------------------
 // INPUT
 // -----------------------
@@ -18,18 +14,21 @@ input {
         natural-scroll
     }
 
-    mouse {}
-    trackpoint {}
+    mouse {
+        // Empty but valid
+    }
+
+    trackpoint {
+        // Empty but valid
+    }
 }
 
 // -----------------------
 // OUTPUT
 // -----------------------
 output "eDP-1" {
-    variable-refresh-rate
-    focus-at-startup
     mode "1920x1080@120.030"
-    scale 2
+    scale 2.0
     transform "normal"
 }
 
@@ -48,8 +47,15 @@ layout {
         inactive-color "#505050"
     }
 
-    border { off; }
-    shadow { off; }
+    border {
+        off
+    }
+
+    preset-column-widths {
+        proportion 0.33333
+        proportion 0.5
+        proportion 0.66667
+    }
 }
 
 animations {
@@ -66,7 +72,6 @@ workspace "unused"
 // -----------------------
 // WINDOW RULES
 // -----------------------
-
 window-rule {
     geometry-corner-radius 1
     clip-to-geometry true
@@ -80,62 +85,34 @@ window-rule {
 screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 
 // -----------------------
-// STARTUP — DOOM IS INIT
+// STARTUP – SAFE & DETERMINISTIC
 // -----------------------
-spawn-at-startup "bash" "-lc" "doom run --daemon"
-spawn-at-startup "bash" "-lc" "xwayland-satellite"
-spawn-at-startup "bash" "-lc" "dunst"
-spawn-at-startup "bash" "-lc" "/usr/lib/polkit-kde-authentication-agent-1"
+spawn-at-startup "bash" "-lc" "pkill -f 'emacs.*daemon' || true; doom run --daemon"
 spawn-at-startup "bash" "-lc" "swaybg -i ~/Pictures/agnes_tach.png"
-spawn-at-startup "bash" "-lc" "pgrep waybar && killall waybar || waybar &"
+spawn-at-startup "bash" "-lc" "pkill waybar || true; waybar"
+spawn-at-startup "bash" "-lc" "pkill dunst || true; dunst"
+spawn-at-startup "bash" "-lc" "/usr/lib/polkit-kde-authentication-agent-1 || true"
 
 // -----------------------
-// KEYBINDS — EMACS FIRST
+// KEYBINDS
 // -----------------------
-
 binds {
-    // Help
     Alt+Shift+Slash { show-hotkey-overlay; }
 
     // -------------------
-    // EMACS = OS
+    // APPS
     // -------------------
 
-    // Open main Emacs frame
-    Alt+Return {
-        spawn "emacsclient" "-c"
-    }
-
-    // Open Emacs terminal (vterm)
-    Alt+Shift+Return {
-        spawn "emacsclient" "-c" "-e" "(vterm)"
-    }
-
-    Alt+Ctrl+Return {
-        spawn "ghostty"
-    }
-
-    // Edit niri config inside Doom
-    Alt+C {
-        spawn "emacsclient" "-c" "~/.config/niri/config.kdl"
-    }
-
-    // Emacs app launcher (SPC SPC equivalent)
-    Alt+Shift+S {
-        spawn "emacsclient" "-e" "(call-interactively #'execute-extended-command)"
-    }
-
-    // -------------------
-    // APPS (SECONDARY)
-    // -------------------
+    Alt+Return { spawn "ghostty"; }
     Alt+B { spawn "qutebrowser"; }
+    Alt+Shift+B { spawn "zen-browser"; }
     Alt+T { spawn "dolphin"; }
     Alt+S { spawn "steam"; }
     Alt+D { spawn "fuzzel"; }
     Alt+V { spawn "lutris"; }
-    Alt+U { spawn "bash" "-lc" "pgrep waybar && killall waybar || waybar &"; }
+    Alt+U { spawn "bash" "-c" "pkill waybar; waybar &"; }
     Alt+Y { spawn "waypaper"; }
-    Alt+R { spawn "bash" "-lc" "doom sync && doom restart"; }
+    Alt+C { spawn "emacsclient" "-c" "~/.config/niri/config.kdl"; }
 
     // -------------------
     // WINDOW / WORKSPACE
@@ -155,76 +132,44 @@ binds {
     Alt+1 { focus-workspace 1; }
     Alt+2 { focus-workspace 2; }
     Alt+3 { focus-workspace 3; }
-    Alt+4 { focus-workspace 4; }
-    Alt+5 { focus-workspace 5; }
-    Alt+6 { focus-workspace 6; }
-    Alt+7 { focus-workspace 7; }
-    Alt+8 { focus-workspace 8; }
-    Alt+9 { focus-workspace 9; }
-    Alt+O { toggle-window-rule-opacity; }
 
     Alt+Shift+1 { move-column-to-workspace 1; }
     Alt+Shift+2 { move-column-to-workspace 2; }
     Alt+Shift+3 { move-column-to-workspace 3; }
-    Alt+Shift+4 { move-column-to-workspace 4; }
-    Alt+Shift+5 { move-column-to-workspace 5; }
-    Alt+Shift+6 { move-column-to-workspace 6; }
-    Alt+Shift+7 { move-column-to-workspace 7; }
-    Alt+Shift+8 { move-column-to-workspace 8; }
-    Alt+Shift+9 { move-column-to-workspace 9; }
 
-    Alt+M                    { focus-workspace-down; }
-    Alt+N                    { focus-workspace-up; }
-    Alt+WheelScrollDown      { focus-workspace-down; }
-    Alt+WheelScrollUp        { focus-workspace-up; }
-    Alt+Ctrl+WheelScrollDown { move-column-to-workspace-down; }
-    Alt+Ctrl+WheelScrollUp   { move-column-to-workspace-up; }
-
-    Alt+WheelScrollRight      { focus-column-right; }
-    Alt+WheelScrollLeft       { focus-column-left; }
-    Alt+Ctrl+WheelScrollRight { move-column-right; }
-    Alt+Ctrl+WheelScrollLeft  { move-column-left; }
-
-    Alt+Shift+WheelScrollDown      { focus-column-right; }
-    Alt+Shift+WheelScrollUp        { focus-column-left; }
-    Alt+Ctrl+Shift+WheelScrollDown { move-column-right; }
-    Alt+Ctrl+Shift+WheelScrollUp   { move-column-left; }
-
-    Alt+Minus { set-column-width "-10%"; }
-    Alt+Equal { set-column-width "+10%"; }
-
-    Alt+Shift+Minus { set-window-height "-10%"; }
-    Alt+Shift+Equal { set-window-height "+10%"; }
-
-    Alt+Tab   { toggle-window-floating; }
-    Alt+Shift+Tab { switch-focus-between-floating-and-tiling; }
+    Alt+Tab { toggle-window-floating; }
 
     Alt+W { maximize-column; }
     Alt+F { fullscreen-window; }
 
-    Alt+Comma  { consume-window-into-column; }
-    Alt+Period { expel-window-from-column; }
-
-    Alt+BracketLeft  { consume-or-expel-window-left; }
-    Alt+BracketRight { consume-or-expel-window-right; }
-
     // -------------------
-    // SYSTEM
+    // SYSTEM (SAFE)
     // -------------------
+    Alt+Shift+Backspace { quit; }
     Mod+Shift+L { spawn "swaylock"; }
-    Alt+Ctrl+P  { spawn "reboot"; }
-    Alt+Shift+P { spawn "shutdown" "now"; }
-    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
-    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
-    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
-    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+
+    Alt+Ctrl+P  { spawn "systemctl" "reboot"; }
+    Alt+Shift+P { spawn "systemctl" "poweroff"; }
+
+    XF86AudioRaiseVolume allow-when-locked=true {
+        spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"
+    }
+
+    XF86AudioLowerVolume allow-when-locked=true {
+        spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"
+    }
+
+    XF86AudioMute allow-when-locked=true {
+        spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"
+    }
+
+    XF86AudioMicMute allow-when-locked=true {
+        spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"
+    }
+
     Alt+X { screenshot; }
     Alt+Shift+X { screenshot-screen; }
     Alt+Ctrl+X { screenshot-window; }
-    Alt+Shift+Backspace { quit; }
 }
 
-// -----------------------
-// ENV — CLEAN WAYLAND
-// -----------------------
-// DO NOT SET DISPLAY
+prefer-no-csd
