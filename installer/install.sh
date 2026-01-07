@@ -52,15 +52,23 @@ if ! command -v yay &> /dev/null; then
     cd yay-bin && makepkg -si && cd .. && sudo rm -rf yay-bin
 fi
 
-yay -Syu --noconfirm acpi adobe-source-han-sans-cn-fonts adobe-source-han-sans-jp-fonts adobe-source-han-sans-kr-fonts alsa-utils arch-install-scripts acpi blueman bluez bluez-utils brightnessctl btop chafa 
-yay -Syu --noconfirm cliphist cmake curl dbus dconf-editor dconf dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im fcitx5-qt firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo
-yay -Syu --noconfirm imagemagick kvantum kvantum-theme-catppuccin-git kitty kwayland lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput libxkbcommon make man-db man-pages mesa meson mov-cli mpv neovim
-yay -Syu --noconfirm network-manager-applet noto-fonts-emoji nwg-look obsidian pam_rundir networkmanager niri nm-connection-editor pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip python-pipx
-yay -Syu --noconfirm qt5ct qt6ct qutebrowser ranger ripgrep rtl88x2ce-dkms-git sddm sddm slurp stow sudo swayidle swaylock swww tar themix-full-git tlp tmux ttf-dejavu ttf-fira-code ttf-fira-mono ttf-fira-sans ttf-hack-nerd
-yay -Syu --noconfirm ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-joypixels ttf-liberation ttf-material-design-iconic-font ttf-meslo-nerd ttf-roboto-mono-nerd unzip vulkan-mesa-layers waybar wayland wayland-protocols 
-yay -Syu --noconfirm wayland-utils waypaper wev wf-recorder wget wireless_tools wlr-randr wlroots xarchiver xbindkeys xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome xdotool xf86-input-libinput
-yay -Syu --noconfirm xorg-xev xorg-xwayland xwayland xwayland-run xwayland-satellite ytfzf zip zram-generator
-    
+yay -Syu --noconfirm \
+acpi alsa-utils arch-install-scripts blueman bluez bluez-utils \
+brightnessctl btop chafa cliphist cmake curl dbus dconf dconf-editor \
+dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im \
+fcitx5-qt firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo \
+imagemagick iw kvantum kvantum-theme-catppuccin-git kitty kwayland \
+lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput \
+libxkbcommon make man-db man-pages mesa meson mpv neovim networkmanager \
+network-manager-applet nm-connection-editor noto-fonts-emoji nwg-look obsidian \
+pam_rundir pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip \
+python-pipx qt5ct qt6ct qutebrowser ranger ripgrep sddm slurp stow sudo swayidle \
+swaylock swww tar tlp tmux ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-dejavu \
+ttf-liberation unzip vulkan-mesa-layers waybar wayland wayland-protocols wayland-utils \
+waypaper wev wf-recorder wget wl-clipboard wlr-randr wlroots xarchiver xbindkeys \
+xdg-desktop-portal xdg-desktop-portal-gtk xdotool xf86-input-libinput xorg-xev xwayland \
+xwayland-run xwayland-satellite yt-dlp ytfzf zip zram-generator
+
 if ! command -v iwctl &> /dev/null; then
     yay -Syu --noconfirm iwd
 fi
@@ -250,12 +258,5 @@ else
 fi
 
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" 
-
-sudo tee /etc/modprobe.d/blacklist-rtw88.conf <<EOF
-blacklist rtw88_8822ce
-blacklist rtw88_8822c
-blacklist rtw88_core
-blacklist rtw88_pci
-EOF
 
 sudo mkinitcpio -P && sudo reboot
