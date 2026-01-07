@@ -1,3 +1,7 @@
+// =======================
+// NIRI CONFIG — DOOM OS
+// =======================
+
 // -----------------------
 // INPUT
 // -----------------------
@@ -69,12 +73,6 @@ window-rule {
 }
 
 window-rule {
-    match app-id="zen"
-    open-on-workspace "apps"
-    open-maximized true
-}
-
-window-rule {
     match app-id="vesktop"
     open-on-workspace "chat"
     open-maximized true
@@ -88,7 +86,7 @@ window-rule {
 screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 
 // -----------------------
-// STARTUP
+// STARTUP — DOOM IS INIT
 // -----------------------
 spawn-at-startup "bash" "-lc" "doom run --daemon"
 spawn-at-startup "bash" "-lc" "xwayland-satellite"
@@ -98,8 +96,9 @@ spawn-at-startup "bash" "-lc" "swaybg -i ~/Pictures/agnes_tach.png"
 spawn-at-startup "bash" "-lc" "pgrep waybar && killall waybar || waybar &"
 
 // -----------------------
-// KEYBINDS
+// KEYBINDS — EMACS FIRST
 // -----------------------
+
 binds {
     // Help
     Alt+Shift+Slash { show-hotkey-overlay; }
@@ -135,7 +134,7 @@ binds {
     // -------------------
     // APPS (SECONDARY)
     // -------------------
-    Alt+B { spawn "zen-browser"; }
+    Alt+B { spawn "qutebrowser"; }
     Alt+T { spawn "dolphin"; }
     Alt+S { spawn "steam"; }
     Alt+D { spawn "fuzzel"; }
@@ -180,10 +179,12 @@ binds {
     Alt+Shift+8 { move-column-to-workspace 8; }
     Alt+Shift+9 { move-column-to-workspace 9; }
 
-    Alt+WheelScrollDown      cooldown-ms=150 { focus-workspace-down; }
-    Alt+WheelScrollUp        cooldown-ms=150 { focus-workspace-up; }
-    Alt+Ctrl+WheelScrollDown cooldown-ms=150 { move-column-to-workspace-down; }
-    Alt+Ctrl+WheelScrollUp   cooldown-ms=150 { move-column-to-workspace-up; }
+    Alt+M                    { focus-workspace-down; }
+    Alt+N                    { focus-workspace-up; }
+    Alt+WheelScrollDown      { focus-workspace-down; }
+    Alt+WheelScrollUp        { focus-workspace-up; }
+    Alt+Ctrl+WheelScrollDown { move-column-to-workspace-down; }
+    Alt+Ctrl+WheelScrollUp   { move-column-to-workspace-up; }
 
     Alt+WheelScrollRight      { focus-column-right; }
     Alt+WheelScrollLeft       { focus-column-left; }
