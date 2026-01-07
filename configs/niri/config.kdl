@@ -118,6 +118,10 @@ binds {
         spawn "emacsclient" "-c" "-e" "(vterm)"
     }
 
+    Alt+Ctrl+Return {
+        spawn "ghostty"
+    }
+
     // Edit niri config inside Doom
     Alt+C {
         spawn "emacsclient" "-c" "~/.config/niri/config.kdl"
