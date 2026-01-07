@@ -211,7 +211,7 @@ sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/" || {
 }
 
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5" "doom")
+CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5" "doom" "qutebrowser")
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
