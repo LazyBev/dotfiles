@@ -104,6 +104,7 @@ binds {
     // -------------------
 
     Alt+Return { spawn "ghostty"; }
+    Alt+E {spawn "ghostty" "doom emacs"}
     Alt+B { spawn "qutebrowser"; }
     Alt+Shift+B { spawn "zen-browser"; }
     Alt+T { spawn "dolphin"; }
@@ -132,10 +133,22 @@ binds {
     Alt+1 { focus-workspace 1; }
     Alt+2 { focus-workspace 2; }
     Alt+3 { focus-workspace 3; }
+    Alt+4 { focus-workspace 4; }
+    Alt+5 { focus-workspace 5; }
+    Alt+6 { focus-workspace 6; }
+    Alt+7 { focus-workspace 7; }
+    Alt+8 { focus-workspace 8; }
+    Alt+9 { focus-workspace 9; }
 
     Alt+Shift+1 { move-column-to-workspace 1; }
     Alt+Shift+2 { move-column-to-workspace 2; }
     Alt+Shift+3 { move-column-to-workspace 3; }
+    Alt+Shift+4 { move-column-to-workspace 4; }
+    Alt+Shift+5 { move-column-to-workspace 5; }
+    Alt+Shift+6 { move-column-to-workspace 6; }
+    Alt+Shift+7 { move-column-to-workspace 7; }
+    Alt+Shift+8 { move-column-to-workspace 8; }
+    Alt+Shift+9 { move-column-to-workspace 9; }
 
     Alt+Tab { toggle-window-floating; }
 
