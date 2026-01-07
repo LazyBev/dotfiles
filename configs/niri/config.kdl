@@ -104,7 +104,7 @@ binds {
     // -------------------
 
     Alt+Return { spawn "ghostty"; }
-    Alt+E {spawn "ghostty" "doom emacs"}
+    Alt+E {spawn "bash" "-lc" "emacsclient -c"; }
     Alt+B { spawn "qutebrowser"; }
     Alt+Shift+B { spawn "zen-browser"; }
     Alt+T { spawn "dolphin"; }
