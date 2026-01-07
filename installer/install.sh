@@ -200,13 +200,18 @@ echo -e "\n---------------------------------------------------------------------
 print_info "\nStarting config setup..."
 print_info "\nEverything is recommended to change"
 
-# Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5")
+git clone --depth 1 https://github.com/doomemacs/doomemacs ~/.emacs.d
+~/.emacs.d/bin/doom install
+~/.emacs.d/bin/doom sync
+~/.emacs.d/bin/doom doctor
 
 sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/" || {
     sudo rm -f "$HOME/.bashrc"
     sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/"
-} 
+}
+
+# Define an array of config directories to copy
+CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5" "doom")
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
@@ -221,15 +226,6 @@ done
 EMACS_DIRS=(".emacs.local" ".emacs.rc")
 
 sudo cp -f -r "$HOME/dotfiles/.emacs" "$HOME/"
-
-# Loop through and copy each emacs directory
-for dir in "${EMACS_DIRS[@]}"; do
-    if [ -d "$HOME/$dir" ]; then 
-        sudo rm -rf "$HOME/$dir"
-    fi
-
-    sudo cp -f -r "$HOME/dotfiles/$dir" "$HOME/"
-done
 
 sudo chown -R $USER:$USER $HOME
 
