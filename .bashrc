@@ -5,7 +5,7 @@ case $- in
 esac
 
 # Path to your oh-my-bash installation.
-export OSH='$HOME/.oh-my-bash'
+export OSH='/home/yari/.oh-my-bash'
 
 # Set name of the theme to load. Optionally, if you set this to "random"
 # it'll load a random theme each time that oh-my-bash is loaded.
@@ -13,6 +13,8 @@ OSH_THEME="font"
 
 # If you set OSH_THEME to "random", you can ignore themes you don't like.
 # OMB_THEME_RANDOM_IGNORED=("powerbash10k" "wanelo")
+# You can also specify the list from which a theme is randomly selected:
+# OMB_THEME_RANDOM_CANDIDATES=("font" "powerline-light" "minimal")
 
 # Uncomment the following line to use case-sensitive completion.
 # OMB_CASE_SENSITIVE="true"
@@ -117,9 +119,14 @@ plugins=(
 #      plugins+=(tmux-autoattach)
 #  fi
 
+# If you want to reduce the initialization cost of the "tput" command to
+# initialize color escape sequences, you can uncomment the following setting.
+# This disables the use of the "tput" command, and the escape sequences are
+# initialized to be the ANSI version:
+#
+#OMB_TERM_USE_TPUT=no
+
 source "$OSH"/oh-my-bash.sh
-export PATH="$HOME/.emacs.d/bin:$PATH"
-alias yt="ytfzf"
 
 # User configuration
 # export MANPATH="/usr/local/man:$MANPATH"
@@ -148,11 +155,7 @@ alias yt="ytfzf"
 # Example aliases
 # alias bashconfig="mate ~/.bashrc"
 # alias ohmybash="mate ~/.oh-my-bash"
-eval "$(direnv hook bash)"
-
-# Source bash completion scripts from ~/.bash_completion.d
-if [ -d "$HOME"/.bash_completion.d ]; then
-    for file in "$HOME"/.bash_completion.d/*; do
-        source "$file"
-    done
-fi
+xhost +local: > /dev/null 2>&1
+export PATH=~/.config/emacs/bin:/home/yari/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/var/lib/flatpak/exports/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
