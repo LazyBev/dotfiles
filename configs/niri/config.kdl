@@ -66,21 +66,15 @@ workspace "unused"
 // -----------------------
 // WINDOW RULES
 // -----------------------
-window-rule {
-    match app-id="emacs"
-    open-on-workspace "main"
-    open-maximized true
-}
-
-window-rule {
-    match app-id="vesktop"
-    open-on-workspace "chat"
-    open-maximized true
-}
 
 window-rule {
     geometry-corner-radius 1
     clip-to-geometry true
+}
+
+window-rule {
+    match app-id="zen$" title="^Picture-in-Picture$"
+    open-floating true
 }
 
 screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
