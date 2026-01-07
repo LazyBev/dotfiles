@@ -431,7 +431,7 @@ config.unbind('b')
 config.unbind('B')
 
 config.bind('b', 'bookmark-add')
-config.bind('B', 'bookmark-load -t')
+config.bind('B', 'bookmark-list')
 config.bind('p', 'hint links spawn mpv {hint-url}')
 config.bind('m', 'scroll down')
 config.bind('n', 'scroll up')
