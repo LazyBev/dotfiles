@@ -6,4 +6,5 @@ I use Niri. Learn about [Niri](https://github.com/YaLTeR/niri). Also learn about
 
 ### Screenshots
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2a20e4cf-887f-4745-81df-d78a89b72058" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/62bf4b25-e72b-4d4e-8785-31a1074d2856" />
+
