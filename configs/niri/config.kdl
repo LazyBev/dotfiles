@@ -87,7 +87,7 @@ screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 // -----------------------
 // STARTUP – SAFE & DETERMINISTIC
 // -----------------------
-spawn-at-startup "bash" "-lc" "pkill -f 'emacs.*daemon' || true; doom run --daemon"
+
 spawn-at-startup "bash" "-lc" "swaybg -i ~/Pictures/agnes_tach.png"
 spawn-at-startup "bash" "-lc" "pkill waybar || true; waybar"
 spawn-at-startup "bash" "-lc" "pkill dunst || true; dunst"
@@ -105,13 +105,14 @@ binds {
 
     Alt+Return { spawn "ghostty"; }
     Alt+E {spawn "bash" "-lc" "emacsclient -c"; }
+    Alt+Shift+E { spawn "bash" "-lc" "doom run --daemon && pkill emacs && doom run --daemon"; }
     Alt+B { spawn "qutebrowser"; }
     Alt+Shift+B { spawn "zen-browser"; }
     Alt+T { spawn "dolphin"; }
     Alt+S { spawn "steam"; }
     Alt+D { spawn "fuzzel"; }
     Alt+V { spawn "lutris"; }
-    Alt+U { spawn "bash" "-c" "pkill waybar; waybar &"; }
+    Alt+U { spawn "bash" "-c" "pgrep waybar && killall waybar || waybar &"; }
     Alt+Y { spawn "waypaper"; }
     Alt+C { spawn "emacsclient" "-c" "~/.config/niri/config.kdl"; }
 
@@ -183,6 +184,51 @@ binds {
     Alt+X { screenshot; }
     Alt+Shift+X { screenshot-screen; }
     Alt+Ctrl+X { screenshot-window; }
+}
+
+// -----------------------
+// ENVIRONMENT (WAYLAND)
+// -----------------------
+
+environment {
+    // Core session info
+    XDG_SESSION_TYPE "wayland"
+    XDG_CURRENT_DESKTOP "niri"
+    XDG_SESSION_DESKTOP "niri"
+
+    // GTK
+    GDK_BACKEND "wayland"
+    GTK_USE_PORTAL "1"
+
+    // Qt
+    QT_QPA_PLATFORM "wayland"
+    QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
+    QT_AUTO_SCREEN_SCALE_FACTOR "1"
+
+    // Electron / Chromium / Zen / Discord / VSCode
+    NIXOS_OZONE_WL "1"
+    ELECTRON_OZONE_PLATFORM_HINT "wayland"
+
+    // Mozilla (Firefox, Zen)
+    MOZ_ENABLE_WAYLAND "1"
+
+    // SDL (games, emulators)
+    SDL_VIDEODRIVER "wayland"
+
+    // Clutter (GNOME stuff)
+    CLUTTER_BACKEND "wayland"
+
+    // Java apps (JetBrains, etc.)
+    _JAVA_AWT_WM_NONREPARENTING "1"
+
+    // Portals
+    XDG_DESKTOP_PORTAL "xdg-desktop-portal"
+
+    // Cursor
+    XCURSOR_SIZE "24"
+
+    // Nvidia (safe even if unused)
+    WLR_NO_HARDWARE_CURSORS "1"
 }
 
 prefer-no-csd
