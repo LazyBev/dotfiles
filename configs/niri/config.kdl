@@ -140,6 +140,8 @@ binds {
     Alt+7 { focus-workspace 7; }
     Alt+8 { focus-workspace 8; }
     Alt+9 { focus-workspace 9; }
+    Alt+M { focus-workspace-down; }
+    Alt+N { focus-workspace-up; }
 
     Alt+Shift+1 { move-column-to-workspace 1; }
     Alt+Shift+2 { move-column-to-workspace 2; }
@@ -150,6 +152,8 @@ binds {
     Alt+Shift+7 { move-column-to-workspace 7; }
     Alt+Shift+8 { move-column-to-workspace 8; }
     Alt+Shift+9 { move-column-to-workspace 9; }
+    Alt+Shift+M { move-column-to-workspace-down; }
+    Alt+Shift+N { move-column-to-workspace-up; }
 
     Alt+Tab { toggle-window-floating; }
 
