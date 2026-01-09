@@ -155,6 +155,18 @@ binds {
     Alt+Shift+M { move-column-to-workspace-down; }
     Alt+Shift+N { move-column-to-workspace-up; }
 
+    Alt+Minus { set-column-width "-10%"; }
+    Alt+Equal { set-column-width "+10%"; }
+    Alt+Shift+Minus { set-window-height "-10%"; }
+    Alt+Shift+Equal { set-window-height "+10%"; }
+    Alt+Comma  { consume-window-into-column; }
+    Alt+Period { expel-window-from-column; }
+    Alt+BracketLeft  { consume-or-expel-window-left; }
+    Alt+BracketRight { consume-or-expel-window-right; }
+
+    Alt+Space       { switch-layout "next"; }
+    Alt+Shift+Space { switch-layout "prev"; }
+
     Alt+Tab { toggle-window-floating; }
 
     Alt+W { maximize-column; }
