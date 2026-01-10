@@ -295,7 +295,11 @@ utils() {
     print_info "\nStarting utilities setup..."
 
     # Install flatpak and Sober
-    yay -Syu --noconfirm arti flatpak wine lutris winetricks protonplus spotify ardour
+    yay -Syu --noconfirm arti flatpak wine lutris winetricks protonplus spotify ardour wine-staging winetricks
+
+    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 dxvk
+
+    wineboot -u
     
     curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-dirs -o ./advcpmv/install.sh && (cd advcpmv && sh install.sh)
     
