@@ -294,8 +294,7 @@ echo -e "\n---------------------------------------------------------------------
 utils() {
     print_info "\nStarting utilities setup..."
 
-    # Install flatpak and Sober
-    yay -Syu --noconfirm arti flatpak wine lutris winetricks protonplus spotify ardour wine-staging winetricks
+    yay -Syu --noconfirm arti flatpak wine lutris winetricks protonplus spotify ardour wine-staging winetricks millennium steam
 
     winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 dxvk
 
@@ -306,7 +305,6 @@ utils() {
     mkdir -p ~/.config/Kvantum/ && touch ~/.config/Kvantum/kvantum.kvconfig
     echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
     
-    flatpak install flathub com.valvesoftware.Steam
     flatpak install flathub org.vinegarhq.Sober
     flatpak install flathub com.stremio.Stremio
     flatpak install flathub io.github.equicord.equibop
@@ -385,7 +383,7 @@ utils() {
     
     [vanguards]
     mode = "lite"
-    EOF
+EOF
     
     echo -e "\n------------------------------------------------------------------------\n"
     
@@ -393,12 +391,12 @@ utils() {
 }
 
 read -p "Do you wanna install extra utilities (Y/n)? " ans
-ans=${ans:-Y}  # If empty, default to Y
+ans=${ans:-Y}
 
 if [[ "$ans" == "Y" || "$ans" == "y" ]]; then
-    utils  # <-- your function
+    utils
 else
-    echo "Skipping installation."
+    echo "Skipping utils installation."
 fi
 
 sudo mkinitcpio -P && sudo reboot
