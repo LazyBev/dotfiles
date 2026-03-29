@@ -88,10 +88,11 @@ screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 // STARTUP – SAFE & DETERMINISTIC
 // -----------------------
 
-spawn-at-startup "bash" "-lc" "swaybg -i ~/Pictures/agnes_tach.png"
-spawn-at-startup "bash" "-lc" "pkill waybar || true; waybar"
-spawn-at-startup "bash" "-lc" "pkill dunst || true; dunst"
+spawn-at-startup "bash" "-lc" "swaybg -i ~/Pictures/manhattan.jpg"
+spawn-at-startup "bash" "-lc" "pkill waybar || true; waybar &"
+spawn-at-startup "bash" "-lc" "pkill dunst || true; dunst &"
 spawn-at-startup "bash" "-lc" "/usr/lib/polkit-kde-authentication-agent-1 || true"
+spawn-at-startup "xwayland-satellite &"
 
 // -----------------------
 // KEYBINDS
@@ -104,8 +105,6 @@ binds {
     // -------------------
 
     Alt+Return { spawn "ghostty"; }
-    Alt+E {spawn "bash" "-lc" "emacsclient -c"; }
-    Alt+Shift+E { spawn "bash" "-lc" "doom run --daemon && pkill emacs && doom run --daemon"; }
     Alt+B { spawn "qutebrowser"; }
     Alt+Shift+B { spawn "zen-browser"; }
     Alt+T { spawn "dolphin"; }
@@ -119,7 +118,7 @@ binds {
     // -------------------
     // WINDOW / WORKSPACE
     // -------------------
-    Alt+Q { close-window; }
+    Ctrl+Alt+Q { close-window; }
 
     Alt+J { focus-column-left; }
     Alt+L { focus-column-right; }
@@ -163,9 +162,6 @@ binds {
     Alt+Period { expel-window-from-column; }
     Alt+BracketLeft  { consume-or-expel-window-left; }
     Alt+BracketRight { consume-or-expel-window-right; }
-
-    Alt+Space       { switch-layout "next"; }
-    Alt+Shift+Space { switch-layout "prev"; }
 
     Alt+Tab { toggle-window-floating; }
 
