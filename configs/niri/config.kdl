@@ -113,7 +113,7 @@ binds {
     Alt+V { spawn "lutris"; }
     Alt+U { spawn "bash" "-c" "pgrep waybar && killall waybar || waybar &"; }
     Alt+Y { spawn "waypaper"; }
-    Alt+C { spawn "emacsclient" "-c" "~/.config/niri/config.kdl"; }
+    Alt+C { spawn "nvim" "~/.config/niri/config.kdl"; }
 
     // -------------------
     // WINDOW / WORKSPACE
