@@ -195,7 +195,7 @@ if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     eval $(dbus-launch --sh-syntax) || rc-service dbus start
 fi
 
-sudo rc-update add sddm default || echo "Cant enable sddm"
+sudo rc-update add sddm boot || echo "Cant enable sddm"
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
