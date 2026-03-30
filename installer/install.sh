@@ -53,7 +53,7 @@ if ! command -v yay &> /dev/null; then
 fi
 
 yay -Syu --noconfirm \
-acpi alsa-utils arch-install-scripts blueman bluez bluez-utils \
+acpi alsa-utils artix-install-scripts blueman bluez bluez-utils \
 brightnessctl btop chafa cliphist cmake curl dbus dconf dconf-editor \
 dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im \
 fcitx5-qt firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo \
@@ -62,7 +62,7 @@ lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput \
 libxkbcommon make man-db man-pages mesa meson mpv neovim networkmanager \
 network-manager-applet nm-connection-editor noto-fonts-emoji nwg-look obsidian \
 pam_rundir pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip \
-python-pipx qt5ct qt6ct qutebrowser ranger ripgrep sddm slurp stow sudo swayidle \
+python-pipx qt5ct qt6ct qutebrowser ranger ripgrep sddm-openrc slurp stow sudo swayidle \
 swaylock swww tar tlp tmux ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-dejavu \
 ttf-liberation unzip vulkan-mesa-layers waybar wayland wayland-protocols wayland-utils \
 waypaper wev wf-recorder wget wl-clipboard wlr-randr wlroots xarchiver xbindkeys \
@@ -77,7 +77,7 @@ if pacman -Q jack2 &>/dev/null; then
     sudo pacman -Rdd --noconfirm jack2
 fi
 
-sudo systemctl enable --now NetworkManager
+sudo rc-update add NetworkManager default
 
 echo "Installing PipeWire and dependencies..."
 yay -Syu --noconfirm alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber gst-plugins-good gst-plugins-bad gst-plugin-pipewire 
@@ -88,9 +88,10 @@ yay -Syu --noconfirm qemu-audio-pipewire wireplumber-docs
 if pacman -Q | grep -E '^pulseaudio' &>/dev/null; then
     echo "PulseAudio detected! Checking if it's active..."
 
-    if systemctl is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
+    if rc-service pulseaudio status &>/dev/null 2>&1; then
         echo "PulseAudio is running. Stopping and disabling it..."
-        systemctl disable --now pulseaudio.service pulseaudio.socket
+        rc-service pulseaudio stop
+        rc-update del pulseaudio
     fi
 
     echo "Finding and removing all PulseAudio-related packages..."
@@ -191,10 +192,10 @@ XDG_RUNTIME_DIR=/run/user/$(id -u)
 
 # Ensure D-Bus is running
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval $(dbus-launch --sh-syntax) || systemctl --user start dbus
+    eval $(dbus-launch --sh-syntax) || rc-service dbus start
 fi
 
-sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
+sudo rc-update add sddm default || echo "Cant enable sddm"
 
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting config setup..."
