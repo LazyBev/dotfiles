@@ -16,7 +16,6 @@ sudo emerge --ask -q \
     x11-apps/xrandr \
     x11-drivers/xf86-video-vesa \
     elogind \
-    dev-vcs/git
 
 # --- Guru overlay -------------------------------------------------------------
 sudo eselect repository enable guru
@@ -27,6 +26,19 @@ echo 'gui-wm/niri ~amd64' | sudo tee -a /etc/portage/package.accept_keywords/nir
 sudo emerge --ask -q gui-wm/niri
 sudo sed -i 's/Exec=niri --session/Exec=niri-session/' /usr/share/wayland-sessions/niri.desktop
 
+# --- Wayland packages ---------------------------------------------------------
+sudo emerge --ask -q \
+    x11-base/xwayland \
+    gui-apps/waybar \
+    gui-apps/fuzzel \
+    gui-apps/wl-clipboard \
+    xdg-desktop-portal-wlr
+
+# --- Audio -------------------------------------------------------------------
+sudo emerge --ask -q     media-sound/alsa-utils     media-libs/pipewire     media-sound/pipewire-pulse     media-sound/pavucontrol
+sudo rc-update add alsasound boot
+
 # --- SDDM display manager -----------------------------------------------------
 sudo emerge --ask x11-misc/sddm
 sudo usermod -a -G video sddm
+sudo rc-update add sddm default
