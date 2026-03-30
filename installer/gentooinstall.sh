@@ -125,7 +125,7 @@ FCFLAGS="\${COMMON_FLAGS}"
 FFLAGS="\${COMMON_FLAGS}"
 RUSTFLAGS="\${RUSTFLAGS} -C target-cpu=native"
 
-USE="-systemd -kde -gnome -bluetooth"
+USE="elogind pipewire dbus wayland X -systemd -kde -gnome -bluetooth"
 FEATURES="candy parallel-fetch parallel-install"
 MAKEOPTS="-j${nproc} -l$(( nproc + 1 ))"
 
@@ -148,7 +148,6 @@ fi
 mount --types tmpfs --options nosuid,nodev,noexec shm /dev/shm
 
 # --- Chroot Script ------------------------------------------------------------
-# Write a script to run inside the chroot so the whole install stays in one file
 cat > /mnt/gentoo/root/chroot-install.sh << 'CHROOT_EOF'
 #!/bin/bash
 set -e
@@ -173,16 +172,15 @@ emerge --sync --quiet
 emerge --ask --verbose --update --deep --changed-use @world
 
 # Essential tools
-emerge -q app-editors/vim
+emerge -q app-editors/vim dev-vcs/git
 emerge --ask --oneshot app-portage/cpuid2cpuflags
 echo "*/* $(cpuid2cpuflags)" > /etc/portage/package.use/00cpu-flags
 
 # Timezone
 read -rp "Enter timezone (e.g., Europe/London): " tz
-ln -sf "../usr/share/zoneinfo/$tz" /etc/localtime
+ln -sf "/usr/share/zoneinfo/$tz" /etc/localtime
 
 # --- Locale Setup -------------------------------------------------------------
-# Parse all available locales from locale.gen (commented and uncommented)
 mapfile -t all_locales < <(grep -E '^\s*#?\s*[A-Za-z]' /etc/locale.gen \
     | sed 's/^\s*#\s*//' \
     | awk '{print $1}' \
@@ -192,7 +190,6 @@ echo
 echo "Available locales:"
 echo "-------------------"
 for i in "${!all_locales[@]}"; do
-    # Mark already-enabled locales with a *
     if grep -qE "^\s*${all_locales[$i]}" /etc/locale.gen; then
         printf "  [%3d] %s  *\n" "$(( i + 1 ))" "${all_locales[$i]}"
     else
@@ -204,7 +201,6 @@ echo
 
 read -rp "Enter locale numbers to enable (space-separated, e.g. 42 43): " -a picks
 
-# Uncomment chosen locales, comment out everything else
 for i in "${!all_locales[@]}"; do
     locale="${all_locales[$i]}"
     num="$(( i + 1 ))"
@@ -217,7 +213,7 @@ for i in "${!all_locales[@]}"; do
 done
 
 echo
-echo "locale.gen is now configured. Running locale-gen..."
+echo "locale.gen configured. Running locale-gen..."
 locale-gen
 
 eselect locale list
@@ -225,10 +221,10 @@ read -rp "Pick a locale number from the list above: " lc
 eselect locale set "$lc"
 env-update && source /etc/profile && export PS1="(chroot) ${PS1}"
 
-# Kernel & firmware
+# --- Kernel & Firmware --------------------------------------------------------
 echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >> /etc/portage/package.license
 emerge -q sys-kernel/linux-firmware
-emerge --ask -q sys-firmware/sof-firmware
+emerge -q sys-firmware/sof-firmware
 echo "sys-kernel/installkernel dracut grub" >> /etc/portage/package.use/installkernel
 emerge -q sys-kernel/installkernel
 emerge -q sys-kernel/gentoo-kernel-bin
@@ -242,40 +238,41 @@ HOSTNAME
 sed -i "s/^\(127\.0\.0\.1\s\+localhost\)$/\1\n127.0.0.1   $hn/" /etc/hosts
 sed -i "s/^\(::1\s\+localhost\)/\1 $hn/" /etc/hosts
 
+# --- Network ------------------------------------------------------------------
 emerge -q net-misc/dhcpcd
 emerge -q --noreplace net-misc/netifrc
 
-ifconfig
-read -rp "Pick your interface: " if
+ip link
+read -rp "Pick your network interface (e.g. eth0, enp3s0): " iface
 cat > /etc/conf.d/net << NET
-config_\$if="dhcp"
+config_${iface}="dhcp"
 NET
 
 cd /etc/init.d
-ln -s net.lo.net.\$if
-rc-update add net.\if default
+ln -s net.lo "net.${iface}"
+rc-update add "net.${iface}" default
+cd
 
+# --- Users --------------------------------------------------------------------
 passwd
 read -rp "Username: " un
-useradd -m -G users,wheel,audio,video -s /bin/bash \$un
-passwd \$un
+useradd -m -G users,wheel,audio,video -s /bin/bash "$un"
+passwd "$un"
 
-emerge -q sudo
+emerge -q app-admin/sudo
 
 # Sudoers — enable wheel group
 sed -i 's/^#\s*\(%wheel\s\+ALL=(ALL:ALL)\s\+ALL\)/\1/' /etc/sudoers
 
-cd
-
+# --- Bootloader ---------------------------------------------------------------
 echo 'GRUB_PLATFORMS="efi-64"' >> /etc/portage/make.conf
-emerge -q sys-boot/grub efibootmgr neofetch
+emerge -q sys-boot/grub sys-boot/efibootmgr app-misc/neofetch
 
-grub-install --efi-directory=/boot/efi
+grub-install --target=x86_64-efi --efi-directory=/boot/efi
 grub-mkconfig -o /boot/grub/grub.cfg
 
 echo
-echo "Chroot installation steps complete."
-exit
+echo "Installation complete. Exiting chroot..."
 CHROOT_EOF
 
 chmod +x /mnt/gentoo/root/chroot-install.sh
