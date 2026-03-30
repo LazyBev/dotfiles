@@ -56,8 +56,8 @@ yay -Syu --noconfirm \
 acpi alsa-utils arch-install-scripts blueman bluez bluez-utils \
 brightnessctl btop chafa cliphist cmake curl dbus dconf dconf-editor \
 dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im \
-fcitx5-qt firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo \
-imagemagick iw kvantum kvantum-theme-catppuccin-git kitty kwayland \
+fcitx5-qt fuzzel fzf ghostty git gvfs hwinfo imagemagick \
+iw kvantum kvantum-theme-catppuccin-git kitty kwayland \
 lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput \
 libxkbcommon make man-db man-pages mesa meson mpv neovim networkmanager \
 network-manager-applet nm-connection-editor noto-fonts-emoji nwg-look obsidian \
@@ -236,10 +236,11 @@ cat > "$HOME/.config/fontconfig/fonts.conf" <<FONTS
 </fontconfig>
 FONTS
 
-git clone --depth 1 https://github.com/doomemacs/doomemacs ~/.emacs.d
-~/.emacs.d/bin/doom install
-~/.emacs.d/bin/doom sync
-~/.emacs.d/bin/doom doctor
+sudo tee /usr/bin/niri-edit > /dev/null <<'EOF'
+#!/bin/sh
+ghostty -e nvim ~/.config/niri/config.kdl
+EOF
+sudo chmod +x /usr/bin/niri-edit
 
 sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/" || {
     sudo rm -f "$HOME/.bashrc"
@@ -294,9 +295,15 @@ echo -e "\n---------------------------------------------------------------------
 utils() {
     print_info "\nStarting utilities setup..."
 
-    yay -Syu --noconfirm arti flatpak wine lutris winetricks protonplus spotify ardour wine-staging winetricks millennium steam
+    yay -Syu --noconfirm arti flatpak lutris winetricks protonplus spotify ardour wine-staging winetricks millennium steam steam-native-runtime
 
     winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 dxvk
+
+    git clone --depth 1 https://github.com/doomemacs/doomemacs ~/.emacs.d
+    ~/.emacs.d/bin/doom install
+    ~/.emacs.d/bin/doom sync
+    ~/.emacs.d/bin/doom doctor
+
 
     wineboot -u
     
@@ -307,8 +314,6 @@ utils() {
     
     flatpak install flathub org.vinegarhq.Sober
     flatpak install flathub com.stremio.Stremio
-    flatpak install flathub io.github.equicord.equibop
-    flatpak install flathub com.usebottles.bottles
     flatpak install flathub com.obsproject.Studio
     
     mkdir -p "$HOME/.config/arti" && cat > "$HOME/.config/arti/arti.toml" <<EOF
