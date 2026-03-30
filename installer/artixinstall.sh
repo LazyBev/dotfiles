@@ -20,8 +20,6 @@ read -p "Enter the username: " user
 
 read -p "Enter the password: " password
 
-read -p "Enter key map for keyboard: " keyboard
-
 read -p "Enter the locale: " locale
 
 read -p "Enter the timezone: " timezone
@@ -78,7 +76,6 @@ loadkeys "$keyboard"
 echo "$locale UTF-8" > /etc/locale.gen
 locale-gen
 echo "LANG=$locale" > /etc/locale.conf
-echo "KEYMAP=$keyboard" > /etc/vconsole.conf
 
 # Hostname
 echo "$hostname" > /etc/hostname
