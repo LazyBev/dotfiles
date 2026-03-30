@@ -65,17 +65,14 @@ set -euo pipefail
 trap 'echo "An error occurred. Exiting..."; exit 1;' ERR
 
 timedatectl set-ntp true
-loadkeys "$keyboard"
 
 # Set timezone
 ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
 hwclock --systohc
 
 # Localization
-loadkeys "$keyboard"
-echo "$locale UTF-8" > /etc/locale.gen
+sudo bash -c "echo -e 'LANG=\"$locale\"\nLC_COLLATE=\"C\"' > /etc/locale.conf"
 locale-gen
-echo "LANG=$locale" > /etc/locale.conf
 
 # Hostname
 echo "$hostname" > /etc/hostname
