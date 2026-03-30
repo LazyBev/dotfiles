@@ -22,7 +22,7 @@ trap 'trap_message' INT TERM
 declare -a pacman_conf=(
     "s/#Color/Color/"
     "s/#ParallelDownloads/ParallelDownloads/"
-    "s/#\multilib\/\multilib\/"
+    "s/#\\[multilib\\]/\\[multilib\\]/"
     "s/#Include = \\/etc\\/pacman\\.d\\/mirrorlist/Include = \\/etc\\/pacman\\.d\\/mirrorlist/"
     "/# Misc options/a ILoveCandy"
 )
@@ -43,7 +43,7 @@ print_bold_blue "\nBev's dotfiles"
 echo -e "\n------------------------------------------------------------------------\n"
 print_info "\nStarting prerequisites setup..."
 
-run "sudo pacman -Syu --noconfirm"
+run "sudo pacman -Syu"
 
 if ! command -v yay &> /dev/null; then
     run "sudo git clone https://aur.archlinux.org/yay-bin.git"
@@ -51,7 +51,7 @@ if ! command -v yay &> /dev/null; then
     run "cd yay-bin && makepkg -si && cd .. && sudo rm -rf yay-bin"
 fi
 
-run "yay -Syu --noconfirm \
+run "yay -Syu \
     acpi alsa-utils blueman bluez bluez-utils \
     brightnessctl btop chafa cliphist cmake curl \
     dbus dbus-openrc dconf dconf-editor \
@@ -82,7 +82,7 @@ run "yay -Syu --noconfirm \
     yt-dlp ytfzf zip zram-generator"
 
 if ! command -v iwctl &> /dev/null; then
-    run "yay -Syu --noconfirm iwd"
+    run "yay -Syu iwd"
 fi
 
 run "sudo rc-update add NetworkManager default"
@@ -93,10 +93,10 @@ run "sudo rc-service NetworkManager start"
 # ─────────────────────────────────────────────
 
 if pacman -Q jack2 &>/dev/null; then
-    run "sudo pacman -Rdd --noconfirm jack2"
+    run "sudo pacman -Rdd jack2"
 fi
 
-run "yay -Syu --noconfirm \
+run "yay -Syu \
     alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg \
     pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
     gst-plugins-good gst-plugins-bad gst-plugin-pipewire gst-libav \
@@ -115,9 +115,9 @@ run "sudo rc-update add wireplumber default"
 VENDOR_ID=$(lscpu | awk '/Vendor ID/ {print $3}')
 
 if [[ "$VENDOR_ID" == "GenuineIntel" ]]; then
-    run "sudo pacman -S --noconfirm intel-ucode"
+    run "sudo pacman -S intel-ucode"
 elif [[ "$VENDOR_ID" == "AuthenticAMD" ]]; then
-    run "sudo pacman -S --noconfirm amd-ucode"
+    run "sudo pacman -S amd-ucode"
 else
     echo "Unknown CPU vendor: $VENDOR_ID"
     exit 1
@@ -128,7 +128,7 @@ fi
 # ─────────────────────────────────────────────
 
 if lspci | grep -i nvidia &>/dev/null; then
-    run "yay -Syu --needed --noconfirm \
+    run "yay -Syu --needed \
         nvidia-dkms nvidia-utils nvidia-settings nvidia-prime \
         lib32-nvidia-utils egl-wayland"
 fi
