@@ -2,114 +2,59 @@
 
 set -ae
 
-network=""
-disk=""
-hostname=""
-user=""
-password=""
-keyboard=""
-locale=""
-timezone=""
-cpu=""
+next_steps() {
+    echo "Internet confirmed."
 
-read -p "Enter the disk you want to write on: " disk
+    echo "Available disks:"
+    lsblk -d -o NAME,SIZE,TYPE
 
-read -p "Enter the hostname: " hostname
+    echo
+    read -rp "Enter the disk to format (e.g. sda or nvme0n1): " disk
+    device="/dev/$disk"
+    echo
+    read -rp "We will add swap" disk
+    
+    cfdisk $device
 
-read -p "Enter the username: " user
+    if [[ $disk == "nvme0n1"]] then
+        part1="p1"
+        part2="p2"
+        part3="p3"
+    else
+        part1="1"
+        part2="2"
+        part3="3"
+    fi
 
-read -p "Enter the password: " password
+    mkfs.ext4 $device$part3
+    mkfs.fat -F 32 $device$part1
+    mkswap $device$par2
 
-read -p "Enter the locale: " locale
+    echo "Done."
+}
 
-read -p "Enter the timezone: " timezone
+hosts=(
+  gnu.org
+  gentoo.org
+  kernel.org
+  archlinux.org
+  debian.org
+  ubuntu.com
+  google.com
+)
 
-read -p "Enter your CPU brand: " cpu 
+connected=0
 
-ip addr
-read -p "Enter what network device you wanna use: " network
+for host in "${hosts[@]}"; do
+  if ping -c 1 -W 2 "$host" > /dev/null 2>&1; then
+    echo "Internet reachable via: $host"
+    connected=1
+  fi
+done
 
-wipefs -af ${disk}
-cfdisk ${disk}
-
-if [[ "$disk" == "/dev/nvme0n1" ]]; then
-    mkfs.ext4 "${disk}p3"
-    mkswap "${disk}p2"
-    mkfs.fat -F 32 "${disk}p1"
-
-    mount "${disk}p3" /mnt
-    mount --mkdir "${disk}p1" /mnt/boot
-    swapon "${disk}p2"
+if [ "$connected" -eq 1 ]; then
+  next_steps
 else
-    mkfs.ext4 "${disk}3"
-    mkswap "${disk}2"
-    mkfs.fat -F 32 "${disk}1"
-
-    mount "${disk}3" /mnt
-    mount --mkdir "${disk}1" /mnt/boot
-    swapon "${disk}2"
+  echo "No internet connection. Exiting."
+  exit 1
 fi
-
-echo "Installing base system..."
-pacstrap -K /mnt base base-devel sudo linux linux-headers linux-firmware sof-firmware grub efibootmgr nano iwd grep git sed "$cpu"-ucode networkmanager seatd
-
-echo "Generating fstab..."
-genfstab -U /mnt >> /mnt/etc/fstab 
-
-# Chroot into the new system
-echo "Chrooting into system..."
-arch-chroot /mnt <<EOF
-set -euo pipefail
-
-# Error handling
-trap 'echo "An error occurred. Exiting..."; exit 1;' ERR
-
-timedatectl set-ntp true
-
-# Set timezone
-ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
-hwclock --systohc
-
-# Localization
-sudo bash -c "echo -e 'LANG=\"$locale\"\nLC_COLLATE=\"C\"' > /etc/locale.conf"
-locale-gen
-
-# Hostname
-echo "$hostname" > /etc/hostname
-
-# Set root password
-echo "root:$password" | chpasswd
-
-# Creating user
-if id "$user" &>/dev/null; then
-    echo "User already exists."
-else
-    useradd -m -G wheel "$user"
-    echo "$user:$password" | chpasswd
-    echo "%wheel ALL=(ALL) ALL" | tee -a /etc/sudoers > /dev/null
-    usermod -aG audio,video,lp,input "$user"
-    echo "User $user created and configured."
-fi 
-
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-grub-mkconfig -o /boot/grub/grub.cfg
-systemctl enable iwd.service
-sudo systemctl enable systemd-networkd
-sudo systemctl enable systemd-resolved 
-systemctl enable NetworkManager 
-systemctl enable seatd
-
-sudo tee /etc/systemd/network/20-wired.network <<NET
-[Match]
-Name=$network
-[Network]
-DHCP=yes
-NET
-
-EOF
-
-# Unmount the partitions
-echo "Unmounting partitions..."
-umount -R /mnt
-
-reboot
