@@ -192,4 +192,14 @@ run "gsettings set org.gnome.desktop.interface gtk-theme \"diinki-retro-dark\""
 
 GRUB_FILE="/etc/default/grub"
 
-if [[ "$V
+if [[ "$VENDOR_ID" == "AuthenticAMD" ]]; then
+    run "sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\\([^\"]*\\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\\1 amd_pstate=active mitigations=off\"/' \"$GRUB_FILE\""
+elif [[ "$VENDOR_ID" == "GenuineIntel" ]]; then
+    run "sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\\([^\"]*\\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\\1 intel_pstate=active mitigations=off\"/' \"$GRUB_FILE\""
+fi
+
+# ─────────────────────────────────────────────
+# Final
+# ─────────────────────────────────────────────
+
+run "sudo mkinitcpio -P && sudo reboot"
