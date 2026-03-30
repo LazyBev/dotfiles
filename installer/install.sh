@@ -53,11 +53,10 @@ fi
 
 run "yay -Syu \
     acpi alsa-utils blueman bluez bluez-utils \
-    brightnessctl btop chafa cliphist cmake curl \
+    brightnessctl btop chafa cmake curl \
     dbus dbus-openrc dconf dconf-editor \
     dolphin dunst emacs eza fastfetch \
-    fcitx5-anthy fcitx5-gtk fcitx5-im fcitx5-qt \
-    firedragon-bin floorp-bin fuzzel fzf ghostty git gvfs hwinfo \
+    fuzzel fzf ghostty git gvfs hwinfo \
     imagemagick iw \
     kvantum kvantum-theme-catppuccin-git \
     kitty kwayland \
@@ -76,10 +75,10 @@ run "yay -Syu \
     ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-dejavu ttf-liberation \
     unzip vulkan-mesa-layers \
     waybar wayland wayland-protocols wayland-utils \
-    waypaper wev wf-recorder wget wl-clipboard wlr-randr \
+    wev wf-recorder wget wl-clipboard wlr-randr \
     xarchiver xbindkeys xdg-desktop-portal xdg-desktop-portal-gtk \
-    xdotool xorg-xev xwayland \
-    yt-dlp ytfzf zip zram-generator"
+    xdotool xorg-xev xorg-xwayland \
+    yt-dlp ytfzf zip"
 
 if ! command -v iwctl &> /dev/null; then
     run "yay -Syu iwd"
