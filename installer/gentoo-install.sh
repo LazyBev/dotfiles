@@ -10,10 +10,74 @@
 #
 # Generate a config first with:
 #   bash gentoo-config.sh
+#
+# Logs are written to /tmp/gentoo-install-<timestamp>.log
+# Follow live with: tail -f /tmp/gentoo-install-<timestamp>.log
 # =============================================================================
 
 set -euo pipefail
 IFS=$'\n\t'
+
+# =============================================================================
+# LOGGING SETUP  — must come before everything else
+# =============================================================================
+
+LOG_FILE="/tmp/gentoo-install-$(date +%Y%m%d-%H%M%S).log"
+STEP_NUM=0
+STEP_TOTAL=0   # filled in by main() once we know what's running
+
+# All output — both stdout and stderr — is tee'd to the log file.
+# We keep a reference to the real terminal (fd 3) so prompts/passwords
+# can bypass the tee and go directly to the user.
+exec 3>&1 4>&2
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+_log_raw() {
+    # Write a timestamped line directly to the log file (not the terminal)
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+# Public logging functions — output goes to terminal AND log file via tee
+log()     { echo -e "${GREEN}[+]${NC} $*";          _log_raw "[INFO]  $*"; }
+warn()    { echo -e "${YELLOW}[!]${NC} $*";          _log_raw "[WARN]  $*"; }
+error()   { echo -e "${RED}[✗]${NC} $*" >&2;        _log_raw "[ERROR] $*"; exit 1; }
+debug()   { echo -e "${CYAN}[…]${NC} $*";            _log_raw "[DEBUG] $*"; }
+
+section() {
+    STEP_NUM=$((STEP_NUM + 1))
+    local title="  Step ${STEP_NUM}: $*"
+    echo -e "\n${BOLD}${BLUE}══════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${CYAN}${title}${NC}"
+    echo -e "${BOLD}${BLUE}══════════════════════════════════════════════${NC}\n"
+    _log_raw "====== STEP ${STEP_NUM}: $* ======"
+}
+
+# Called on EXIT — records success or failure with elapsed time
+_install_start_time=$SECONDS
+_on_exit() {
+    local code=$?
+    local elapsed=$(( SECONDS - _install_start_time ))
+    local mins=$(( elapsed / 60 ))
+    local secs=$(( elapsed % 60 ))
+    echo "" >> "$LOG_FILE"
+    if [[ $code -eq 0 ]]; then
+        _log_raw "====== INSTALL SUCCEEDED in ${mins}m ${secs}s (exit 0) ======"
+    else
+        _log_raw "====== INSTALL FAILED after ${mins}m ${secs}s (exit ${code}) ======"
+        echo -e "\n${RED}${BOLD}[✗] Installation failed. Check the log for details:${NC}"
+        echo -e "    ${BOLD}${LOG_FILE}${NC}"
+        echo -e "    Last 20 lines:\n"
+        tail -20 "$LOG_FILE" >&3   # send to real terminal, not through tee again
+    fi
+}
+trap _on_exit EXIT
+
+# =============================================================================
+# COLORS  (defined early — used by logging above)
+# =============================================================================
+
+RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m';   BOLD='\033[1m'; NC='\033[0m'
 
 # =============================================================================
 # DEFAULTS  (overridden by --config or env)
@@ -50,32 +114,16 @@ ENABLE_FLATPAK="no"
 ENABLE_LIBVIRT="no"
 ENABLE_DOCKER="no"
 ENABLE_SECURE_BOOT="no"
-SECURE_BOOT_MICROSOFT_KEYS="no"   # FIX #9: separate opt-in for MS trust anchor
+SECURE_BOOT_MICROSOFT_KEYS="no"
 EXTRA_PACKAGES=""
 
-# Runtime globals — set during partitioning
+# Runtime globals
 PART_EFI=""
 PART_SWAP=""
 PART_ROOT=""
 ROOT_HASH=""
 USER_HASH=""
 LUKS_NAME="cryptroot"
-
-# =============================================================================
-# COLORS & LOGGING
-# =============================================================================
-
-RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; CYAN='\033[0;36m';   BOLD='\033[1m'; NC='\033[0m'
-
-log()     { echo -e "${GREEN}[+]${NC} $*"; }
-warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
-error()   { echo -e "${RED}[✗]${NC} $*" >&2; exit 1; }
-section() {
-    echo -e "\n${BOLD}${BLUE}══════════════════════════════════════════════${NC}"
-    echo -e "${BOLD}${CYAN}  $*${NC}"
-    echo -e "${BOLD}${BLUE}══════════════════════════════════════════════${NC}\n"
-}
 
 # =============================================================================
 # ARGUMENT PARSING
@@ -112,6 +160,19 @@ load_config() {
     # shellcheck source=/dev/null
     source "$CONFIG_FILE"
     log "Loaded config: $CONFIG_FILE"
+
+    # Log the full resolved config for later debugging
+    _log_raw "--- Resolved configuration ---"
+    _log_raw "DISK=${DISK}  FS=${FS_TYPE}  LUKS=${ENABLE_LUKS}  SWAP=${SWAP_SIZE}G"
+    _log_raw "HOSTNAME=${HOSTNAME}  USER=${USERNAME}"
+    _log_raw "INIT=${INIT_SYSTEM}  KERNEL=${KERNEL_TYPE}  DISPLAY=${DISPLAY_SERVER}  DE=${DESKTOP_ENV}"
+    _log_raw "CPU=${CPU_VENDOR}  GPU=${GPU_VENDOR}  VIDEO_CARDS=${VIDEO_CARDS}"
+    _log_raw "KEYWORDS=${ACCEPT_KEYWORDS}  STAGE3=${STAGE3_VARIANT}"
+    _log_raw "PIPEWIRE=${ENABLE_PIPEWIRE}  BT=${ENABLE_BLUETOOTH}  PRINT=${ENABLE_PRINTING}"
+    _log_raw "FLATPAK=${ENABLE_FLATPAK}  LIBVIRT=${ENABLE_LIBVIRT}  DOCKER=${ENABLE_DOCKER}"
+    _log_raw "SECURE_BOOT=${ENABLE_SECURE_BOOT}  MS_KEYS=${SECURE_BOOT_MICROSOFT_KEYS}"
+    _log_raw "EXTRA_PACKAGES=${EXTRA_PACKAGES:-<none>}"
+    _log_raw "------------------------------"
 }
 
 # =============================================================================
@@ -121,56 +182,76 @@ load_config() {
 preflight_checks() {
     section "Pre-flight Checks"
 
-    [[ $EUID -ne 0 ]]   && error "Must be run as root."
-    [[ ! -b "$DISK" ]]  && error "Disk $DISK not found. Verify DISK in config."
+    debug "Running as UID ${EUID}"
+    [[ $EUID -ne 0 ]] && error "Must be run as root."
 
-    # Check required tools
+    debug "Checking disk: ${DISK}"
+    [[ ! -b "$DISK" ]] && error "Disk $DISK not found. Verify DISK in config."
+    _log_raw "Disk ${DISK}: $(lsblk -dno SIZE,MODEL "$DISK" 2>/dev/null || echo 'info unavailable')"
+
+    debug "Checking required tools..."
     local tools=(wipefs sgdisk mkfs.fat mkswap wget gpg openssl chroot)
     for t in "${tools[@]}"; do
-        command -v "$t" &>/dev/null || error "Required tool not found: $t"
+        if command -v "$t" &>/dev/null; then
+            _log_raw "  tool ok: ${t} ($(command -v "$t"))"
+        else
+            error "Required tool not found: $t"
+        fi
     done
 
-    # LUKS tooling
     if [[ "$ENABLE_LUKS" == "yes" ]]; then
+        debug "Checking cryptsetup for LUKS..."
         command -v cryptsetup &>/dev/null || error "cryptsetup not found (required for LUKS)."
+        _log_raw "  cryptsetup: $(cryptsetup --version)"
     fi
 
-    # Secure Boot tooling
     if [[ "$ENABLE_SECURE_BOOT" == "yes" ]]; then
         command -v sbctl &>/dev/null \
             || warn "sbctl not found — Secure Boot setup will be manual post-install."
     fi
 
-    # Password prompt — plaintext never stored to disk
+    # Passwords — read directly from /dev/tty so they bypass the tee pipeline
+    # and are never written to the log file.
     echo ""
-    read -rsp "  Enter root password: "    rp1; echo
-    read -rsp "  Confirm root password: "  rp2; echo
+    read -rsp "  Enter root password: "    rp1 </dev/tty; echo
+    read -rsp "  Confirm root password: "  rp2 </dev/tty; echo
     [[ "$rp1" != "$rp2" ]] && error "Root passwords do not match."
 
-    read -rsp "  Enter password for ${USERNAME}: "   up1; echo
-    read -rsp "  Confirm password for ${USERNAME}: " up2; echo
+    read -rsp "  Enter password for ${USERNAME}: "   up1 </dev/tty; echo
+    read -rsp "  Confirm password for ${USERNAME}: " up2 </dev/tty; echo
     [[ "$up1" != "$up2" ]] && error "User passwords do not match."
 
     ROOT_HASH=$(openssl passwd -6 "$rp1")
     USER_HASH=$(openssl passwd -6 "$up1")
     unset rp1 rp2 up1 up2
+    _log_raw "Passwords hashed (SHA-512). Plaintext not stored."
 
     if [[ "$ENABLE_LUKS" == "yes" ]]; then
         echo ""
-        read -rsp "  Enter LUKS passphrase: "    lp1; echo
-        read -rsp "  Confirm LUKS passphrase: "  lp2; echo
+        read -rsp "  Enter LUKS passphrase: "    lp1 </dev/tty; echo
+        read -rsp "  Confirm LUKS passphrase: "  lp2 </dev/tty; echo
         [[ "$lp1" != "$lp2" ]] && error "LUKS passphrases do not match."
         LUKS_PASSPHRASE="$lp1"
         unset lp1 lp2
+        _log_raw "LUKS passphrase accepted (not logged)."
     fi
 
-    log "Verifying internet connectivity..."
-    ping -c 2 -W 5 gentoo.org &>/dev/null || error "No internet connection."
+    debug "Checking internet connectivity..."
+    if ping -c 2 -W 5 gentoo.org &>/dev/null; then
+        log "Internet connectivity: OK"
+        _log_raw "  ping gentoo.org: OK"
+    else
+        error "No internet connection."
+    fi
 
-    log "Syncing system clock..."
-    chronyd -q &>/dev/null \
-        || ntpd -gq &>/dev/null \
-        || warn "Could not sync clock automatically."
+    debug "Syncing system clock..."
+    if chronyd -q &>/dev/null; then
+        _log_raw "Clock synced via chronyd"
+    elif ntpd -gq &>/dev/null; then
+        _log_raw "Clock synced via ntpd"
+    else
+        warn "Could not sync clock automatically."
+    fi
 
     log "Pre-flight checks passed."
 }
@@ -192,57 +273,57 @@ _part_suffix() {
 # =============================================================================
 
 partition_disk() {
-    section "Partitioning: $DISK  (FS: $FS_TYPE  LUKS: $ENABLE_LUKS)"
+    section "Partitioning  —  ${DISK}  (${FS_TYPE}  LUKS: ${ENABLE_LUKS})"
 
     warn "This will DESTROY all data on $DISK"
     local confirm
-    read -rp "  Type 'yes' to confirm: " confirm
+    read -rp "  Type 'yes' to confirm: " confirm </dev/tty
     [[ "$confirm" != "yes" ]] && error "Aborted by user."
+    _log_raw "User confirmed destructive wipe of ${DISK}"
 
-    log "Wiping disk..."
+    log "Wiping disk signatures..."
     wipefs -a "$DISK"
     sgdisk --zap-all "$DISK"
+    _log_raw "Disk wiped: ${DISK}"
 
-    # FIX #1: use arithmetic assignment instead of ((++)) to avoid set -e
-    # triggering when the post-increment expression evaluates to 0.
     local part_num=1
-    log "Creating GPT layout..."
-    # EFI
-    sgdisk -n ${part_num}:0:+${EFI_SIZE}G  -t ${part_num}:ef00 -c ${part_num}:"EFI"  "$DISK"
+    log "Creating GPT partition layout..."
+
+    sgdisk -n ${part_num}:0:+${EFI_SIZE}G -t ${part_num}:ef00 -c ${part_num}:"EFI" "$DISK"
     PART_EFI="$(_part_suffix $part_num)"
+    _log_raw "  Part ${part_num}: EFI  ${EFI_SIZE}G  → ${PART_EFI}"
     part_num=$((part_num + 1))
 
-    # Optional swap
     if [[ "$SWAP_SIZE" != "0" ]]; then
         sgdisk -n ${part_num}:0:+${SWAP_SIZE}G -t ${part_num}:8200 -c ${part_num}:"swap" "$DISK"
         PART_SWAP="$(_part_suffix $part_num)"
+        _log_raw "  Part ${part_num}: swap ${SWAP_SIZE}G  → ${PART_SWAP}"
         part_num=$((part_num + 1))
     fi
 
-    # Root (remainder)
     sgdisk -n ${part_num}:0:0 -t ${part_num}:8300 -c ${part_num}:"root" "$DISK"
     PART_ROOT="$(_part_suffix $part_num)"
+    _log_raw "  Part ${part_num}: root (remainder) → ${PART_ROOT}"
 
-    # FIX #12: udevadm settle is deterministic; sleep 1 is a race
+    debug "Waiting for kernel to re-read partition table..."
     partprobe "$DISK"
     udevadm settle
+    _log_raw "partprobe + udevadm settle complete"
 
-    log "Formatting EFI (FAT32)..."
+    log "Formatting EFI partition (FAT32)..."
     mkfs.fat -F32 -n "EFI" "$PART_EFI"
+    _log_raw "EFI formatted: ${PART_EFI}"
 
     if [[ -n "$PART_SWAP" ]]; then
         log "Formatting swap..."
         mkswap -L "swap" "$PART_SWAP"
         swapon "$PART_SWAP"
+        _log_raw "Swap formatted and activated: ${PART_SWAP}"
     fi
 
-    # LUKS
     local ROOT_DEVICE="$PART_ROOT"
     if [[ "$ENABLE_LUKS" == "yes" ]]; then
-        log "Setting up LUKS2 container on $PART_ROOT..."
-        # FIX #7: feed passphrase via process substitution so it never
-        # appears in /proc/<pid>/environ as a shell variable during the
-        # cryptsetup calls.
+        log "Setting up LUKS2 container on ${PART_ROOT}..."
         cryptsetup luksFormat --type luks2 \
             --cipher aes-xts-plain64 --key-size 512 \
             --hash sha512 --pbkdf argon2id \
@@ -251,44 +332,56 @@ partition_disk() {
             < <(printf '%s' "$LUKS_PASSPHRASE")
         unset LUKS_PASSPHRASE
         ROOT_DEVICE="/dev/mapper/${LUKS_NAME}"
+        _log_raw "LUKS2 container opened: ${ROOT_DEVICE}"
     fi
 
-    log "Formatting root ($FS_TYPE)..."
+    log "Formatting root partition (${FS_TYPE})..."
     mkdir -p /mnt/gentoo
     case "$FS_TYPE" in
         btrfs)
             mkfs.btrfs -L "gentoo" -f "$ROOT_DEVICE"
+            _log_raw "btrfs formatted: ${ROOT_DEVICE}"
+
+            debug "Creating btrfs subvolumes..."
             mount "$ROOT_DEVICE" /mnt/gentoo
             for sv in @ @home @snapshots @var_log; do
                 btrfs subvolume create "/mnt/gentoo/${sv}"
+                _log_raw "  subvolume created: ${sv}"
             done
             umount /mnt/gentoo
 
             local btrfs_opts="noatime,compress=zstd:1,space_cache=v2"
+            debug "Mounting btrfs subvolumes..."
             mount -o "${btrfs_opts},subvol=@"          "$ROOT_DEVICE" /mnt/gentoo
             mkdir -p /mnt/gentoo/{home,.snapshots,var/log}
             mount -o "${btrfs_opts},subvol=@home"      "$ROOT_DEVICE" /mnt/gentoo/home
             mount -o "${btrfs_opts},subvol=@snapshots" "$ROOT_DEVICE" /mnt/gentoo/.snapshots
             mount -o "${btrfs_opts},subvol=@var_log"   "$ROOT_DEVICE" /mnt/gentoo/var/log
+            _log_raw "btrfs subvolumes mounted (opts: ${btrfs_opts})"
             ;;
         ext4)
             mkfs.ext4 -L "gentoo" -O dir_index,extent,sparse_super2 "$ROOT_DEVICE"
             mount "$ROOT_DEVICE" /mnt/gentoo
+            _log_raw "ext4 formatted and mounted: ${ROOT_DEVICE}"
             ;;
         xfs)
             mkfs.xfs -L "gentoo" -f "$ROOT_DEVICE"
             mount "$ROOT_DEVICE" /mnt/gentoo
+            _log_raw "xfs formatted and mounted: ${ROOT_DEVICE}"
             ;;
         f2fs)
             mkfs.f2fs -l "gentoo" -O extra_attr,inode_checksum,sb_checksum "$ROOT_DEVICE"
             mount -o noatime "$ROOT_DEVICE" /mnt/gentoo
+            _log_raw "f2fs formatted and mounted: ${ROOT_DEVICE}"
             ;;
     esac
 
     mkdir -p /mnt/gentoo/boot/efi
     mount "$PART_EFI" /mnt/gentoo/boot/efi
+    _log_raw "EFI mounted: ${PART_EFI} → /mnt/gentoo/boot/efi"
 
-    log "Partitioning complete."
+    log "Partition layout complete."
+    _log_raw "Final mount state:"; findmnt --target /mnt/gentoo -R 2>/dev/null >> "$LOG_FILE" || true
 }
 
 # =============================================================================
@@ -296,12 +389,12 @@ partition_disk() {
 # =============================================================================
 
 write_fstab() {
-    # FIX #5: called after install_stage3 so /mnt/gentoo/etc/ exists.
-    # The /etc dir comes from the stage3 tarball extract.
     section "Generating /etc/fstab"
+    # Called after install_stage3 so /mnt/gentoo/etc/ exists.
 
-    local root_source efi_uuid swap_uuid
+    local root_source efi_uuid
     efi_uuid=$(blkid -s UUID -o value "$PART_EFI")
+    _log_raw "EFI UUID: ${efi_uuid}"
 
     if [[ "$ENABLE_LUKS" == "yes" ]]; then
         root_source="/dev/mapper/${LUKS_NAME}"
@@ -309,14 +402,15 @@ write_fstab() {
         luks_uuid=$(blkid -s UUID -o value "$PART_ROOT")
         echo "${LUKS_NAME}  UUID=${luks_uuid}  none  luks,discard" \
             > /mnt/gentoo/etc/crypttab
+        _log_raw "crypttab written: ${LUKS_NAME} UUID=${luks_uuid}"
         log "crypttab written."
     else
         root_source="UUID=$(blkid -s UUID -o value "$PART_ROOT")"
+        _log_raw "Root source: ${root_source}"
     fi
 
     {
         echo "# <fs>                         <mp>          <type>  <opts>                                         <dump> <pass>"
-
         case "$FS_TYPE" in
             btrfs)
                 local btrfs_opts="noatime,compress=zstd:1,space_cache=v2"
@@ -325,24 +419,18 @@ write_fstab() {
                 echo "${root_source}  /.snapshots   btrfs   ${btrfs_opts},subvol=@snapshots  0 0"
                 echo "${root_source}  /var/log      btrfs   ${btrfs_opts},subvol=@var_log    0 0"
                 ;;
-            ext4)
-                echo "${root_source}  /          ext4    defaults,noatime  0 1"
-                ;;
-            xfs)
-                echo "${root_source}  /          xfs     defaults,noatime  0 1"
-                ;;
-            f2fs)
-                echo "${root_source}  /          f2fs    defaults,noatime  0 1"
-                ;;
+            ext4) echo "${root_source}  /  ext4   defaults,noatime  0 1" ;;
+            xfs)  echo "${root_source}  /  xfs    defaults,noatime  0 1" ;;
+            f2fs) echo "${root_source}  /  f2fs   defaults,noatime  0 1" ;;
         esac
-
         echo "UUID=${efi_uuid}   /boot/efi  vfat    umask=0077                                     0 2"
         [[ -n "$PART_SWAP" ]] && \
-            echo "UUID=$(blkid -s UUID -o value "$PART_SWAP")  none       swap    sw                                             0 0"
-        echo "tmpfs                         /tmp          tmpfs   defaults,nosuid,nodev,size=4G           0 0"
+            echo "UUID=$(blkid -s UUID -o value "$PART_SWAP")  none  swap  sw  0 0"
+        echo "tmpfs  /tmp  tmpfs  defaults,nosuid,nodev,size=4G  0 0"
     } > /mnt/gentoo/etc/fstab
 
     log "fstab written."
+    _log_raw "fstab contents:"; cat /mnt/gentoo/etc/fstab >> "$LOG_FILE"
 }
 
 # =============================================================================
@@ -350,7 +438,7 @@ write_fstab() {
 # =============================================================================
 
 install_stage3() {
-    section "Installing Stage3 Tarball"
+    section "Installing Stage3 Tarball  (${STAGE3_VARIANT})"
 
     local base_url="https://distfiles.gentoo.org/releases/amd64/autobuilds"
     local stage3_url
@@ -362,16 +450,16 @@ install_stage3() {
         musl)     stage3_url="${base_url}/current-stage3-amd64-musl/stage3-amd64-musl-latest.tar.xz" ;;
         *)        error "Unknown STAGE3_VARIANT: $STAGE3_VARIANT" ;;
     esac
+    _log_raw "Stage3 URL: ${stage3_url}"
 
     cd /mnt/gentoo
 
-    # FIX #11: add --tries=3 for transient network failures
-    log "Downloading stage3 (${STAGE3_VARIANT})..."
-    wget -q --show-progress --tries=3 "$stage3_url"    -O stage3.tar.xz
-    # Fetch the detached signature and separate DIGESTS file
-    wget -q --tries=3 "${stage3_url}.asc"              -O stage3.tar.xz.asc  2>/dev/null || true
-    wget -q --tries=3 "${stage3_url}.DIGESTS"          -O stage3.tar.xz.DIGESTS 2>/dev/null || true
-    wget -q --tries=3 "${stage3_url}.DIGESTS.asc"      -O stage3.tar.xz.DIGESTS.asc 2>/dev/null || true
+    log "Downloading stage3..."
+    wget -q --show-progress --tries=3 "$stage3_url"       -O stage3.tar.xz
+    wget -q --tries=3 "${stage3_url}.asc"                 -O stage3.tar.xz.asc        2>/dev/null || true
+    wget -q --tries=3 "${stage3_url}.DIGESTS"             -O stage3.tar.xz.DIGESTS    2>/dev/null || true
+    wget -q --tries=3 "${stage3_url}.DIGESTS.asc"         -O stage3.tar.xz.DIGESTS.asc 2>/dev/null || true
+    _log_raw "Downloads complete. Sizes: $(du -sh stage3.tar.xz 2>/dev/null | cut -f1) (tarball)"
 
     log "Verifying GPG signature..."
     gpg --keyserver hkps://keys.openpgp.org \
@@ -381,35 +469,44 @@ install_stage3() {
     local gpg_ok=0
     if gpg --verify stage3.tar.xz.asc stage3.tar.xz 2>/dev/null; then
         log "GPG signature verified (detached .asc)."
+        _log_raw "GPG: verified via .asc"
         gpg_ok=1
     elif gpg --verify stage3.tar.xz.DIGESTS.asc stage3.tar.xz.DIGESTS 2>/dev/null; then
         log "GPG signature verified (DIGESTS.asc)."
+        _log_raw "GPG: verified via DIGESTS.asc"
         gpg_ok=1
+    else
+        _log_raw "GPG: verification failed or skipped"
     fi
 
-    # FIX #4: checksum from the dedicated DIGESTS file, not the .asc armored blob.
-    # The .asc is a binary/armored signature — grepping it for hex strings is unreliable.
     if [[ "$gpg_ok" -eq 1 && -f stage3.tar.xz.DIGESTS ]]; then
         local expected actual tarball="stage3.tar.xz"
         expected=$(grep -E "^[0-9a-f]{128}  .*stage3.*\.tar\.xz$" stage3.tar.xz.DIGESTS \
                    | grep -v "\.asc" | awk '{print $1}')
         if [[ -n "$expected" ]]; then
+            debug "Verifying SHA512 checksum..."
             actual=$(sha512sum "$tarball" | awk '{print $1}')
             if [[ "$expected" == "$actual" ]]; then
                 log "SHA512 checksum verified."
+                _log_raw "SHA512: OK (${actual:0:16}…)"
             else
+                _log_raw "SHA512 MISMATCH — expected: ${expected:0:16}… got: ${actual:0:16}…"
                 error "SHA512 mismatch — aborting."
             fi
         else
             warn "No SHA512 entry found in DIGESTS — skipping checksum."
+            _log_raw "SHA512: no entry found in DIGESTS"
         fi
     elif [[ "$gpg_ok" -eq 0 ]]; then
         warn "GPG verification skipped — verify manually if security is critical."
     fi
 
-    log "Extracting stage3..."
+    log "Extracting stage3 (this may take a few minutes)..."
     tar xpf stage3.tar.xz --xattrs-include='*.*' --numeric-owner
+    _log_raw "stage3 extracted to /mnt/gentoo"
+
     rm -f stage3.tar.xz stage3.tar.xz.asc stage3.tar.xz.DIGESTS stage3.tar.xz.DIGESTS.asc
+    _log_raw "stage3 tarballs removed"
 
     log "Stage3 installed."
 }
@@ -422,6 +519,7 @@ configure_portage() {
     section "Configuring Portage"
 
     mkdir -p /mnt/gentoo/etc/portage/{package.use,package.accept_keywords,package.license,repos.conf,env,package.mask}
+    _log_raw "Portage config dirs created"
 
     log "Writing make.conf..."
     cat > /mnt/gentoo/etc/portage/make.conf << EOF
@@ -429,7 +527,6 @@ configure_portage() {
 # make.conf — generated $(date -u '+%Y-%m-%dT%H:%M:%SZ')
 # =============================================================================
 
-# Compiler flags
 COMMON_FLAGS="-O2 -pipe -march=native"
 CFLAGS="\${COMMON_FLAGS}"
 CXXFLAGS="\${COMMON_FLAGS}"
@@ -438,46 +535,35 @@ FFLAGS="\${COMMON_FLAGS}"
 RUSTFLAGS="-C opt-level=2 -C target-cpu=native"
 LDFLAGS="-Wl,-O1 -Wl,--as-needed"
 
-# Build parallelism
 MAKEOPTS="${MAKEOPTS}"
 EMERGE_DEFAULT_OPTS="--jobs=$(nproc) --load-average=$(nproc) --with-bdeps=y --keep-going --verbose-conflicts"
 PORTAGE_NICENESS=15
 
-# USE flags
 USE="${USE_FLAGS}"
 
-# Licences
 ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
-
-# Arch
 ACCEPT_KEYWORDS="${ACCEPT_KEYWORDS}"
 
-# Localisation
 L10N="en en-US"
 LINGUAS="en en_US"
 
-# GPU
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
 
-# Mirrors
 GENTOO_MIRRORS="${GENTOO_MIRRORS}"
 
-# Portage dirs
 DISTDIR="/var/cache/distfiles"
 PKGDIR="/var/cache/binpkgs"
 PORTDIR="/var/db/repos/gentoo"
 
-# Logging
 PORTAGE_ELOG_CLASSES="warn error log"
 PORTAGE_ELOG_SYSTEM="save"
 
-# Features
 FEATURES="parallel-fetch parallel-install buildpkg clean-logs split-elog"
 
-# GRUB EFI target
 GRUB_PLATFORMS="efi-64"
 EOF
+    _log_raw "make.conf written"
 
     log "Writing repos.conf..."
     cat > /mnt/gentoo/etc/portage/repos.conf/gentoo.conf << 'EOF'
@@ -493,6 +579,7 @@ sync-rsync-verify-jobs   = 1
 sync-rsync-verify-metamanifest = yes
 sync-rsync-verify-max-age = 24
 EOF
+    _log_raw "repos.conf written"
 
     _configure_portage_display
     _configure_portage_gpu
@@ -503,6 +590,7 @@ EOF
 }
 
 _configure_portage_display() {
+    debug "Configuring display USE/keywords (DE: ${DESKTOP_ENV}, display: ${DISPLAY_SERVER})..."
     local kw_file="/mnt/gentoo/etc/portage/package.accept_keywords/desktop"
     case "$DESKTOP_ENV" in
         niri)
@@ -520,24 +608,15 @@ gui-libs/hyprwayland-scanner ~amd64
 dev-libs/wayland-protocols ~amd64
 EOF
             ;;
-        river)
-            cat >> "$kw_file" << 'EOF'
-gui-wm/river             ~amd64
-EOF
-            ;;
-        cosmic)
-            cat >> "$kw_file" << 'EOF'
+        river)  echo "gui-wm/river  ~amd64" >> "$kw_file" ;;
+        cosmic) cat >> "$kw_file" << 'EOF'
 gui-wm/cosmic-comp       ~amd64
 gui-apps/cosmic-term     ~amd64
 gui-apps/cosmic-files    ~amd64
 gui-apps/cosmic-launcher ~amd64
 EOF
             ;;
-        labwc)
-            cat >> "$kw_file" << 'EOF'
-gui-wm/labwc             ~amd64
-EOF
-            ;;
+        labwc)  echo "gui-wm/labwc  ~amd64" >> "$kw_file" ;;
     esac
 
     if [[ "$DISPLAY_SERVER" == "wayland" || "$DISPLAY_SERVER" == "both" ]]; then
@@ -547,9 +626,11 @@ dev-libs/wayland       doc
 x11-base/xwayland      -glamor
 EOF
     fi
+    _log_raw "Display portage config written (DE=${DESKTOP_ENV})"
 }
 
 _configure_portage_gpu() {
+    debug "Configuring GPU USE flags (vendor: ${GPU_VENDOR})..."
     local use_file="/mnt/gentoo/etc/portage/package.use/gpu"
     case "$GPU_VENDOR" in
         amd)
@@ -574,29 +655,32 @@ EOF
                 >> /mnt/gentoo/etc/portage/package.license/nvidia
             ;;
     esac
+    _log_raw "GPU portage config written (${GPU_VENDOR})"
 }
 
 _configure_portage_audio() {
     if [[ "$ENABLE_PIPEWIRE" == "yes" ]]; then
+        debug "Configuring PipeWire USE flags..."
         cat > /mnt/gentoo/etc/portage/package.use/audio << 'EOF'
 media-video/pipewire    sound-server jack-sdk v4l screencast bluetooth
 media-sound/wireplumber -systemd
 EOF
+        _log_raw "PipeWire portage config written"
     fi
 }
 
 _configure_portage_optional() {
     if [[ "$ENABLE_FLATPAK" == "yes" ]]; then
-        cat >> /mnt/gentoo/etc/portage/package.use/desktop << 'EOF'
-sys-apps/xdg-desktop-portal  flatpak
-EOF
+        echo "sys-apps/xdg-desktop-portal  flatpak" \
+            >> /mnt/gentoo/etc/portage/package.use/desktop
+        _log_raw "Flatpak USE flag written"
     fi
-
     if [[ "$ENABLE_LIBVIRT" == "yes" ]]; then
         cat >> /mnt/gentoo/etc/portage/package.use/virt << 'EOF'
 app-emulation/libvirt  qemu virt-network
 app-emulation/qemu     spice usb
 EOF
+        _log_raw "Libvirt USE flags written"
     fi
 }
 
@@ -605,10 +689,13 @@ EOF
 # =============================================================================
 
 setup_chroot() {
-    section "Preparing chroot"
+    section "Preparing chroot environment"
 
+    debug "Copying resolv.conf..."
     cp --dereference /etc/resolv.conf /mnt/gentoo/etc/
+    _log_raw "resolv.conf copied"
 
+    debug "Binding virtual filesystems..."
     mount --types proc  /proc /mnt/gentoo/proc
     mount --rbind       /sys  /mnt/gentoo/sys
     mount --make-rslave       /mnt/gentoo/sys
@@ -616,13 +703,17 @@ setup_chroot() {
     mount --make-rslave       /mnt/gentoo/dev
     mount --bind        /run  /mnt/gentoo/run
     mount --make-slave        /mnt/gentoo/run
+    _log_raw "proc/sys/dev/run bound"
 
     if [[ -d /sys/firmware/efi/efivars ]]; then
         mount --bind /sys/firmware/efi/efivars \
             /mnt/gentoo/sys/firmware/efi/efivars
+        _log_raw "efivars bound"
+    else
+        _log_raw "efivars: not present (non-EFI?), skipped"
     fi
 
-    log "Chroot ready."
+    log "Chroot environment ready."
 }
 
 # =============================================================================
@@ -630,78 +721,105 @@ setup_chroot() {
 # =============================================================================
 
 write_chroot_script() {
-    section "Writing chroot script"
+    section "Writing chroot install script"
 
-    # FIX #10: create the file with mode 700 *before* writing content so
-    # ROOT_HASH / USER_HASH are never readable by other users even briefly.
+    # Create with restricted permissions before writing sensitive content
     install -m 700 /dev/null /mnt/gentoo/root/chroot-install.sh
 
-    # NOTE: The heredoc uses an unquoted delimiter (CHROOT_EOF) intentionally —
-    # outer-scope shell variables (HOSTNAME, INIT_SYSTEM, etc.) are expanded
-    # here so their values are baked into the chroot script.  Inner variables
-    # that must remain literal use escaped \$ or quoted-delimiter sub-heredocs.
+    # Copy the log file path into the chroot script so it can append to it
+    # Note: unquoted CHROOT_EOF → outer variables expand (intentional)
     cat >> /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ── Logging inside chroot ─────────────────────────────────────────────────────
+# Appends to the same host log file (it's visible at the same path inside
+# the chroot because /mnt/gentoo maps to / and /tmp is shared via bind).
+CHROOT_LOG="${LOG_FILE}"
+
 RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m';   BOLD='\033[1m'; NC='\033[0m'
-log()     { echo -e "\${GREEN}[+]\${NC} \$*"; }
-warn()    { echo -e "\${YELLOW}[!]\${NC} \$*"; }
-error()   { echo -e "\${RED}[✗]\${NC} \$*" >&2; exit 1; }
+
+_clog() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CHROOT] \$*" >> "\${CHROOT_LOG}" 2>/dev/null || true; }
+log()     { echo -e "\${GREEN}[+]\${NC} \$*";   _clog "[INFO]  \$*"; }
+warn()    { echo -e "\${YELLOW}[!]\${NC} \$*";  _clog "[WARN]  \$*"; }
+error()   { echo -e "\${RED}[✗]\${NC} \$*" >&2; _clog "[ERROR] \$*"; exit 1; }
+debug()   { echo -e "\${CYAN}[…]\${NC} \$*";    _clog "[DEBUG] \$*"; }
 section() {
     echo -e "\n\${BOLD}\${BLUE}══════════════════════════════════════════════\${NC}"
     echo -e "\${BOLD}\${CYAN}  \$*\${NC}"
     echo -e "\${BOLD}\${BLUE}══════════════════════════════════════════════\${NC}\n"
+    _clog "====== \$* ======"
 }
 
 # ── Environment ───────────────────────────────────────────────────────────────
 source /etc/profile
 export PS1="(chroot) \${PS1}"
+_clog "Profile sourced, chroot environment ready"
 
 # ── Portage sync ──────────────────────────────────────────────────────────────
 section "Syncing Portage tree"
+debug "Running emerge-webrsync..."
 emerge-webrsync
 eselect news read all
+_clog "Portage tree synced"
 
 # ── Profile ───────────────────────────────────────────────────────────────────
-section "Setting profile"
+section "Setting Portage profile"
 PROFILE_PATTERN="amd64/23.0/desktop"
 [[ "${INIT_SYSTEM}" == "systemd" ]] && PROFILE_PATTERN="\${PROFILE_PATTERN}/systemd"
+debug "Looking for profile matching: \${PROFILE_PATTERN}"
 
-# FIX #15: anchor match with a trailing space/bracket so "desktop" doesn't
-# accidentally match "desktop/plasma" or "desktop/gnome".
 PROFILE_NUM=\$(eselect profile list \
     | awk -v pat="\${PROFILE_PATTERN}" '\$0 ~ pat"[[:space:]]" && !/musl/ {print \$1; exit}' \
     | tr -d '[]')
 if [[ -n "\$PROFILE_NUM" ]]; then
     eselect profile set "\$PROFILE_NUM"
-    log "Profile: \$(eselect profile show | tail -1 | xargs)"
+    SELECTED="\$(eselect profile show | tail -1 | xargs)"
+    log "Profile set: \${SELECTED}"
+    _clog "Profile: \${SELECTED}"
 else
     warn "Could not auto-select profile — run: eselect profile set"
+    _clog "Profile auto-select failed for pattern: \${PROFILE_PATTERN}"
 fi
 
 # ── Timezone & Locale ─────────────────────────────────────────────────────────
 section "Timezone & Locale"
+debug "Setting timezone: ${TIMEZONE}"
 echo "${TIMEZONE}" > /etc/timezone
 emerge -q --config sys-libs/timezone-data
+_clog "Timezone set: ${TIMEZONE}"
 
 echo "${LOCALE} UTF-8" >> /etc/locale.gen
 locale-gen
 LOC=\$(locale -a | grep -i "\$(echo "${LOCALE}" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/')" | head -1)
-[[ -n "\$LOC" ]] && eselect locale set "\$LOC" || warn "Set locale manually: eselect locale set"
+if [[ -n "\$LOC" ]]; then
+    eselect locale set "\$LOC"
+    _clog "Locale set: \${LOC}"
+else
+    warn "Set locale manually: eselect locale set"
+    _clog "Locale auto-set failed for: ${LOCALE}"
+fi
 env-update && source /etc/profile
 
 # ── Firmware & Microcode ──────────────────────────────────────────────────────
-section "Firmware & Microcode"
-[[ "${CPU_VENDOR}" == "intel" ]] && emerge -q sys-firmware/intel-microcode
+section "Firmware & Microcode  (CPU: ${CPU_VENDOR})"
+[[ "${CPU_VENDOR}" == "intel" ]] && {
+    debug "Installing Intel microcode..."
+    emerge -q sys-firmware/intel-microcode
+    _clog "intel-microcode installed"
+}
+debug "Installing linux-firmware..."
 emerge -q sys-firmware/linux-firmware
+_clog "linux-firmware installed"
 
 # ── Kernel ────────────────────────────────────────────────────────────────────
-section "Kernel: ${KERNEL_TYPE}"
+section "Kernel installation  (type: ${KERNEL_TYPE})"
 case "${KERNEL_TYPE}" in
     dist)
+        debug "Installing gentoo-kernel-bin (pre-compiled)..."
         emerge -q sys-kernel/gentoo-kernel-bin
+        _clog "gentoo-kernel-bin installed"
         ;;
     sources|hardened|rt)
         case "${KERNEL_TYPE}" in
@@ -710,10 +828,13 @@ case "${KERNEL_TYPE}" in
             rt)       emerge -q sys-kernel/rt-sources ;;
         esac
         eselect kernel set 1
+        KVER=\$(eselect kernel show | tail -1 | xargs | sed 's|.*/||')
+        _clog "Kernel sources installed: \${KVER}"
         cd /usr/src/linux
 
         case "${KERNEL_CONFIG}" in
             defconfig)
+                debug "Running make defconfig..."
                 make defconfig
                 scripts/config --enable CONFIG_EFI_STUB
                 scripts/config --enable CONFIG_EFI_PARTITION
@@ -721,25 +842,31 @@ case "${KERNEL_TYPE}" in
                     scripts/config --enable CONFIG_DM_CRYPT
                     scripts/config --enable CONFIG_CRYPTO_AES
                     scripts/config --enable CONFIG_CRYPTO_XTS
+                    _clog "LUKS kernel options enabled"
                 }
                 make olddefconfig
+                log "Compiling kernel (${MAKEOPTS}) — this will take a while..."
                 make ${MAKEOPTS}
                 make modules_install
                 make install
+                _clog "Kernel compiled and installed"
                 ;;
             genkernel)
                 emerge -q sys-kernel/genkernel
+                log "Running genkernel..."
                 genkernel --menuconfig=no \
                           --makeopts="${MAKEOPTS}" \
                           $( [[ "${ENABLE_LUKS}" == "yes" ]] && echo "--luks" ) \
                           all
+                _clog "genkernel complete"
                 ;;
             manual)
-                warn "Launching menuconfig — configure and save, then exit."
+                warn "Launching menuconfig — configure, save, then exit."
                 make menuconfig
                 make ${MAKEOPTS}
                 make modules_install
                 make install
+                _clog "Manual kernel compiled and installed"
                 ;;
         esac
         ;;
@@ -747,6 +874,7 @@ esac
 
 # ── Base system packages ──────────────────────────────────────────────────────
 section "Base system packages"
+debug "Emerging base packages..."
 emerge -q \
     app-admin/sudo \
     app-editors/neovim \
@@ -767,43 +895,49 @@ emerge -q \
     sys-auth/pambase \
     sys-process/cronie \
     net-misc/networkmanager
+_clog "Base packages installed"
 
-# FIX #16: only emerge fs tools relevant to the chosen filesystem
 case "${FS_TYPE}" in
-    xfs)  emerge -q sys-fs/xfsprogs ;;
-    f2fs) emerge -q sys-fs/f2fs-tools ;;
+    xfs)  emerge -q sys-fs/xfsprogs;   _clog "xfsprogs installed" ;;
+    f2fs) emerge -q sys-fs/f2fs-tools; _clog "f2fs-tools installed" ;;
 esac
 
-[[ "${ENABLE_LUKS}" == "yes" ]] && emerge -q sys-fs/cryptsetup
+[[ "${ENABLE_LUKS}" == "yes" ]] && {
+    emerge -q sys-fs/cryptsetup
+    _clog "cryptsetup installed"
+}
 
 # ── Hostname & Networking ─────────────────────────────────────────────────────
-section "Hostname & network"
+section "Hostname & network configuration"
 echo "${HOSTNAME}" > /etc/hostname
-
 cat > /etc/hosts << EOF
 127.0.0.1   localhost
 ::1         localhost
 127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}
 EOF
+_clog "Hostname: ${HOSTNAME}"
 
-# ── OpenRC / systemd services ─────────────────────────────────────────────────
-section "Init services"
+# ── Init services ─────────────────────────────────────────────────────────────
+section "Enabling init services  (${INIT_SYSTEM})"
 if [[ "${INIT_SYSTEM}" == "openrc" ]]; then
-    rc-update add NetworkManager default
-    rc-update add elogind boot
-    rc-update add dbus default
+    for svc in NetworkManager elogind dbus udev cronie; do
+        rc-update add \$svc default 2>/dev/null \
+            && _clog "  rc-update add \${svc} default" \
+            || _clog "  rc-update \${svc}: skipped/already added"
+    done
     rc-update add udev sysinit
-    rc-update add cronie default
     rc-update add sshd default 2>/dev/null || true
 else
-    systemctl enable NetworkManager
-    systemctl enable dbus
-    systemctl enable cronie
+    for unit in NetworkManager dbus cronie; do
+        systemctl enable \$unit
+        _clog "  systemctl enable \${unit}"
+    done
 fi
 
-# ── Display server packages ───────────────────────────────────────────────────
-section "Display server: ${DISPLAY_SERVER}"
+# ── Display server ────────────────────────────────────────────────────────────
+section "Display server packages  (${DISPLAY_SERVER})"
 if [[ "${DISPLAY_SERVER}" == "x11" || "${DISPLAY_SERVER}" == "both" ]]; then
+    debug "Installing X11 packages..."
     emerge -q \
         x11-base/xorg-server \
         x11-apps/xinit \
@@ -811,9 +945,11 @@ if [[ "${DISPLAY_SERVER}" == "x11" || "${DISPLAY_SERVER}" == "both" ]]; then
         x11-libs/libX11 \
         x11-libs/libXrandr \
         x11-libs/libXinerama
+    _clog "X11 packages installed"
 fi
 
 if [[ "${DISPLAY_SERVER}" == "wayland" || "${DISPLAY_SERVER}" == "both" ]]; then
+    debug "Installing Wayland packages..."
     emerge -q \
         dev-libs/wayland \
         dev-libs/wayland-protocols \
@@ -821,177 +957,128 @@ if [[ "${DISPLAY_SERVER}" == "wayland" || "${DISPLAY_SERVER}" == "both" ]]; then
         x11-libs/libdrm \
         x11-libs/pixman \
         x11-misc/xkeyboard-config
+    _clog "Wayland packages installed"
 fi
 
-# ── Mesa / GPU drivers ────────────────────────────────────────────────────────
-section "GPU drivers: ${GPU_VENDOR}"
+# ── GPU drivers ───────────────────────────────────────────────────────────────
+section "GPU drivers  (${GPU_VENDOR})"
+debug "Installing Mesa and VA-API..."
 emerge -q media-libs/mesa media-libs/libva media-libs/libva-utils
+_clog "Mesa + libva installed"
 
 case "${GPU_VENDOR}" in
     amd)
         emerge -q media-libs/vulkan-loader dev-util/vulkan-tools
+        _clog "AMD Vulkan packages installed"
         ;;
     intel)
         emerge -q media-libs/intel-media-driver media-libs/vulkan-loader
+        _clog "Intel media driver + Vulkan installed"
         ;;
     nvidia)
+        debug "Installing NVIDIA proprietary driver..."
         emerge -q x11-drivers/nvidia-drivers
-        [[ "${INIT_SYSTEM}" == "openrc" ]] \
-            && rc-update add modules boot \
-            && echo "nvidia" >> /etc/modules-load.d/nvidia.conf
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && {
+            rc-update add modules boot
+            echo "nvidia" >> /etc/modules-load.d/nvidia.conf
+        }
+        _clog "nvidia-drivers installed"
         ;;
 esac
 
 # ── Desktop environment / WM ──────────────────────────────────────────────────
-section "Desktop: ${DESKTOP_ENV}"
+section "Desktop environment  (${DESKTOP_ENV})"
+debug "Installing DE/WM packages..."
 case "${DESKTOP_ENV}" in
     gnome)
         emerge -q gnome-base/gnome gnome-base/gnome-extra-apps
-        [[ "${INIT_SYSTEM}" == "openrc" ]] \
-            && rc-update add gdm default \
-            || systemctl enable gdm
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add gdm default || systemctl enable gdm
+        _clog "GNOME installed"
         ;;
     kde)
         emerge -q kde-plasma/plasma-meta kde-apps/kde-apps-meta
-        [[ "${INIT_SYSTEM}" == "openrc" ]] \
-            && rc-update add sddm default \
-            || systemctl enable sddm
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add sddm default || systemctl enable sddm
+        _clog "KDE Plasma installed"
         ;;
     cosmic)
-        emerge -q \
-            gui-wm/cosmic-comp \
-            gui-apps/cosmic-term \
-            gui-apps/cosmic-files \
-            gui-apps/cosmic-launcher \
-            gui-apps/cosmic-settings
+        emerge -q gui-wm/cosmic-comp gui-apps/cosmic-term gui-apps/cosmic-files \
+                   gui-apps/cosmic-launcher gui-apps/cosmic-settings
+        _clog "COSMIC installed"
         ;;
     sway)
-        emerge -q \
-            gui-wm/sway \
-            gui-apps/swaybar \
-            gui-apps/swaybg \
-            gui-apps/swayidle \
-            gui-apps/swaylock \
-            gui-apps/foot \
-            gui-apps/fuzzel \
-            gui-apps/mako \
-            gui-apps/grim \
-            gui-apps/slurp \
-            gui-apps/wl-clipboard \
-            gui-libs/xdg-desktop-portal-gtk
+        emerge -q gui-wm/sway gui-apps/swaybar gui-apps/swaybg gui-apps/swayidle \
+                   gui-apps/swaylock gui-apps/foot gui-apps/fuzzel gui-apps/mako \
+                   gui-apps/grim gui-apps/slurp gui-apps/wl-clipboard \
+                   gui-libs/xdg-desktop-portal-gtk
+        _clog "Sway installed"
         ;;
     niri)
-        emerge -q \
-            gui-wm/niri \
-            gui-apps/swayidle \
-            gui-apps/swaylock \
-            gui-apps/foot \
-            gui-apps/fuzzel \
-            gui-apps/mako \
-            gui-apps/waybar \
-            gui-apps/grim \
-            gui-apps/slurp \
-            gui-apps/wl-clipboard \
-            gui-libs/xdg-desktop-portal-gtk \
-            x11-libs/xcb-util-cursor
+        emerge -q gui-wm/niri gui-apps/swayidle gui-apps/swaylock gui-apps/foot \
+                   gui-apps/fuzzel gui-apps/mako gui-apps/waybar gui-apps/grim \
+                   gui-apps/slurp gui-apps/wl-clipboard \
+                   gui-libs/xdg-desktop-portal-gtk x11-libs/xcb-util-cursor
+        _clog "niri installed"
         ;;
     hyprland)
-        emerge -q \
-            gui-wm/hyprland \
-            gui-apps/swayidle \
-            gui-apps/swaylock \
-            gui-apps/foot \
-            gui-apps/fuzzel \
-            gui-apps/mako \
-            gui-apps/waybar \
-            gui-apps/grim \
-            gui-apps/slurp \
-            gui-apps/wl-clipboard \
-            gui-libs/xdg-desktop-portal-gtk
+        emerge -q gui-wm/hyprland gui-apps/swayidle gui-apps/swaylock gui-apps/foot \
+                   gui-apps/fuzzel gui-apps/mako gui-apps/waybar gui-apps/grim \
+                   gui-apps/slurp gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
+        _clog "Hyprland installed"
         ;;
     river)
-        emerge -q \
-            gui-wm/river \
-            gui-apps/foot \
-            gui-apps/fuzzel \
-            gui-apps/mako \
-            gui-apps/waybar \
-            gui-apps/wl-clipboard \
-            gui-libs/xdg-desktop-portal-gtk
+        emerge -q gui-wm/river gui-apps/foot gui-apps/fuzzel gui-apps/mako \
+                   gui-apps/waybar gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
+        _clog "river installed"
         ;;
     labwc)
-        emerge -q \
-            gui-wm/labwc \
-            gui-apps/foot \
-            gui-apps/fuzzel \
-            gui-apps/mako \
-            gui-apps/wl-clipboard \
-            gui-libs/xdg-desktop-portal-gtk
+        emerge -q gui-wm/labwc gui-apps/foot gui-apps/fuzzel gui-apps/mako \
+                   gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
+        _clog "labwc installed"
         ;;
     xfce)
-        emerge -q \
-            xfce-base/xfce4-meta \
-            x11-misc/lightdm \
-            x11-misc/lightdm-gtk-greeter
-        [[ "${INIT_SYSTEM}" == "openrc" ]] \
-            && rc-update add lightdm default \
-            || systemctl enable lightdm
+        emerge -q xfce-base/xfce4-meta x11-misc/lightdm x11-misc/lightdm-gtk-greeter
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add lightdm default || systemctl enable lightdm
+        _clog "XFCE installed"
         ;;
     lxqt)
-        emerge -q \
-            lxqt-base/lxqt-meta \
-            x11-misc/sddm
-        [[ "${INIT_SYSTEM}" == "openrc" ]] \
-            && rc-update add sddm default \
-            || systemctl enable sddm
+        emerge -q lxqt-base/lxqt-meta x11-misc/sddm
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add sddm default || systemctl enable sddm
+        _clog "LXQt installed"
         ;;
     openbox)
-        emerge -q \
-            x11-wm/openbox \
-            x11-misc/obconf \
-            x11-apps/xrandr \
-            x11-misc/tint2 \
-            x11-misc/rofi
+        emerge -q x11-wm/openbox x11-misc/obconf x11-apps/xrandr x11-misc/tint2 x11-misc/rofi
+        _clog "Openbox installed"
         ;;
     i3)
-        emerge -q \
-            x11-wm/i3 \
-            x11-misc/i3status \
-            x11-misc/i3lock \
-            x11-misc/rofi \
-            x11-apps/xrandr \
-            x11-misc/picom
+        emerge -q x11-wm/i3 x11-misc/i3status x11-misc/i3lock x11-misc/rofi \
+                   x11-apps/xrandr x11-misc/picom
+        _clog "i3 installed"
         ;;
     dwm)
-        emerge -q \
-            x11-wm/dwm \
-            x11-misc/dmenu \
-            x11-misc/st
+        emerge -q x11-wm/dwm x11-misc/dmenu x11-misc/st
+        _clog "dwm installed"
         ;;
     none|custom)
         log "Skipping desktop install (none/custom)."
+        _clog "Desktop: skipped"
         ;;
 esac
 
 # ── Audio ─────────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_PIPEWIRE}" == "yes" ]]; then
     section "PipeWire audio"
-    emerge -q \
-        media-video/pipewire \
-        media-sound/wireplumber \
-        media-sound/pavucontrol
-    [[ "${INIT_SYSTEM}" == "openrc" ]] \
-        && rc-update add pipewire default \
-        || true
+    debug "Installing PipeWire + WirePlumber..."
+    emerge -q media-video/pipewire media-sound/wireplumber media-sound/pavucontrol
+    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add pipewire default || true
+    _clog "PipeWire installed"
 fi
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_BLUETOOTH}" == "yes" ]]; then
     section "Bluetooth"
     emerge -q net-wireless/bluez app-misc/blueman
-    [[ "${INIT_SYSTEM}" == "openrc" ]] \
-        && rc-update add bluetooth default \
-        || systemctl enable bluetooth
+    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add bluetooth default || systemctl enable bluetooth
+    _clog "Bluetooth installed"
 fi
 
 # ── Printing ──────────────────────────────────────────────────────────────────
@@ -999,12 +1086,9 @@ if [[ "${ENABLE_PRINTING}" == "yes" ]]; then
     section "Printing (CUPS + Avahi)"
     emerge -q net-print/cups net-dns/avahi app-text/ghostscript-gpl
     [[ "${INIT_SYSTEM}" == "openrc" ]] && {
-        rc-update add cupsd default
-        rc-update add avahi-daemon default
-    } || {
-        systemctl enable cups
-        systemctl enable avahi-daemon
-    }
+        rc-update add cupsd default; rc-update add avahi-daemon default
+    } || { systemctl enable cups; systemctl enable avahi-daemon; }
+    _clog "CUPS + Avahi installed"
 fi
 
 # ── Flatpak ───────────────────────────────────────────────────────────────────
@@ -1012,45 +1096,50 @@ if [[ "${ENABLE_FLATPAK}" == "yes" ]]; then
     section "Flatpak"
     emerge -q sys-apps/flatpak
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    _clog "Flatpak installed + Flathub remote added"
 fi
 
 # ── Libvirt / QEMU ────────────────────────────────────────────────────────────
 if [[ "${ENABLE_LIBVIRT}" == "yes" ]]; then
     section "Libvirt / QEMU"
     emerge -q app-emulation/libvirt app-emulation/qemu app-emulation/virt-manager
-    [[ "${INIT_SYSTEM}" == "openrc" ]] \
-        && rc-update add libvirtd default \
-        || systemctl enable libvirtd
+    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add libvirtd default || systemctl enable libvirtd
+    _clog "Libvirt + QEMU installed"
 fi
 
 # ── Docker / Podman ───────────────────────────────────────────────────────────
 if [[ "${ENABLE_DOCKER}" == "yes" ]]; then
     section "Containers"
     emerge -q app-containers/docker app-containers/podman app-containers/docker-compose
-    [[ "${INIT_SYSTEM}" == "openrc" ]] \
-        && rc-update add docker default \
-        || systemctl enable docker
+    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add docker default || systemctl enable docker
+    _clog "Docker + Podman installed"
 fi
 
-# ── Snapper (Btrfs snapshots) ─────────────────────────────────────────────────
+# ── Snapper ───────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_BTRFS_SNAPPER}" == "yes" && "${FS_TYPE}" == "btrfs" ]]; then
-    section "Snapper"
+    section "Snapper (btrfs snapshots)"
     emerge -q app-backup/snapper
     snapper -c root create-config /
-    [[ "${INIT_SYSTEM}" == "openrc" ]] \
-        && rc-update add snapper-timeline default \
-        && rc-update add snapper-cleanup default \
-        || { systemctl enable snapper-timeline.timer; systemctl enable snapper-cleanup.timer; }
+    [[ "${INIT_SYSTEM}" == "openrc" ]] && {
+        rc-update add snapper-timeline default
+        rc-update add snapper-cleanup default
+    } || {
+        systemctl enable snapper-timeline.timer
+        systemctl enable snapper-cleanup.timer
+    }
+    _clog "Snapper installed and configured"
 fi
 
 # ── Extra packages ────────────────────────────────────────────────────────────
 if [[ -n "${EXTRA_PACKAGES}" ]]; then
     section "Extra packages"
+    debug "Installing: ${EXTRA_PACKAGES}"
     # shellcheck disable=SC2086
     emerge -q ${EXTRA_PACKAGES}
+    _clog "Extra packages installed: ${EXTRA_PACKAGES}"
 fi
 
-# ── Common fonts & themes ─────────────────────────────────────────────────────
+# ── Fonts & themes ────────────────────────────────────────────────────────────
 section "Fonts & themes"
 emerge -q \
     media-fonts/noto \
@@ -1058,14 +1147,14 @@ emerge -q \
     media-fonts/fira-code \
     x11-themes/papirus-icon-theme \
     x11-themes/capitaine-cursors
+_clog "Fonts and themes installed"
 
 # ── GRUB ──────────────────────────────────────────────────────────────────────
 section "GRUB bootloader"
 emerge -q sys-boot/grub
 
 GRUB_CMDLINE="quiet loglevel=3 mitigations=auto"
-[[ "${ENABLE_LUKS}" == "yes" ]] \
-    && GRUB_CMDLINE="\${GRUB_CMDLINE} rd.luks=1"
+[[ "${ENABLE_LUKS}" == "yes" ]] && GRUB_CMDLINE="\${GRUB_CMDLINE} rd.luks=1"
 
 cat >> /etc/default/grub << EOF
 GRUB_CMDLINE_LINUX_DEFAULT="\${GRUB_CMDLINE}"
@@ -1073,57 +1162,65 @@ GRUB_TIMEOUT=3
 GRUB_GFXMODE=auto
 EOF
 
+debug "Running grub-install..."
 grub-install --target=x86_64-efi \
              --efi-directory=/boot/efi \
              --bootloader-id=gentoo \
              --recheck
+_clog "grub-install complete"
 
+debug "Running grub-mkconfig..."
 grub-mkconfig -o /boot/grub/grub.cfg
+_clog "grub.cfg written"
 
-# ── Secure Boot (sbctl) ───────────────────────────────────────────────────────
+# ── Secure Boot ───────────────────────────────────────────────────────────────
 if [[ "${ENABLE_SECURE_BOOT}" == "yes" ]]; then
-    section "Secure Boot"
+    section "Secure Boot (sbctl)"
     if command -v sbctl &>/dev/null; then
         sbctl create-keys
-        # FIX #9: only enroll Microsoft keys when explicitly requested;
-        # on Gentoo-only machines they add an unnecessary trust anchor.
         if [[ "${SECURE_BOOT_MICROSOFT_KEYS}" == "yes" ]]; then
             sbctl enroll-keys --microsoft
+            _clog "Secure Boot keys enrolled (with Microsoft CA)"
         else
             sbctl enroll-keys
+            _clog "Secure Boot keys enrolled (without Microsoft CA)"
         fi
-        # FIX #6: glob covers both dist-kernel and compiled kernel paths
         sbctl sign -s /boot/efi/EFI/gentoo/grubx64.efi
         for vmlinuz in /boot/vmlinuz-*; do
-            [[ -f "\$vmlinuz" ]] && sbctl sign -s "\$vmlinuz"
+            [[ -f "\$vmlinuz" ]] && sbctl sign -s "\$vmlinuz" \
+                && _clog "Signed: \${vmlinuz}"
         done
-        log "Secure Boot keys enrolled. Enable Secure Boot in firmware after reboot."
+        log "Secure Boot keys enrolled. Enable in firmware after reboot."
     else
         warn "sbctl not found — install app-crypt/sbctl post-boot and re-run signing."
+        _clog "sbctl not found, Secure Boot signing skipped"
     fi
 fi
 
 # ── Users ─────────────────────────────────────────────────────────────────────
-section "Users"
+section "User accounts"
+debug "Setting root password..."
 echo "root:${ROOT_HASH}" | chpasswd -e
+_clog "root password set"
 
-# FIX #2: resolve niri session binary name inside the chroot (at install
-# time) rather than on the host at script-generation time.
 NIRI_CMD="niri"
 command -v niri-session &>/dev/null && NIRI_CMD="niri-session"
 
+debug "Creating user: ${USERNAME}"
 useradd -m \
     -G wheel,audio,video,input,seat,plugdev,usb,portage \
     $( [[ "${ENABLE_LIBVIRT}" == "yes" ]] && echo "-G libvirt" ) \
     $( [[ "${ENABLE_DOCKER}"  == "yes" ]] && echo "-G docker"  ) \
     -s /bin/bash "${USERNAME}"
 echo "${USERNAME}:${USER_HASH}" | chpasswd -e
+_clog "User created: ${USERNAME}"
 
 install -m 440 /dev/null /etc/sudoers.d/wheel
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
+_clog "sudoers wheel entry written"
 
-# ── Session auto-start (TTY1) ─────────────────────────────────────────────────
-section "Session auto-start"
+# ── Session auto-start ────────────────────────────────────────────────────────
+section "Session auto-start (TTY1)"
 USER_HOME="/home/${USERNAME}"
 
 _write_autostart() {
@@ -1135,10 +1232,11 @@ if [[ -z "\\\$DISPLAY" && -z "\\\$WAYLAND_DISPLAY" && "\\\${XDG_VTNR}" -eq 1 ]];
     exec \${cmd}
 fi
 BEOF
+    _clog "Auto-start configured: \${cmd}"
 }
 
 case "${DESKTOP_ENV}" in
-    gnome|kde|xfce|lxqt) : ;;
+    gnome|kde|xfce|lxqt) _clog "Session start handled by display manager" ;;
     sway)     _write_autostart "sway" ;;
     niri)     _write_autostart "\${NIRI_CMD}" ;;
     hyprland) _write_autostart "Hyprland" ;;
@@ -1151,7 +1249,7 @@ case "${DESKTOP_ENV}" in
     none|custom) warn "Configure session start manually." ;;
 esac
 
-# ── Wayland environment ───────────────────────────────────────────────────────
+# ── Wayland environment vars ──────────────────────────────────────────────────
 if [[ "${DISPLAY_SERVER}" == "wayland" || "${DISPLAY_SERVER}" == "both" ]]; then
     mkdir -p "\${USER_HOME}/.config/environment.d"
     cat > "\${USER_HOME}/.config/environment.d/wayland.conf" << 'EEOF'
@@ -1165,18 +1263,23 @@ MOZ_ENABLE_WAYLAND=1
 _JAVA_AWT_WM_NONREPARENTING=1
 ELECTRON_OZONE_PLATFORM_HINT=wayland
 EEOF
+    _clog "Wayland environment.d written"
 fi
 
 # ── Keymap ────────────────────────────────────────────────────────────────────
 sed -i 's/^keymap=.*/keymap="${KEYMAP}"/' /etc/conf.d/keymaps 2>/dev/null || true
+_clog "Keymap set: ${KEYMAP}"
 
-# ── Fix ownership ─────────────────────────────────────────────────────────────
+# ── Ownership ─────────────────────────────────────────────────────────────────
 chown -R "${USERNAME}:${USERNAME}" "\${USER_HOME}"
+_clog "Ownership set for \${USER_HOME}"
 
-section "Chroot phase complete."
+_clog "====== Chroot phase complete ======"
+section "Chroot phase complete"
 CHROOT_EOF
 
-    log "Chroot script written."
+    log "Chroot script written to /root/chroot-install.sh"
+    _log_raw "Chroot script size: $(wc -l < /mnt/gentoo/root/chroot-install.sh) lines"
 }
 
 # =============================================================================
@@ -1185,7 +1288,9 @@ CHROOT_EOF
 
 run_chroot() {
     section "Entering chroot"
+    _log_raw "Handing off to chroot script..."
     chroot /mnt/gentoo /bin/bash /root/chroot-install.sh
+    _log_raw "Chroot script returned successfully"
 }
 
 # =============================================================================
@@ -1196,6 +1301,7 @@ cleanup() {
     section "Cleanup & unmount"
 
     rm -f /mnt/gentoo/root/chroot-install.sh
+    _log_raw "Chroot script removed"
 
     local mounts=(
         /mnt/gentoo/sys/firmware/efi/efivars
@@ -1210,13 +1316,19 @@ cleanup() {
         /mnt/gentoo
     )
     for mp in "${mounts[@]}"; do
-        mountpoint -q "$mp" 2>/dev/null && umount -R "$mp" 2>/dev/null || true
+        if mountpoint -q "$mp" 2>/dev/null; then
+            umount -R "$mp" 2>/dev/null && _log_raw "  unmounted: ${mp}" \
+                || _log_raw "  unmount failed (non-fatal): ${mp}"
+        fi
     done
 
-    [[ -n "$PART_SWAP" ]] && swapoff "$PART_SWAP" 2>/dev/null || true
+    if [[ -n "$PART_SWAP" ]]; then
+        swapoff "$PART_SWAP" 2>/dev/null && _log_raw "swap off: ${PART_SWAP}" || true
+    fi
 
     if [[ "$ENABLE_LUKS" == "yes" ]]; then
-        cryptsetup close "$LUKS_NAME" 2>/dev/null || true
+        cryptsetup close "$LUKS_NAME" 2>/dev/null \
+            && _log_raw "LUKS container closed: ${LUKS_NAME}" || true
     fi
 
     log "Unmount complete."
@@ -1235,6 +1347,12 @@ main() {
     echo "  ╚════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
+    # Announce the log file immediately so the user knows where to look
+    echo -e "  ${CYAN}Log file:${NC} ${BOLD}${LOG_FILE}${NC}"
+    echo -e "  ${CYAN}Follow:${NC}   ${BOLD}tail -f ${LOG_FILE}${NC}"
+    echo ""
+    _log_raw "====== Gentoo Installer started (PID $$) ======"
+
     parse_args "$@"
     load_config
 
@@ -1247,12 +1365,13 @@ main() {
     echo -e "  CPU/GPU:  ${BOLD}${CPU_VENDOR}${NC} / ${BOLD}${GPU_VENDOR}${NC}"
     echo ""
 
-    trap cleanup EXIT
+    # Replace the exit trap now that cleanup() is defined
+    trap 'cleanup; _on_exit' EXIT
 
     preflight_checks
     partition_disk
-    install_stage3        # FIX #5: stage3 extracted first → /mnt/gentoo/etc/ exists
-    write_fstab           #         fstab written after, so the directory is present
+    install_stage3        # stage3 first → /mnt/gentoo/etc/ exists
+    write_fstab
     configure_portage
     setup_chroot
     write_chroot_script
@@ -1261,10 +1380,16 @@ main() {
 
     trap - EXIT
 
+    local elapsed=$(( SECONDS - _install_start_time ))
+    local mins=$(( elapsed / 60 ))
+    local secs=$(( elapsed % 60 ))
+
     echo ""
     echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${NC}"
-    echo -e "${BOLD}${GREEN}  Installation complete!${NC}"
+    echo -e "${BOLD}${GREEN}  Installation complete!  (${mins}m ${secs}s)${NC}"
     echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  ${CYAN}Log saved to:${NC} ${BOLD}${LOG_FILE}${NC}"
     echo ""
     echo -e "  ${CYAN}Next steps:${NC}"
     echo -e "   1. ${BOLD}reboot${NC}"
@@ -1277,6 +1402,7 @@ main() {
     [[ "$ENABLE_LUKS" == "yes" ]] \
         && echo -e "   ${YELLOW}[!]${NC} You will be prompted for your LUKS passphrase on boot"
     echo ""
+    _log_raw "====== Installer main() returned cleanly ======"
 }
 
 main "$@"
