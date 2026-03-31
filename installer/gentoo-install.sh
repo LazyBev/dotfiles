@@ -254,6 +254,7 @@ partition_disk() {
     fi
 
     log "Formatting root ($FS_TYPE)..."
+    mkdir -p /mnt/gentoo
     case "$FS_TYPE" in
         btrfs)
             mkfs.btrfs -L "gentoo" -f "$ROOT_DEVICE"
