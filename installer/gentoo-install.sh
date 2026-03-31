@@ -788,7 +788,7 @@ section() {
 set +u
 source /etc/profile
 set -u
-export PS1="(chroot) \${PS1}"
+export PS1="(chroot) \${PS1:-}"
 _clog "Profile sourced, chroot environment ready"
 
 # ── Portage sync ──────────────────────────────────────────────────────────────
