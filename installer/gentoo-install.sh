@@ -785,7 +785,9 @@ section() {
 }
 
 # ── Environment ───────────────────────────────────────────────────────────────
+set +u
 source /etc/profile
+set -u
 export PS1="(chroot) \${PS1}"
 _clog "Profile sourced, chroot environment ready"
 
