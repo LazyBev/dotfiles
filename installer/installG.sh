@@ -50,6 +50,7 @@ ENABLE_FLATPAK="no"
 ENABLE_LIBVIRT="no"
 ENABLE_DOCKER="no"
 ENABLE_SECURE_BOOT="no"
+SECURE_BOOT_MICROSOFT_KEYS="no"   # FIX #9: separate opt-in for MS trust anchor
 EXTRA_PACKAGES=""
 
 # Runtime globals — set during partitioning
@@ -202,24 +203,29 @@ partition_disk() {
     wipefs -a "$DISK"
     sgdisk --zap-all "$DISK"
 
+    # FIX #1: use arithmetic assignment instead of ((++)) to avoid set -e
+    # triggering when the post-increment expression evaluates to 0.
     local part_num=1
     log "Creating GPT layout..."
     # EFI
     sgdisk -n ${part_num}:0:+${EFI_SIZE}G  -t ${part_num}:ef00 -c ${part_num}:"EFI"  "$DISK"
-    PART_EFI="$(_part_suffix $part_num)"; ((part_num++))
+    PART_EFI="$(_part_suffix $part_num)"
+    part_num=$((part_num + 1))
 
     # Optional swap
     if [[ "$SWAP_SIZE" != "0" ]]; then
         sgdisk -n ${part_num}:0:+${SWAP_SIZE}G -t ${part_num}:8200 -c ${part_num}:"swap" "$DISK"
-        PART_SWAP="$(_part_suffix $part_num)"; ((part_num++))
+        PART_SWAP="$(_part_suffix $part_num)"
+        part_num=$((part_num + 1))
     fi
 
     # Root (remainder)
     sgdisk -n ${part_num}:0:0 -t ${part_num}:8300 -c ${part_num}:"root" "$DISK"
     PART_ROOT="$(_part_suffix $part_num)"
 
+    # FIX #12: udevadm settle is deterministic; sleep 1 is a race
     partprobe "$DISK"
-    sleep 1
+    udevadm settle
 
     log "Formatting EFI (FAT32)..."
     mkfs.fat -F32 -n "EFI" "$PART_EFI"
@@ -234,13 +240,15 @@ partition_disk() {
     local ROOT_DEVICE="$PART_ROOT"
     if [[ "$ENABLE_LUKS" == "yes" ]]; then
         log "Setting up LUKS2 container on $PART_ROOT..."
-        echo -n "$LUKS_PASSPHRASE" \
-            | cryptsetup luksFormat --type luks2 \
-                --cipher aes-xts-plain64 --key-size 512 \
-                --hash sha512 --pbkdf argon2id \
-                "$PART_ROOT" -
-        echo -n "$LUKS_PASSPHRASE" \
-            | cryptsetup open "$PART_ROOT" "$LUKS_NAME" -
+        # FIX #7: feed passphrase via process substitution so it never
+        # appears in /proc/<pid>/environ as a shell variable during the
+        # cryptsetup calls.
+        cryptsetup luksFormat --type luks2 \
+            --cipher aes-xts-plain64 --key-size 512 \
+            --hash sha512 --pbkdf argon2id \
+            "$PART_ROOT" - < <(printf '%s' "$LUKS_PASSPHRASE")
+        cryptsetup open "$PART_ROOT" "$LUKS_NAME" \
+            < <(printf '%s' "$LUKS_PASSPHRASE")
         unset LUKS_PASSPHRASE
         ROOT_DEVICE="/dev/mapper/${LUKS_NAME}"
     fi
@@ -287,13 +295,14 @@ partition_disk() {
 # =============================================================================
 
 write_fstab() {
+    # FIX #5: called after install_stage3 so /mnt/gentoo/etc/ exists.
+    # The /etc dir comes from the stage3 tarball extract.
     section "Generating /etc/fstab"
 
     local root_source efi_uuid swap_uuid
     efi_uuid=$(blkid -s UUID -o value "$PART_EFI")
 
     if [[ "$ENABLE_LUKS" == "yes" ]]; then
-        # LUKS: use /dev/mapper name; add crypttab entry
         root_source="/dev/mapper/${LUKS_NAME}"
         local luks_uuid
         luks_uuid=$(blkid -s UUID -o value "$PART_ROOT")
@@ -342,7 +351,6 @@ write_fstab() {
 install_stage3() {
     section "Installing Stage3 Tarball"
 
-    # Construct URL from variant
     local base_url="https://distfiles.gentoo.org/releases/amd64/autobuilds"
     local stage3_url
 
@@ -356,30 +364,51 @@ install_stage3() {
 
     cd /mnt/gentoo
 
+    # FIX #11: add --tries=3 for transient network failures
     log "Downloading stage3 (${STAGE3_VARIANT})..."
-    wget -q --show-progress "$stage3_url"              -O stage3.tar.xz
-    wget -q "${stage3_url}.asc"                        -O stage3.tar.xz.asc  2>/dev/null \
-        || wget -q "${stage3_url}.DIGESTS.asc"         -O stage3.tar.xz.asc
+    wget -q --show-progress --tries=3 "$stage3_url"    -O stage3.tar.xz
+    # Fetch the detached signature and separate DIGESTS file
+    wget -q --tries=3 "${stage3_url}.asc"              -O stage3.tar.xz.asc  2>/dev/null || true
+    wget -q --tries=3 "${stage3_url}.DIGESTS"          -O stage3.tar.xz.DIGESTS 2>/dev/null || true
+    wget -q --tries=3 "${stage3_url}.DIGESTS.asc"      -O stage3.tar.xz.DIGESTS.asc 2>/dev/null || true
 
     log "Verifying GPG signature..."
     gpg --keyserver hkps://keys.openpgp.org \
         --recv-keys 13EBBDBEDE7A12775DFDB1BABB572E0E2D182910 2>/dev/null \
         || warn "GPG key import failed — skipping signature check."
 
-    if gpg --verify stage3.tar.xz.asc stage3.tar.xz 2>/dev/null \
-        || gpg --verify stage3.tar.xz.asc 2>/dev/null; then
-        log "GPG signature verified."
-        # Checksum from signed file
-        grep "^[0-9a-f]\{128\}  stage3.*\.tar\.xz$" stage3.tar.xz.asc \
-            | sha512sum -c - || error "SHA512 mismatch — aborting."
-        log "SHA512 checksum verified."
-    else
+    local gpg_ok=0
+    if gpg --verify stage3.tar.xz.asc stage3.tar.xz 2>/dev/null; then
+        log "GPG signature verified (detached .asc)."
+        gpg_ok=1
+    elif gpg --verify stage3.tar.xz.DIGESTS.asc stage3.tar.xz.DIGESTS 2>/dev/null; then
+        log "GPG signature verified (DIGESTS.asc)."
+        gpg_ok=1
+    fi
+
+    # FIX #4: checksum from the dedicated DIGESTS file, not the .asc armored blob.
+    # The .asc is a binary/armored signature — grepping it for hex strings is unreliable.
+    if [[ "$gpg_ok" -eq 1 && -f stage3.tar.xz.DIGESTS ]]; then
+        local expected actual tarball="stage3.tar.xz"
+        expected=$(grep -E "^[0-9a-f]{128}  .*stage3.*\.tar\.xz$" stage3.tar.xz.DIGESTS \
+                   | grep -v "\.asc" | awk '{print $1}')
+        if [[ -n "$expected" ]]; then
+            actual=$(sha512sum "$tarball" | awk '{print $1}')
+            if [[ "$expected" == "$actual" ]]; then
+                log "SHA512 checksum verified."
+            else
+                error "SHA512 mismatch — aborting."
+            fi
+        else
+            warn "No SHA512 entry found in DIGESTS — skipping checksum."
+        fi
+    elif [[ "$gpg_ok" -eq 0 ]]; then
         warn "GPG verification skipped — verify manually if security is critical."
     fi
 
     log "Extracting stage3..."
     tar xpf stage3.tar.xz --xattrs-include='*.*' --numeric-owner
-    rm -f stage3.tar.xz stage3.tar.xz.asc
+    rm -f stage3.tar.xz stage3.tar.xz.asc stage3.tar.xz.DIGESTS stage3.tar.xz.DIGESTS.asc
 
     log "Stage3 installed."
 }
@@ -473,7 +502,6 @@ EOF
 }
 
 _configure_portage_display() {
-    # Accept keywords for tiling WMs / newer compositors that live in ~amd64
     local kw_file="/mnt/gentoo/etc/portage/package.accept_keywords/desktop"
     case "$DESKTOP_ENV" in
         niri)
@@ -511,7 +539,6 @@ EOF
             ;;
     esac
 
-    # Wayland-specific USE
     if [[ "$DISPLAY_SERVER" == "wayland" || "$DISPLAY_SERVER" == "both" ]]; then
         cat > /mnt/gentoo/etc/portage/package.use/wayland << 'EOF'
 gui-libs/wlroots       X drm gles2 vulkan xwayland
@@ -589,7 +616,6 @@ setup_chroot() {
     mount --bind        /run  /mnt/gentoo/run
     mount --make-slave        /mnt/gentoo/run
 
-    # EFI vars — needed for grub-install inside chroot
     if [[ -d /sys/firmware/efi/efivars ]]; then
         mount --bind /sys/firmware/efi/efivars \
             /mnt/gentoo/sys/firmware/efi/efivars
@@ -605,7 +631,15 @@ setup_chroot() {
 write_chroot_script() {
     section "Writing chroot script"
 
-    cat > /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
+    # FIX #10: create the file with mode 700 *before* writing content so
+    # ROOT_HASH / USER_HASH are never readable by other users even briefly.
+    install -m 700 /dev/null /mnt/gentoo/root/chroot-install.sh
+
+    # NOTE: The heredoc uses an unquoted delimiter (CHROOT_EOF) intentionally —
+    # outer-scope shell variables (HOSTNAME, INIT_SYSTEM, etc.) are expanded
+    # here so their values are baked into the chroot script.  Inner variables
+    # that must remain literal use escaped \$ or quoted-delimiter sub-heredocs.
+    cat >> /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -633,8 +667,11 @@ eselect news read all
 section "Setting profile"
 PROFILE_PATTERN="amd64/23.0/desktop"
 [[ "${INIT_SYSTEM}" == "systemd" ]] && PROFILE_PATTERN="\${PROFILE_PATTERN}/systemd"
+
+# FIX #15: anchor match with a trailing space/bracket so "desktop" doesn't
+# accidentally match "desktop/plasma" or "desktop/gnome".
 PROFILE_NUM=\$(eselect profile list \
-    | awk -v pat="\${PROFILE_PATTERN}" '\$0 ~ pat && !/musl/ {print \$1; exit}' \
+    | awk -v pat="\${PROFILE_PATTERN}" '\$0 ~ pat"[[:space:]]" && !/musl/ {print \$1; exit}' \
     | tr -d '[]')
 if [[ -n "\$PROFILE_NUM" ]]; then
     eselect profile set "\$PROFILE_NUM"
@@ -663,7 +700,6 @@ emerge -q sys-firmware/linux-firmware
 section "Kernel: ${KERNEL_TYPE}"
 case "${KERNEL_TYPE}" in
     dist)
-        # Pre-built binary kernel — fastest, no compilation
         emerge -q sys-kernel/gentoo-kernel-bin
         ;;
     sources|hardened|rt)
@@ -678,7 +714,6 @@ case "${KERNEL_TYPE}" in
         case "${KERNEL_CONFIG}" in
             defconfig)
                 make defconfig
-                # Enable essential options that defconfig may miss
                 scripts/config --enable CONFIG_EFI_STUB
                 scripts/config --enable CONFIG_EFI_PARTITION
                 [[ "${ENABLE_LUKS}" == "yes" ]] && {
@@ -687,7 +722,7 @@ case "${KERNEL_TYPE}" in
                     scripts/config --enable CONFIG_CRYPTO_XTS
                 }
                 make olddefconfig
-                make \$(echo "${MAKEOPTS}")
+                make ${MAKEOPTS}
                 make modules_install
                 make install
                 ;;
@@ -701,7 +736,7 @@ case "${KERNEL_TYPE}" in
             manual)
                 warn "Launching menuconfig — configure and save, then exit."
                 make menuconfig
-                make \$(echo "${MAKEOPTS}")
+                make ${MAKEOPTS}
                 make modules_install
                 make install
                 ;;
@@ -714,7 +749,6 @@ section "Base system packages"
 emerge -q \
     app-admin/sudo \
     app-editors/neovim \
-    app-shells/bash \
     app-shells/bash-completion \
     dev-vcs/git \
     net-misc/curl \
@@ -728,11 +762,16 @@ emerge -q \
     sys-fs/dosfstools \
     sys-fs/e2fsprogs \
     sys-fs/btrfs-progs \
-    sys-fs/f2fs-tools \
     sys-libs/pam \
     sys-auth/pambase \
     sys-process/cronie \
     net-misc/networkmanager
+
+# FIX #16: only emerge fs tools relevant to the chosen filesystem
+case "${FS_TYPE}" in
+    xfs)  emerge -q sys-fs/xfsprogs ;;
+    f2fs) emerge -q sys-fs/f2fs-tools ;;
+esac
 
 [[ "${ENABLE_LUKS}" == "yes" ]] && emerge -q sys-fs/cryptsetup
 
@@ -942,7 +981,7 @@ if [[ "${ENABLE_PIPEWIRE}" == "yes" ]]; then
         media-sound/pavucontrol
     [[ "${INIT_SYSTEM}" == "openrc" ]] \
         && rc-update add pipewire default \
-        || true   # PipeWire starts via user session under systemd
+        || true
 fi
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
@@ -1045,9 +1084,18 @@ if [[ "${ENABLE_SECURE_BOOT}" == "yes" ]]; then
     section "Secure Boot"
     if command -v sbctl &>/dev/null; then
         sbctl create-keys
-        sbctl enroll-keys --microsoft
+        # FIX #9: only enroll Microsoft keys when explicitly requested;
+        # on Gentoo-only machines they add an unnecessary trust anchor.
+        if [[ "${SECURE_BOOT_MICROSOFT_KEYS}" == "yes" ]]; then
+            sbctl enroll-keys --microsoft
+        else
+            sbctl enroll-keys
+        fi
+        # FIX #6: glob covers both dist-kernel and compiled kernel paths
         sbctl sign -s /boot/efi/EFI/gentoo/grubx64.efi
-        sbctl sign -s /boot/vmlinuz-*
+        for vmlinuz in /boot/vmlinuz-*; do
+            [[ -f "\$vmlinuz" ]] && sbctl sign -s "\$vmlinuz"
+        done
         log "Secure Boot keys enrolled. Enable Secure Boot in firmware after reboot."
     else
         warn "sbctl not found — install app-crypt/sbctl post-boot and re-run signing."
@@ -1058,6 +1106,11 @@ fi
 section "Users"
 echo "root:${ROOT_HASH}" | chpasswd -e
 
+# FIX #2: resolve niri session binary name inside the chroot (at install
+# time) rather than on the host at script-generation time.
+NIRI_CMD="niri"
+command -v niri-session &>/dev/null && NIRI_CMD="niri-session"
+
 useradd -m \
     -G wheel,audio,video,input,seat,plugdev,usb,portage \
     $( [[ "${ENABLE_LIBVIRT}" == "yes" ]] && echo "-G libvirt" ) \
@@ -1065,7 +1118,6 @@ useradd -m \
     -s /bin/bash "${USERNAME}"
 echo "${USERNAME}:${USER_HASH}" | chpasswd -e
 
-# Sudoers — file is never world-readable
 install -m 440 /dev/null /etc/sudoers.d/wheel
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 
@@ -1085,10 +1137,9 @@ BEOF
 }
 
 case "${DESKTOP_ENV}" in
-    gnome|kde|xfce|lxqt) : ;; # DMs handle session start
+    gnome|kde|xfce|lxqt) : ;;
     sway)     _write_autostart "sway" ;;
-    niri)
-        _write_autostart "$(command -v niri-session &>/dev/null && echo niri-session || echo niri)" ;;
+    niri)     _write_autostart "\${NIRI_CMD}" ;;
     hyprland) _write_autostart "Hyprland" ;;
     river)    _write_autostart "river" ;;
     labwc)    _write_autostart "labwc" ;;
@@ -1124,7 +1175,6 @@ chown -R "${USERNAME}:${USERNAME}" "\${USER_HOME}"
 section "Chroot phase complete."
 CHROOT_EOF
 
-    chmod +x /mnt/gentoo/root/chroot-install.sh
     log "Chroot script written."
 }
 
@@ -1146,7 +1196,6 @@ cleanup() {
 
     rm -f /mnt/gentoo/root/chroot-install.sh
 
-    # Unmount in reverse order
     local mounts=(
         /mnt/gentoo/sys/firmware/efi/efivars
         /mnt/gentoo/proc
@@ -1201,8 +1250,8 @@ main() {
 
     preflight_checks
     partition_disk
-    write_fstab
-    install_stage3
+    install_stage3        # FIX #5: stage3 extracted first → /mnt/gentoo/etc/ exists
+    write_fstab           #         fstab written after, so the directory is present
     configure_portage
     setup_chroot
     write_chroot_script
