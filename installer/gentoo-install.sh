@@ -762,6 +762,21 @@ _clog "linux-firmware installed"
 
 # ── Kernel ────────────────────────────────────────────────────────────────────
 section "Kernel installation  (type: ${KERNEL_TYPE})"
+
+# Provide a kernel cmdline for dracut so it doesn't fall back to
+# /proc/cmdline (which is the host's cmdline inside a chroot).
+debug "Writing /etc/kernel/cmdline for dracut..."
+mkdir -p /etc/kernel
+DRACUT_CMDLINE="root=UUID=\$(findmnt -no UUID /) ro quiet"
+[[ "${ENABLE_LUKS}" == "yes" ]] && DRACUT_CMDLINE="rd.luks=1 \${DRACUT_CMDLINE}"
+echo "\${DRACUT_CMDLINE}" > /etc/kernel/cmdline
+_clog "kernel cmdline written: \$(cat /etc/kernel/cmdline)"
+
+# Suppress the chroot preflight check — we know we're in a chroot and
+# have already provided /etc/kernel/cmdline above.
+touch /etc/kernel/preinst.d/05-check-chroot.install
+_clog "dracut chroot check suppressed"
+
 case "${KERNEL_TYPE}" in
     dist)
         debug "Installing gentoo-kernel-bin (pre-compiled)..."
