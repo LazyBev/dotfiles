@@ -518,12 +518,25 @@ sync-webrsync-verify-signature = no
 EOF
     _log_raw "repos.conf written"
 
+    _configure_portage_kernel
     _configure_portage_display
     _configure_portage_gpu
     _configure_portage_audio
     _configure_portage_optional
 
     log "Portage configuration complete."
+}
+
+# NEW: kernel USE flags — fixes the installkernel dracut requirement
+_configure_portage_kernel() {
+    debug "Configuring kernel USE flags (type: ${KERNEL_TYPE})..."
+    cat > /mnt/gentoo/etc/portage/package.use/kernel << 'EOF'
+# dracut is required to build an initramfs for the dist/binary kernel
+sys-kernel/installkernel        dracut
+sys-kernel/gentoo-kernel-bin    initramfs
+virtual/dist-kernel             initramfs
+EOF
+    _log_raw "Kernel USE flags written (installkernel dracut, dist-kernel initramfs)"
 }
 
 _configure_portage_display() {
