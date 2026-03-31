@@ -431,7 +431,7 @@ install_stage3() {
     local tarball_url="https://distfiles.gentoo.org/releases/amd64/autobuilds/20260329T161601Z/stage3-amd64-openrc-20260329T161601Z.tar.xz"
 
     log "Downloading stage3..."
-    wget -q --show-progress --tries=3 "$tarball_url" \
+    wget -q --tries=3 "$tarball_url" \
         -O /mnt/gentoo/stage3.tar.xz \
         || error "Failed to download stage3"
 
@@ -698,7 +698,6 @@ debug "Running emerge-webrsync..."
 GENTOO_MIRRORS="https://distfiles.gentoo.org" \
 WEBSYNC_MIRROR="https://distfiles.gentoo.org" \
 emerge-webrsync
-eselect news read all 2>/dev/null || true
 _clog "Portage tree synced"
 
 # ── Profile ───────────────────────────────────────────────────────────────────
