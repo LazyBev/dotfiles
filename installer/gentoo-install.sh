@@ -438,108 +438,23 @@ write_fstab() {
 # =============================================================================
 
 install_stage3() {
-    section "Installing Stage3 Tarball  (${STAGE3_VARIANT})"
+    section "Installing Stage3 Tarball"
 
     local tarball_url="https://distfiles.gentoo.org/releases/amd64/autobuilds/20260329T161601Z/stage3-amd64-openrc-20260329T161601Z.tar.xz"
-    local tarball_name
-    tarball_name=$(basename "$tarball_url")
-    _log_raw "Stage3 URL:     ${tarball_url}"
-    _log_raw "Stage3 tarball: ${tarball_name}"
 
-    # ── Download ──────────────────────────────────────────────────────────────
-    log "Downloading stage3 to /mnt/gentoo ..."
-    cd /mnt/gentoo
+    log "Downloading stage3..."
+    wget -q --show-progress --tries=3 "$tarball_url" \
+        -O /mnt/gentoo/stage3.tar.xz \
+        || error "Failed to download stage3"
 
-    wget -q --show-progress --tries=3 \
-        "${tarball_url}"          -O "${tarball_name}"
-    wget -q --tries=3 \
-        "${tarball_url}.asc"      -O "${tarball_name}.asc"      2>/dev/null || true
-    wget -q --tries=3 \
-        "${tarball_url}.DIGESTS"  -O "${tarball_name}.DIGESTS"  2>/dev/null || true
-    # Some mirrors still ship a .sha256 (PGP-signed); grab it if present
-    wget -q --tries=3 \
-        "${tarball_url}.sha256"   -O "${tarball_name}.sha256"   2>/dev/null || true
-
-    _log_raw "Download sizes: $(du -sh "${tarball_name}" 2>/dev/null | cut -f1) (tarball)"
-
-    # ── GPG verification ──────────────────────────────────────────────────────
-    log "Verifying GPG signature..."
-    local gpg_ok=0
-
-    # Prefer the packaged release key (present on official Gentoo live media)
-    if [[ -f /usr/share/openpgp-keys/gentoo-release.asc ]]; then
-        gpg --import /usr/share/openpgp-keys/gentoo-release.asc 2>/dev/null \
-            && _log_raw "GPG: imported key from /usr/share/openpgp-keys/gentoo-release.asc"
-    else
-        # Fallback: fetch from keyserver (may fail on restrictive networks)
-        gpg --keyserver hkps://keys.openpgp.org \
-            --recv-keys 13EBBDBEDE7A12775DFDB1BABB572E0E2D182910 2>/dev/null \
-            || warn "GPG key import failed — signature check will be skipped."
-    fi
-
-    if [[ -f "${tarball_name}.asc" ]]; then
-        if gpg --verify "${tarball_name}.asc" "${tarball_name}" 2>/dev/null; then
-            log "GPG signature verified (.asc)."
-            _log_raw "GPG: OK via .asc"
-            gpg_ok=1
-        else
-            _log_raw "GPG: .asc verification FAILED"
-        fi
-    fi
-
-    if [[ "$gpg_ok" -eq 0 && -f "${tarball_name}.sha256" ]]; then
-        if gpg --verify "${tarball_name}.sha256" 2>/dev/null; then
-            log "GPG signature verified (.sha256)."
-            _log_raw "GPG: OK via .sha256"
-            gpg_ok=1
-        else
-            _log_raw "GPG: .sha256 verification FAILED"
-        fi
-    fi
-
-    if [[ "$gpg_ok" -eq 0 ]]; then
-        warn "GPG verification skipped or failed — verify manually if security is critical."
-    fi
-
-    # ── Checksum verification ─────────────────────────────────────────────────
-    if [[ "$gpg_ok" -eq 1 && -f "${tarball_name}.DIGESTS" ]]; then
-        debug "Verifying SHA512 checksum..."
-        local expected actual
-        expected=$(grep -E "^[0-9a-f]{128}[[:space:]]" "${tarball_name}.DIGESTS" \
-                   | grep -v "\.asc" \
-                   | grep "${tarball_name}$" \
-                   | awk '{print $1}')
-        if [[ -n "$expected" ]]; then
-            actual=$(sha512sum "${tarball_name}" | awk '{print $1}')
-            if [[ "$expected" == "$actual" ]]; then
-                log "SHA512 checksum verified."
-                _log_raw "SHA512: OK (${actual:0:16}…)"
-            else
-                _log_raw "SHA512 MISMATCH — expected: ${expected:0:16}… got: ${actual:0:16}…"
-                error "SHA512 checksum mismatch — tarball may be corrupt or tampered with."
-            fi
-        else
-            warn "No matching SHA512 entry found in DIGESTS — skipping checksum."
-            _log_raw "SHA512: no matching entry in DIGESTS"
-        fi
-    fi
-
-    # ── Extract ───────────────────────────────────────────────────────────────
-    log "Extracting stage3 (this may take several minutes)..."
-    tar xpf "${tarball_name}" \
+    log "Extracting stage3..."
+    tar xpf /mnt/gentoo/stage3.tar.xz \
         --xattrs-include='*.*' \
         --numeric-owner \
-        -C /mnt/gentoo
-    _log_raw "stage3 extracted to /mnt/gentoo"
+        -C /mnt/gentoo \
+        || error "Failed to extract stage3"
 
-    # ── Cleanup ───────────────────────────────────────────────────────────────
-    rm -f "${tarball_name}" \
-          "${tarball_name}.asc" \
-          "${tarball_name}.DIGESTS" \
-          "${tarball_name}.sha256"
-    _log_raw "stage3 tarballs removed"
-
-    cd /
+    rm -f /mnt/gentoo/stage3.tar.xz
     log "Stage3 installed."
 }
 
