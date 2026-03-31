@@ -441,73 +441,130 @@ install_stage3() {
     section "Installing Stage3 Tarball  (${STAGE3_VARIANT})"
 
     local base_url="https://distfiles.gentoo.org/releases/amd64/autobuilds"
-    local stage3_url
+    local latest_url subdir tarball_name tarball_url
 
+    # Map variant → autobuilds subdirectory name
     case "$STAGE3_VARIANT" in
-        openrc)   stage3_url="${base_url}/current-stage3-amd64-openrc/stage3-amd64-openrc-latest.tar.xz" ;;
-        systemd)  stage3_url="${base_url}/current-stage3-amd64-systemd/stage3-amd64-systemd-latest.tar.xz" ;;
-        hardened) stage3_url="${base_url}/current-stage3-amd64-hardened/stage3-amd64-hardened-latest.tar.xz" ;;
-        musl)     stage3_url="${base_url}/current-stage3-amd64-musl/stage3-amd64-musl-latest.tar.xz" ;;
+        openrc)   subdir="current-stage3-amd64-openrc" ;;
+        systemd)  subdir="current-stage3-amd64-systemd" ;;
+        hardened) subdir="current-stage3-amd64-hardened-openrc" ;;
+        musl)     subdir="current-stage3-amd64-musl" ;;
         *)        error "Unknown STAGE3_VARIANT: $STAGE3_VARIANT" ;;
     esac
-    _log_raw "Stage3 URL: ${stage3_url}"
 
+    latest_url="${base_url}/${subdir}/latest-stage3.txt"
+    _log_raw "Fetching latest stage3 manifest: ${latest_url}"
+
+    # latest-stage3.txt contains lines like:
+    #   20250101T123456Z/stage3-amd64-openrc-20250101T123456Z.tar.xz <size>
+    # We strip comments (#) and grab the first path field.
+    local rel_path
+    rel_path=$(wget -qO- "$latest_url" \
+        | grep -v '^#' \
+        | awk 'NF {print $1; exit}') \
+        || error "Failed to fetch latest-stage3.txt from ${latest_url}"
+
+    [[ -z "$rel_path" ]] && error "Could not parse a filename from ${latest_url}"
+
+    tarball_name=$(basename "$rel_path")
+    tarball_url="${base_url}/${subdir}/${rel_path}"
+    _log_raw "Stage3 tarball: ${tarball_name}"
+    _log_raw "Stage3 URL:     ${tarball_url}"
+
+    # ── Download ──────────────────────────────────────────────────────────────
+    log "Downloading stage3 to /mnt/gentoo ..."
     cd /mnt/gentoo
 
-    log "Downloading stage3..."
-    wget -q --show-progress --tries=3 "$stage3_url"       -O stage3.tar.xz
-    wget -q --tries=3 "${stage3_url}.asc"                 -O stage3.tar.xz.asc        2>/dev/null || true
-    wget -q --tries=3 "${stage3_url}.DIGESTS"             -O stage3.tar.xz.DIGESTS    2>/dev/null || true
-    wget -q --tries=3 "${stage3_url}.DIGESTS.asc"         -O stage3.tar.xz.DIGESTS.asc 2>/dev/null || true
-    _log_raw "Downloads complete. Sizes: $(du -sh stage3.tar.xz 2>/dev/null | cut -f1) (tarball)"
+    wget -q --show-progress --tries=3 \
+        "${tarball_url}"          -O "${tarball_name}"
+    wget -q --tries=3 \
+        "${tarball_url}.asc"      -O "${tarball_name}.asc"      2>/dev/null || true
+    wget -q --tries=3 \
+        "${tarball_url}.DIGESTS"  -O "${tarball_name}.DIGESTS"  2>/dev/null || true
+    # Some mirrors still ship a .sha256 (PGP-signed); grab it if present
+    wget -q --tries=3 \
+        "${tarball_url}.sha256"   -O "${tarball_name}.sha256"   2>/dev/null || true
 
+    _log_raw "Download sizes: $(du -sh "${tarball_name}" 2>/dev/null | cut -f1) (tarball)"
+
+    # ── GPG verification ──────────────────────────────────────────────────────
     log "Verifying GPG signature..."
-    gpg --keyserver hkps://keys.openpgp.org \
-        --recv-keys 13EBBDBEDE7A12775DFDB1BABB572E0E2D182910 2>/dev/null \
-        || warn "GPG key import failed — skipping signature check."
-
     local gpg_ok=0
-    if gpg --verify stage3.tar.xz.asc stage3.tar.xz 2>/dev/null; then
-        log "GPG signature verified (detached .asc)."
-        _log_raw "GPG: verified via .asc"
-        gpg_ok=1
-    elif gpg --verify stage3.tar.xz.DIGESTS.asc stage3.tar.xz.DIGESTS 2>/dev/null; then
-        log "GPG signature verified (DIGESTS.asc)."
-        _log_raw "GPG: verified via DIGESTS.asc"
-        gpg_ok=1
+
+    # Prefer the packaged release key (present on official Gentoo live media)
+    if [[ -f /usr/share/openpgp-keys/gentoo-release.asc ]]; then
+        gpg --import /usr/share/openpgp-keys/gentoo-release.asc 2>/dev/null \
+            && _log_raw "GPG: imported key from /usr/share/openpgp-keys/gentoo-release.asc"
     else
-        _log_raw "GPG: verification failed or skipped"
+        # Fallback: fetch from keyserver (may fail on restrictive networks)
+        gpg --keyserver hkps://keys.openpgp.org \
+            --recv-keys 13EBBDBEDE7A12775DFDB1BABB572E0E2D182910 2>/dev/null \
+            || warn "GPG key import failed — signature check will be skipped."
     fi
 
-    if [[ "$gpg_ok" -eq 1 && -f stage3.tar.xz.DIGESTS ]]; then
-        local expected actual tarball="stage3.tar.xz"
-        expected=$(grep -E "^[0-9a-f]{128}  .*stage3.*\.tar\.xz$" stage3.tar.xz.DIGESTS \
-                   | grep -v "\.asc" | awk '{print $1}')
+    if [[ -f "${tarball_name}.asc" ]]; then
+        if gpg --verify "${tarball_name}.asc" "${tarball_name}" 2>/dev/null; then
+            log "GPG signature verified (.asc)."
+            _log_raw "GPG: OK via .asc"
+            gpg_ok=1
+        else
+            _log_raw "GPG: .asc verification FAILED"
+        fi
+    fi
+
+    if [[ "$gpg_ok" -eq 0 && -f "${tarball_name}.sha256" ]]; then
+        if gpg --verify "${tarball_name}.sha256" 2>/dev/null; then
+            log "GPG signature verified (.sha256)."
+            _log_raw "GPG: OK via .sha256"
+            gpg_ok=1
+        else
+            _log_raw "GPG: .sha256 verification FAILED"
+        fi
+    fi
+
+    if [[ "$gpg_ok" -eq 0 ]]; then
+        warn "GPG verification skipped or failed — verify manually if security is critical."
+    fi
+
+    # ── Checksum verification ─────────────────────────────────────────────────
+    if [[ "$gpg_ok" -eq 1 && -f "${tarball_name}.DIGESTS" ]]; then
+        debug "Verifying SHA512 checksum..."
+        local expected actual
+        expected=$(grep -E "^[0-9a-f]{128}[[:space:]]" "${tarball_name}.DIGESTS" \
+                   | grep -v "\.asc" \
+                   | grep "${tarball_name}$" \
+                   | awk '{print $1}')
         if [[ -n "$expected" ]]; then
-            debug "Verifying SHA512 checksum..."
-            actual=$(sha512sum "$tarball" | awk '{print $1}')
+            actual=$(sha512sum "${tarball_name}" | awk '{print $1}')
             if [[ "$expected" == "$actual" ]]; then
                 log "SHA512 checksum verified."
                 _log_raw "SHA512: OK (${actual:0:16}…)"
             else
                 _log_raw "SHA512 MISMATCH — expected: ${expected:0:16}… got: ${actual:0:16}…"
-                error "SHA512 mismatch — aborting."
+                error "SHA512 checksum mismatch — tarball may be corrupt or tampered with."
             fi
         else
-            warn "No SHA512 entry found in DIGESTS — skipping checksum."
-            _log_raw "SHA512: no entry found in DIGESTS"
+            warn "No matching SHA512 entry found in DIGESTS — skipping checksum."
+            _log_raw "SHA512: no matching entry in DIGESTS"
         fi
-    elif [[ "$gpg_ok" -eq 0 ]]; then
-        warn "GPG verification skipped — verify manually if security is critical."
     fi
 
-    log "Extracting stage3 (this may take a few minutes)..."
-    tar xpf stage3.tar.xz --xattrs-include='*.*' --numeric-owner
+    # ── Extract ───────────────────────────────────────────────────────────────
+    log "Extracting stage3 (this may take several minutes)..."
+    tar xpf "${tarball_name}" \
+        --xattrs-include='*.*' \
+        --numeric-owner \
+        -C /mnt/gentoo
     _log_raw "stage3 extracted to /mnt/gentoo"
 
-    rm -f stage3.tar.xz stage3.tar.xz.asc stage3.tar.xz.DIGESTS stage3.tar.xz.DIGESTS.asc
+    # ── Cleanup ───────────────────────────────────────────────────────────────
+    rm -f "${tarball_name}" \
+          "${tarball_name}.asc" \
+          "${tarball_name}.DIGESTS" \
+          "${tarball_name}.sha256"
     _log_raw "stage3 tarballs removed"
 
+    cd /
     log "Stage3 installed."
 }
 
