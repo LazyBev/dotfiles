@@ -743,7 +743,8 @@ section "Firmware & Microcode  (CPU: ${CPU_VENDOR})"
     _clog "intel-microcode installed"
 }
 debug "Installing linux-firmware..."
-emerge -q sys-firmware/linux-firmware
+emerge --ask -q sys-kernel/linux-firmware
+emerge --ask -q sys-firmware/sof-firmware
 _clog "linux-firmware installed"
 
 # ── Kernel ────────────────────────────────────────────────────────────────────
