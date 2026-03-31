@@ -774,6 +774,7 @@ _clog "kernel cmdline written: \$(cat /etc/kernel/cmdline)"
 
 # Suppress the chroot preflight check — we know we're in a chroot and
 # have already provided /etc/kernel/cmdline above.
+mkdir -p /etc/kernel/preinst.d
 touch /etc/kernel/preinst.d/05-check-chroot.install
 _clog "dracut chroot check suppressed"
 
