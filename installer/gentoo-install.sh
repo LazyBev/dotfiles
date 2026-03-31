@@ -440,36 +440,11 @@ write_fstab() {
 install_stage3() {
     section "Installing Stage3 Tarball  (${STAGE3_VARIANT})"
 
-    local base_url="https://distfiles.gentoo.org/releases/amd64/autobuilds"
-    local latest_url subdir tarball_name tarball_url
-
-    # Map variant → autobuilds subdirectory name
-    case "$STAGE3_VARIANT" in
-        openrc)   subdir="current-stage3-amd64-openrc" ;;
-        systemd)  subdir="current-stage3-amd64-systemd" ;;
-        hardened) subdir="current-stage3-amd64-hardened-openrc" ;;
-        musl)     subdir="current-stage3-amd64-musl" ;;
-        *)        error "Unknown STAGE3_VARIANT: $STAGE3_VARIANT" ;;
-    esac
-
-    latest_url="${base_url}/${subdir}/latest-stage3.txt"
-    _log_raw "Fetching latest stage3 manifest: ${latest_url}"
-
-    # latest-stage3.txt contains lines like:
-    #   20250101T123456Z/stage3-amd64-openrc-20250101T123456Z.tar.xz <size>
-    # We strip comments (#) and grab the first path field.
-    local rel_path
-    rel_path=$(wget -qO- "$latest_url" \
-        | grep -v '^#' \
-        | awk 'NF {print $1; exit}') \
-        || error "Failed to fetch latest-stage3.txt from ${latest_url}"
-
-    [[ -z "$rel_path" ]] && error "Could not parse a filename from ${latest_url}"
-
-    tarball_name=$(basename "$rel_path")
-    tarball_url="${base_url}/${subdir}/${rel_path}"
-    _log_raw "Stage3 tarball: ${tarball_name}"
+    local tarball_url="https://distfiles.gentoo.org/releases/amd64/autobuilds/20260329T161601Z/stage3-amd64-openrc-20260329T161601Z.tar.xz"
+    local tarball_name
+    tarball_name=$(basename "$tarball_url")
     _log_raw "Stage3 URL:     ${tarball_url}"
+    _log_raw "Stage3 tarball: ${tarball_name}"
 
     # ── Download ──────────────────────────────────────────────────────────────
     log "Downloading stage3 to /mnt/gentoo ..."
