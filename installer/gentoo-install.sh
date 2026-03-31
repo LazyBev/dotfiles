@@ -27,7 +27,7 @@ STEP_NUM=0
 STEP_TOTAL=0   # filled in by main() once we know what's running
 
 exec 3>&1 4>&2
-exec > >(tee -a "$LOG_FILE") 2>&1
+exec > >(tee >(sed 's/\x1b\[[0-9;]*m//g' >> "$LOG_FILE")) 2>&1
 
 _log_raw() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
@@ -431,7 +431,7 @@ install_stage3() {
     local tarball_url="https://distfiles.gentoo.org/releases/amd64/autobuilds/20260329T161601Z/stage3-amd64-openrc-20260329T161601Z.tar.xz"
 
     log "Downloading stage3..."
-    wget -q --tries=3 "$tarball_url" \
+    wget -q --show-progress --tries=3 "$tarball_url" \
         -O /mnt/gentoo/stage3.tar.xz \
         || error "Failed to download stage3"
 
@@ -698,25 +698,23 @@ debug "Running emerge-webrsync..."
 GENTOO_MIRRORS="https://distfiles.gentoo.org" \
 WEBSYNC_MIRROR="https://distfiles.gentoo.org" \
 emerge-webrsync
+eselect news read all 2>/dev/null || true
 _clog "Portage tree synced"
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 section "Setting Portage profile"
-PROFILE_PATTERN="amd64/23.0/desktop"
-[[ "${INIT_SYSTEM}" == "systemd" ]] && PROFILE_PATTERN="\${PROFILE_PATTERN}/systemd"
-debug "Looking for profile matching: \${PROFILE_PATTERN}"
-
-PROFILE_NUM=\$(eselect profile list \
-    | awk -v pat="\${PROFILE_PATTERN}" '\$0 ~ pat"[[:space:]]" && !/musl/ {print \$1; exit}' \
-    | tr -d '[]')
-if [[ -n "\$PROFILE_NUM" ]]; then
-    eselect profile set "\$PROFILE_NUM"
+log "Available profiles:"
+eselect profile list | less
+echo ""
+read -rp "  Enter profile number to use: " PROFILE_NUM </dev/tty
+if [[ -n "$PROFILE_NUM" ]]; then
+    eselect profile set "$PROFILE_NUM" || warn "Profile set failed — set manually with: eselect profile set"
     SELECTED="\$(eselect profile show | tail -1 | xargs)"
     log "Profile set: \${SELECTED}"
     _clog "Profile: \${SELECTED}"
 else
-    warn "Could not auto-select profile — run: eselect profile set"
-    _clog "Profile auto-select failed for pattern: \${PROFILE_PATTERN}"
+    warn "No profile selected — set manually with: eselect profile set"
+    _clog "Profile selection skipped"
 fi
 
 # ── Timezone & Locale ─────────────────────────────────────────────────────────
