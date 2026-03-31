@@ -26,18 +26,13 @@ LOG_FILE="/tmp/gentoo-install-$(date +%Y%m%d-%H%M%S).log"
 STEP_NUM=0
 STEP_TOTAL=0   # filled in by main() once we know what's running
 
-# All output — both stdout and stderr — is tee'd to the log file.
-# We keep a reference to the real terminal (fd 3) so prompts/passwords
-# can bypass the tee and go directly to the user.
 exec 3>&1 4>&2
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 _log_raw() {
-    # Write a timestamped line directly to the log file (not the terminal)
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 }
 
-# Public logging functions — output goes to terminal AND log file via tee
 log()     { echo -e "${GREEN}[+]${NC} $*";          _log_raw "[INFO]  $*"; }
 warn()    { echo -e "${YELLOW}[!]${NC} $*";          _log_raw "[WARN]  $*"; }
 error()   { echo -e "${RED}[✗]${NC} $*" >&2;        _log_raw "[ERROR] $*"; exit 1; }
@@ -52,7 +47,6 @@ section() {
     _log_raw "====== STEP ${STEP_NUM}: $* ======"
 }
 
-# Called on EXIT — records success or failure with elapsed time
 _install_start_time=$SECONDS
 _on_exit() {
     local code=$?
@@ -67,20 +61,20 @@ _on_exit() {
         echo -e "\n${RED}${BOLD}[✗] Installation failed. Check the log for details:${NC}"
         echo -e "    ${BOLD}${LOG_FILE}${NC}"
         echo -e "    Last 20 lines:\n"
-        tail -20 "$LOG_FILE" >&3   # send to real terminal, not through tee again
+        tail -20 "$LOG_FILE" >&3
     fi
 }
 trap _on_exit EXIT
 
 # =============================================================================
-# COLORS  (defined early — used by logging above)
+# COLORS
 # =============================================================================
 
 RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m';   BOLD='\033[1m'; NC='\033[0m'
 
 # =============================================================================
-# DEFAULTS  (overridden by --config or env)
+# DEFAULTS
 # =============================================================================
 
 DISK="/dev/nvme0n1"
@@ -103,7 +97,6 @@ DISPLAY_SERVER="wayland"
 DESKTOP_ENV="none"
 USE_FLAGS="wayland -X -gnome -kde -plasma udev dbus policykit"
 MAKEOPTS="-j$(nproc) -l$(nproc)"
-GENTOO_MIRRORS="https://distfiles.gentoo.org"
 STAGE3_VARIANT="openrc"
 ENABLE_LUKS="no"
 ENABLE_BTRFS_SNAPPER="no"
@@ -117,7 +110,6 @@ ENABLE_SECURE_BOOT="no"
 SECURE_BOOT_MICROSOFT_KEYS="no"
 EXTRA_PACKAGES=""
 
-# Runtime globals
 PART_EFI=""
 PART_SWAP=""
 PART_ROOT=""
@@ -161,7 +153,6 @@ load_config() {
     source "$CONFIG_FILE"
     log "Loaded config: $CONFIG_FILE"
 
-    # Log the full resolved config for later debugging
     _log_raw "--- Resolved configuration ---"
     _log_raw "DISK=${DISK}  FS=${FS_TYPE}  LUKS=${ENABLE_LUKS}  SWAP=${SWAP_SIZE}G"
     _log_raw "HOSTNAME=${HOSTNAME}  USER=${USERNAME}"
@@ -210,8 +201,6 @@ preflight_checks() {
             || warn "sbctl not found — Secure Boot setup will be manual post-install."
     fi
 
-    # Passwords — read directly from /dev/tty so they bypass the tee pipeline
-    # and are never written to the log file.
     echo ""
     read -rsp "  Enter root password: "    rp1 </dev/tty; echo
     read -rsp "  Confirm root password: "  rp2 </dev/tty; echo
@@ -390,7 +379,6 @@ partition_disk() {
 
 write_fstab() {
     section "Generating /etc/fstab"
-    # Called after install_stage3 so /mnt/gentoo/etc/ exists.
 
     local root_source efi_uuid
     efi_uuid=$(blkid -s UUID -o value "$PART_EFI")
@@ -497,7 +485,8 @@ LINGUAS="en en_US"
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
 
-GENTOO_MIRRORS="${GENTOO_MIRRORS}"
+GENTOO_MIRRORS="https://distfiles.gentoo.org"
+WEBSYNC_MIRROR="https://distfiles.gentoo.org"
 
 DISTDIR="/var/cache/distfiles"
 PKGDIR="/var/cache/binpkgs"
@@ -525,6 +514,7 @@ auto-sync = yes
 sync-rsync-verify-jobs   = 1
 sync-rsync-verify-metamanifest = yes
 sync-rsync-verify-max-age = 24
+sync-webrsync-verify-signature = no
 EOF
     _log_raw "repos.conf written"
 
@@ -670,18 +660,12 @@ setup_chroot() {
 write_chroot_script() {
     section "Writing chroot install script"
 
-    # Create with restricted permissions before writing sensitive content
     install -m 700 /dev/null /mnt/gentoo/root/chroot-install.sh
 
-    # Copy the log file path into the chroot script so it can append to it
-    # Note: unquoted CHROOT_EOF → outer variables expand (intentional)
     cat >> /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
-# ── Logging inside chroot ─────────────────────────────────────────────────────
-# Appends to the same host log file (it's visible at the same path inside
-# the chroot because /mnt/gentoo maps to / and /tmp is shared via bind).
 CHROOT_LOG="${LOG_FILE}"
 
 RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
@@ -700,6 +684,8 @@ section() {
 }
 
 # ── Environment ───────────────────────────────────────────────────────────────
+# Disable nounset around profile sourcing — some profile.d scripts (e.g.
+# debuginfod.sh) reference variables that may not be set in a chroot.
 set +u
 source /etc/profile
 set -u
@@ -709,8 +695,10 @@ _clog "Profile sourced, chroot environment ready"
 # ── Portage sync ──────────────────────────────────────────────────────────────
 section "Syncing Portage tree"
 debug "Running emerge-webrsync..."
+GENTOO_MIRRORS="https://distfiles.gentoo.org" \
+WEBSYNC_MIRROR="https://distfiles.gentoo.org" \
 emerge-webrsync
-eselect news read all
+eselect news read all 2>/dev/null || true
 _clog "Portage tree synced"
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -749,7 +737,7 @@ else
     warn "Set locale manually: eselect locale set"
     _clog "Locale auto-set failed for: ${LOCALE}"
 fi
-env-update && source /etc/profile
+set +u; env-update && source /etc/profile; set -u
 
 # ── Firmware & Microcode ──────────────────────────────────────────────────────
 section "Firmware & Microcode  (CPU: ${CPU_VENDOR})"
@@ -1296,7 +1284,6 @@ main() {
     echo "  ╚════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
-    # Announce the log file immediately so the user knows where to look
     echo -e "  ${CYAN}Log file:${NC} ${BOLD}${LOG_FILE}${NC}"
     echo -e "  ${CYAN}Follow:${NC}   ${BOLD}tail -f ${LOG_FILE}${NC}"
     echo ""
@@ -1314,12 +1301,11 @@ main() {
     echo -e "  CPU/GPU:  ${BOLD}${CPU_VENDOR}${NC} / ${BOLD}${GPU_VENDOR}${NC}"
     echo ""
 
-    # Replace the exit trap now that cleanup() is defined
     trap 'cleanup; _on_exit' EXIT
 
     preflight_checks
     partition_disk
-    install_stage3        # stage3 first → /mnt/gentoo/etc/ exists
+    install_stage3
     write_fstab
     configure_portage
     setup_chroot
