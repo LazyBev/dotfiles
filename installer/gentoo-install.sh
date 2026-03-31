@@ -95,6 +95,7 @@ KERNEL_TYPE="dist"
 KERNEL_CONFIG="defconfig"
 DISPLAY_SERVER="wayland"
 DESKTOP_ENV="none"
+DISPLAY_MANAGER="none"
 USE_FLAGS="wayland -X -gnome -kde -plasma udev dbus policykit"
 MAKEOPTS="-j$(nproc) -l$(nproc)"
 STAGE3_VARIANT="openrc"
@@ -955,12 +956,10 @@ debug "Installing DE/WM packages..."
 case "${DESKTOP_ENV}" in
     gnome)
         emerge -q gnome-base/gnome gnome-base/gnome-extra-apps
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add gdm default || systemctl enable gdm
         _clog "GNOME installed"
         ;;
     kde)
         emerge -q kde-plasma/plasma-meta kde-apps/kde-apps-meta
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add sddm default || systemctl enable sddm
         _clog "KDE Plasma installed"
         ;;
     cosmic)
@@ -999,13 +998,11 @@ case "${DESKTOP_ENV}" in
         _clog "labwc installed"
         ;;
     xfce)
-        emerge -q xfce-base/xfce4-meta x11-misc/lightdm x11-misc/lightdm-gtk-greeter
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add lightdm default || systemctl enable lightdm
+        emerge -q xfce-base/xfce4-meta
         _clog "XFCE installed"
         ;;
     lxqt)
-        emerge -q lxqt-base/lxqt-meta x11-misc/sddm
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add sddm default || systemctl enable sddm
+        emerge -q lxqt-base/lxqt-meta
         _clog "LXQt installed"
         ;;
     openbox)
@@ -1024,6 +1021,52 @@ case "${DESKTOP_ENV}" in
     none|custom)
         log "Skipping desktop install (none/custom)."
         _clog "Desktop: skipped"
+        ;;
+esac
+
+# ── Display manager / login daemon ────────────────────────────────────────────
+section "Display manager  (${DISPLAY_MANAGER:-none})"
+case "${DISPLAY_MANAGER:-none}" in
+    gdm)
+        emerge -q gnome-base/gdm
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add gdm default || systemctl enable gdm
+        _clog "GDM installed and enabled"
+        ;;
+    sddm)
+        emerge -q x11-misc/sddm
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add sddm default || systemctl enable sddm
+        _clog "SDDM installed and enabled"
+        ;;
+    lightdm)
+        emerge -q x11-misc/lightdm x11-misc/lightdm-gtk-greeter
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add lightdm default || systemctl enable lightdm
+        _clog "LightDM installed and enabled"
+        ;;
+    greetd)
+        emerge -q gui-apps/greetd gui-apps/tuigreet
+        if [[ "${INIT_SYSTEM}" == "openrc" ]]; then
+            rc-update add greetd default
+        else
+            systemctl enable greetd
+        fi
+        cat > /etc/greetd/config.toml << 'EOF'
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet --time --remember --cmd niri-session"
+user = "greeter"
+EOF
+        _clog "greetd + tuigreet installed and enabled"
+        ;;
+    ly)
+        emerge -q x11-misc/ly
+        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add ly default || systemctl enable ly
+        _clog "ly installed and enabled"
+        ;;
+    none)
+        log "No display manager selected — TTY auto-start will be used."
+        _clog "Display manager: none"
         ;;
 esac
 
@@ -1198,19 +1241,23 @@ BEOF
     _clog "Auto-start configured: \${cmd}"
 }
 
-case "${DESKTOP_ENV}" in
-    gnome|kde|xfce|lxqt) _clog "Session start handled by display manager" ;;
-    sway)     _write_autostart "sway" ;;
-    niri)     _write_autostart "\${NIRI_CMD}" ;;
-    hyprland) _write_autostart "Hyprland" ;;
-    river)    _write_autostart "river" ;;
-    labwc)    _write_autostart "labwc" ;;
-    cosmic)   _write_autostart "cosmic-session" ;;
-    openbox)  _write_autostart "openbox-session" ;;
-    i3)       _write_autostart "i3" ;;
-    dwm)      _write_autostart "dwm" ;;
-    none|custom) warn "Configure session start manually." ;;
-esac
+if [[ "${DISPLAY_MANAGER:-none}" != "none" ]]; then
+    _clog "Session start handled by display manager: ${DISPLAY_MANAGER}"
+else
+    case "${DESKTOP_ENV}" in
+        sway)     _write_autostart "sway" ;;
+        niri)     _write_autostart "\${NIRI_CMD}" ;;
+        hyprland) _write_autostart "Hyprland" ;;
+        river)    _write_autostart "river" ;;
+        labwc)    _write_autostart "labwc" ;;
+        cosmic)   _write_autostart "cosmic-session" ;;
+        openbox)  _write_autostart "openbox-session" ;;
+        i3)       _write_autostart "i3" ;;
+        dwm)      _write_autostart "dwm" ;;
+        gnome|kde|xfce|lxqt) warn "No display manager set for ${DESKTOP_ENV} — set DISPLAY_MANAGER in config." ;;
+        none|custom) warn "Configure session start manually." ;;
+    esac
+fi
 
 # ── Wayland environment vars ──────────────────────────────────────────────────
 if [[ "${DISPLAY_SERVER}" == "wayland" || "${DISPLAY_SERVER}" == "both" ]]; then
@@ -1322,7 +1369,7 @@ main() {
     echo -e "  Disk:     ${BOLD}${DISK}${NC}  (${FS_TYPE}$([ "$ENABLE_LUKS" = yes ] && echo " + LUKS2"))"
     echo -e "  Init:     ${BOLD}${INIT_SYSTEM}${NC}"
     echo -e "  Display:  ${BOLD}${DISPLAY_SERVER}${NC}"
-    echo -e "  Desktop:  ${BOLD}${DESKTOP_ENV}${NC}"
+    echo -e "  Desktop:  ${BOLD}${DESKTOP_ENV}${NC}  (DM: ${BOLD}${DISPLAY_MANAGER:-none}${NC})"
     echo -e "  Kernel:   ${BOLD}${KERNEL_TYPE}${NC}"
     echo -e "  CPU/GPU:  ${BOLD}${CPU_VENDOR}${NC} / ${BOLD}${GPU_VENDOR}${NC}"
     echo ""
