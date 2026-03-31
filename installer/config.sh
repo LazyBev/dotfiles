@@ -79,11 +79,13 @@ yesno() {
     local var="$1" prompt="$2" default="${3:-no}"
     local hint="[y/N]"
     [[ "$default" == "yes" ]] && hint="[Y/n]"
-    local ans
+    local ans ans_lower
     echo -en "  ${CYAN}?${NC} ${prompt} ${DIM}${hint}${NC}: "
     read -r ans
     ans="${ans:-$default}"
-    case "${ans,,}" in
+    # avoid ,, bashism — use tr for lowercase
+    ans_lower="$(echo "$ans" | tr '[:upper:]' '[:lower:]')"
+    case "$ans_lower" in
         y|yes) printf -v "$var" 'yes' ;;
         *)     printf -v "$var" 'no'  ;;
     esac
@@ -201,10 +203,11 @@ wizard_system() {
     ask HOSTNAME  "Hostname"        "gentoo"
     ask USERNAME  "Primary username" "user"
 
-    # Timezone: attempt to detect from timedatectl or fallback
+    # Timezone: attempt to detect — timedatectl may not exist on all live ISOs
     local tz_default="America/New_York"
-    command -v timedatectl &>/dev/null \
-        && tz_default=$(timedatectl show -p Timezone --value 2>/dev/null || echo "$tz_default")
+    if command -v timedatectl &>/dev/null; then
+        tz_default=$(timedatectl show -p Timezone --value 2>/dev/null) || tz_default="America/New_York"
+    fi
     ask TIMEZONE "Timezone (see /usr/share/zoneinfo)" "$tz_default"
 
     ask LOCALE  "Locale"  "en_US.UTF-8"
