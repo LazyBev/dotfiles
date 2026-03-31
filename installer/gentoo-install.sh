@@ -538,6 +538,15 @@ sys-kernel/gentoo-kernel-bin    initramfs
 virtual/dist-kernel             initramfs
 EOF
     _log_raw "Kernel USE flags written (installkernel dracut, dist-kernel initramfs)"
+
+    debug "Writing misc system USE flags..."
+    cat > /mnt/gentoo/etc/portage/package.use/system << 'EOF'
+# elogind required by xorg-server and libinput
+>=sys-auth/pambase-20251104-r1  elogind
+# harfbuzz required by freetype (circular dep bootstrapped in ~amd64)
+>=media-libs/freetype-2.14.3    harfbuzz
+EOF
+    _log_raw "System USE flags written (pambase elogind, freetype harfbuzz)"
 }
 
 _configure_portage_display() {
@@ -573,7 +582,7 @@ EOF
     if [[ "$DISPLAY_SERVER" == "wayland" || "$DISPLAY_SERVER" == "both" ]]; then
         cat > /mnt/gentoo/etc/portage/package.use/wayland << 'EOF'
 gui-libs/wlroots       X drm gles2 vulkan xwayland
-dev-libs/wayland       doc
+dev-libs/wayland       -doc
 x11-base/xwayland      -glamor
 EOF
     fi
