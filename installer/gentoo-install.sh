@@ -936,7 +936,7 @@ fi
 # ── GPU drivers ───────────────────────────────────────────────────────────────
 section "GPU drivers  (${GPU_VENDOR})"
 debug "Installing Mesa and VA-API..."
-emerge -q media-libs/mesa media-libs/libva media-libs/libva-utils
+emerge -q media-libs/mesa media-libs/libva media-video/libva-utils
 _clog "Mesa + libva installed"
 
 case "${GPU_VENDOR}" in
