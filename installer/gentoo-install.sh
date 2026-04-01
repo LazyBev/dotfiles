@@ -166,30 +166,47 @@ TARBALL_PATH=$(echo "$MANIFEST" \
 [[ -z "$TARBALL_PATH" ]] && error "Could not parse stage3 path."
 
 TARBALL_URL="${BASE_URL}/${TARBALL_PATH}"
-log "Downloading: ${TARBALL_URL}"
-wget --tries=10 \
-     --continue \
-     --timeout=30 \
-     --waitretry=10 \
-     --show-progress \
-     "$TARBALL_URL" -O /mnt/gentoo/stage3.tar.xz \
-    || error "stage3 download failed."
 
-# FIX: Verify stage3 integrity before extraction.
-# The manifest lists SHA512; Gentoo also publishes a separate .sha256 file.
-log "Verifying stage3 checksum..."
+# FIX: Retry the download up to 3 times on checksum mismatch.
+# --continue is intentionally absent: resuming a corrupt partial produces
+# another corrupt file. We delete and re-download from scratch each attempt.
+# Mirror list: if the primary distfiles mirror is mid-sync, fall back to
+# known-stable mirrors so we get a consistent tarball + .sha256 pair.
 DIGEST_URL="${TARBALL_URL}.sha256"
-if wget -qO /tmp/stage3.sha256 "$DIGEST_URL" 2>/dev/null; then
-    EXPECTED=$(awk '{print $1}' /tmp/stage3.sha256)
-    ACTUAL=$(sha256sum /mnt/gentoo/stage3.tar.xz | awk '{print $1}')
-    if [[ "$EXPECTED" == "$ACTUAL" ]]; then
-        log "Stage3 SHA256 checksum OK."
+STAGE3_MIRRORS=(
+    "https://distfiles.gentoo.org/releases/amd64/autobuilds"
+    "https://mirror.bytemark.co.uk/gentoo/releases/amd64/autobuilds"
+    "https://ftp.halifax.rwth-aachen.de/gentoo/releases/amd64/autobuilds"
+)
+STAGE3_OK=0
+for attempt in 1 2 3; do
+    MIRROR_BASE="${STAGE3_MIRRORS[$(( (attempt - 1) % ${#STAGE3_MIRRORS[@]} ))]}"
+    ATTEMPT_URL="${MIRROR_BASE}/${TARBALL_PATH}"
+    log "Stage3 download attempt ${attempt}/3: ${ATTEMPT_URL}"
+    rm -f /mnt/gentoo/stage3.tar.xz /tmp/stage3.sha256
+    wget --tries=3 \
+         --timeout=60 \
+         --waitretry=10 \
+         --show-progress \
+         "$ATTEMPT_URL" -O /mnt/gentoo/stage3.tar.xz \
+        || { warn "Download failed on attempt ${attempt} — retrying..."; continue; }
+    # Verify checksum; fetch .sha256 from the same mirror for consistency.
+    ATTEMPT_DIGEST="${MIRROR_BASE}/${TARBALL_PATH}.sha256"
+    if wget -qO /tmp/stage3.sha256 "$ATTEMPT_DIGEST" 2>/dev/null; then
+        EXPECTED=$(awk '{print $1}' /tmp/stage3.sha256)
+        ACTUAL=$(sha256sum /mnt/gentoo/stage3.tar.xz | awk '{print $1}')
+        if [[ "$EXPECTED" == "$ACTUAL" ]]; then
+            log "Stage3 SHA256 checksum OK (attempt ${attempt})."
+            STAGE3_OK=1
+            break
+        else
+            warn "Checksum MISMATCH on attempt ${attempt} — deleting and retrying..."
+        fi
     else
-        error "Stage3 checksum MISMATCH — download may be corrupt or tampered. Aborting."
+        warn "Could not fetch .sha256 on attempt ${attempt} — retrying..."
     fi
-else
-    warn "Could not fetch .sha256 file — skipping checksum verification."
-fi
+done
+[[ "$STAGE3_OK" -eq 1 ]] || error "Stage3 download failed after 3 attempts — check your network or try again later."
 
 log "Extracting stage3..."
 tar xpf /mnt/gentoo/stage3.tar.xz \
