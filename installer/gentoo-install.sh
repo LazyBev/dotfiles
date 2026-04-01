@@ -718,7 +718,7 @@ set +u; env-update && source /etc/profile; set -u
 # subsequent compiles benefit from them immediately.
 section "Bootstrap: ccache + mold"
 debug "Installing ccache and mold early..."
-emerge dev-util/ccache dev-util/mold
+emerge dev-util/ccache sys-devel/mold
 mkdir -p /var/cache/ccache
 ccache --max-size="${CCACHE_SIZE}"
 ccache --set-config=compression=true
