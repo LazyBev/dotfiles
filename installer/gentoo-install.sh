@@ -6,8 +6,15 @@
 # Assumptions:
 #   • x86_64 (amd64) system booted in UEFI mode
 #   • Target disk:  /dev/nvme0n1  (edit DISK below)
-#   • Hybrid AMD (primary/iGPU) + NVIDIA (discrete) GPU
+#   • Hybrid AMD (primary/iGPU) + NVIDIA (discrete) proprietary drivers
 #   • Internet available on the live environment
+#   • Pure OpenRC — no systemd as init; systemd-utils present ONLY for udev
+#
+# Note on systemd-utils:
+#   eudev was removed from Gentoo. sys-apps/systemd-utils now provides udev
+#   for OpenRC systems. It does NOT pull in or require sys-apps/systemd.
+#   We pin it to USE="udev tmpfiles kmod -boot -sysusers -kernel-install"
+#   so only the device manager and tmpfiles components are built.
 #
 # Usage (as root on the live ISO):
 #   bash gentoo-install.sh
@@ -23,14 +30,14 @@ IFS=$'\n\t'
 # =============================================================================
 
 DISK="/dev/nvme0n1"
-HOSTNAME="gentuwu"
-USERNAME="25yari"
-TIMEZONE="Europe/London"
+HOSTNAME="gentoo"
+USERNAME="user"
+TIMEZONE="America/New_York"
 LOCALE="en_US.UTF-8"
 KEYMAP="us"
 
-# Hybrid AMD iGPU / NVIDIA dGPU
-GPU_VENDOR="hybrid-amd-nvidia"
+GPU_PRIMARY="amd"
+GPU_SECONDARY="nvidia"
 VIDEO_CARDS="amdgpu radeonsi nvidia"
 
 # =============================================================================
@@ -75,14 +82,15 @@ section "Pre-flight checks"
 [[ $EUID -ne 0 ]]  && error "Must run as root."
 [[ ! -b "$DISK" ]] && error "Disk $DISK not found."
 
-for t in wipefs sgdisk mkfs.fat mkswap wget gpg openssl chroot; do
+for t in wipefs sgdisk mkfs.fat mkswap wget openssl chroot ntpd; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
 done
 
 ping -c2 -W5 gentoo.org &>/dev/null || error "No internet connection."
 log "Network OK"
 
-timedatectl set-ntp true &>/dev/null && sleep 2 || warn "Clock sync failed — continuing"
+# ntpd -gq: step the clock once and exit — no timedatectl/systemd needed
+ntpd -gq &>/dev/null && log "Clock synced." || warn "Clock sync failed — continuing"
 
 echo
 read -rsp "  Root password: "            rp1 </dev/tty; echo
@@ -162,7 +170,7 @@ log "Stage3 installed."
 
 section "Portage configuration"
 
-mkdir -p /mnt/gentoo/etc/portage/{package.use,package.accept_keywords,package.license,repos.conf}
+mkdir -p /mnt/gentoo/etc/portage/{package.use,package.accept_keywords,package.license,package.mask,repos.conf}
 
 cat > /mnt/gentoo/etc/portage/make.conf << EOF
 # make.conf — generated $(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -179,9 +187,11 @@ EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --keep
 ACCEPT_KEYWORDS="~amd64"
 ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
 
-USE="wayland -systemd -kde -X -gnome udev dbus policykit elogind"
+# Global -systemd ensures no package silently pulls in systemd deps.
+# elogind replaces systemd-logind for seat/session management.
+# udev USE flag is satisfied by sys-apps/systemd-utils[udev] (not sys-apps/systemd).
+USE="wayland -systemd -kde -X -gnome udev dbus policykit elogind -systemd-units"
 
-# Hybrid AMD + NVIDIA
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
 
@@ -208,49 +218,76 @@ sync-rsync-verify-metamanifest = yes
 sync-rsync-verify-max-age      = 24
 EOF
 
-# ── package.use ───────────────────────────────────────────────────────────────
+# ── package.mask — hard-block sys-apps/systemd from ever being installed ──────
+cat > /mnt/gentoo/etc/portage/package.mask/systemd << 'EOF'
+# Hard-block the full systemd init — we use OpenRC + elogind.
+# sys-apps/systemd-utils is NOT masked; it provides udev/tmpfiles for OpenRC
+# and does not depend on or activate sys-apps/systemd.
+sys-apps/systemd
+EOF
 
+# ── package.use/systemd-utils — pin to only what OpenRC needs ─────────────────
+cat > /mnt/gentoo/etc/portage/package.use/systemd-utils << 'EOF'
+# udev   — device manager (replaces eudev, which was removed from Gentoo)
+# tmpfiles — needed by several packages to set up /run, /tmp entries at boot
+# kmod   — allow udev to load kernel modules
+# Everything else (boot, sysusers, kernel-install, ukify) is systemd-specific
+# tooling we do not want on an OpenRC system.
+sys-apps/systemd-utils  udev tmpfiles kmod -boot -sysusers -kernel-install
+EOF
+
+# ── package.use/kernel ────────────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.use/kernel << 'EOF'
-sys-kernel/installkernel        dracut
+sys-kernel/installkernel        dracut -systemd
 sys-kernel/gentoo-kernel-bin    initramfs
 virtual/dist-kernel             initramfs
 EOF
 
+# ── package.use/system ────────────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.use/system << 'EOF'
->=sys-auth/pambase-20251104-r1  elogind
+>=sys-auth/pambase-20251104-r1  elogind -systemd
 >=media-libs/freetype-2.14.3    harfbuzz
+# NetworkManager: openrc init script, no systemd unit activation
+net-misc/networkmanager         -systemd -systemd-units elogind
+# dbus: elogind session tracking, no systemd activation
+sys-apps/dbus                   -systemd elogind
+# polkit: elogind for session management
+sys-auth/polkit                 -systemd elogind
+# elogind itself must not pull systemd
+sys-auth/elogind                -systemd
 EOF
 
+# ── package.use/wayland ───────────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.use/wayland << 'EOF'
 gui-libs/wlroots   drm gles2 vulkan xwayland
 dev-libs/wayland   -doc
 EOF
 
-# ── GPU — hybrid AMD + NVIDIA proprietary ────────────────────────────────────
-# Mesa covers the AMD side; nvidia-drivers covers the NVIDIA side.
-# The -nvidia flag on mesa prevents mesa from trying to wrap the nvidia blob.
+# ── package.use/gpu ───────────────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
-# AMD (mesa)
+# AMD (mesa) — -nvidia prevents mesa wrapping the blob
 media-libs/mesa  vulkan vulkan-overlay video_cards_amdgpu video_cards_radeonsi -nvidia
 
-# NVIDIA proprietary — Wayland + kernel-open disabled (proprietary closed modules)
-x11-drivers/nvidia-drivers  wayland -kernel-open
+# NVIDIA proprietary — Wayland support, no kernel-open, no systemd
+x11-drivers/nvidia-drivers  wayland -kernel-open -systemd
 EOF
 
-# nvidia-drivers needs ~amd64 and its proprietary licence accepted
+# ── package.use/audio ─────────────────────────────────────────────────────────
+cat > /mnt/gentoo/etc/portage/package.use/audio << 'EOF'
+media-video/pipewire    sound-server jack-sdk -systemd
+media-sound/wireplumber -systemd
+EOF
+
+# ── package.accept_keywords ───────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.accept_keywords/desktop << 'EOF'
 gui-wm/niri                ~amd64
 dev-libs/wayland-protocols ~amd64
 x11-drivers/nvidia-drivers ~amd64
 EOF
 
+# ── package.license ───────────────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.license/nvidia << 'EOF'
 x11-drivers/nvidia-drivers  NVIDIA-r2
-EOF
-
-cat > /mnt/gentoo/etc/portage/package.use/audio << 'EOF'
-media-video/pipewire    sound-server jack-sdk
-media-sound/wireplumber -systemd
 EOF
 
 log "Portage config written."
@@ -322,6 +359,12 @@ export PS1="(chroot) \${PS1:-}"
 section "Syncing Portage tree (emerge-webrsync)"
 emerge-webrsync || error "emerge-webrsync failed."
 
+# ── Explicitly install systemd-utils with our pinned USE flags first ──────────
+# This prevents any later package from pulling it in with unwanted USE flags.
+section "Pinning sys-apps/systemd-utils (udev for OpenRC)"
+emerge --oneshot sys-apps/systemd-utils
+log "systemd-utils (udev+tmpfiles only) installed."
+
 # ── Profile ───────────────────────────────────────────────────────────────────
 section "Selecting profile"
 eselect profile list
@@ -330,7 +373,10 @@ read -rp "  Enter profile number (default: amd64/23.0/desktop/openrc): " PROFILE
 if [[ -n "\$PROFILE_NUM" ]]; then
     eselect profile set "\$PROFILE_NUM" || warn "Profile set failed."
 else
-    PROFILE_NUM=\$(eselect profile list | grep 'desktop/openrc' | grep -v 'plasma\|gnome\|systemd' | head -1 | awk '{print \$1}' | tr -d '[]')
+    PROFILE_NUM=\$(eselect profile list \
+        | grep 'desktop/openrc' \
+        | grep -v 'plasma\|gnome\|systemd' \
+        | head -1 | awk '{print \$1}' | tr -d '[]')
     [[ -n "\$PROFILE_NUM" ]] \
         && { eselect profile set "\$PROFILE_NUM"; log "Set profile \${PROFILE_NUM}."; } \
         || warn "Could not auto-select profile — set manually."
@@ -338,7 +384,15 @@ fi
 
 # ── @world update ─────────────────────────────────────────────────────────────
 section "Updating @world"
-emerge --update --newuse --deep @world || warn "@world update had non-fatal issues."
+# --changed-use picks up our new -systemd flags across all packages
+emerge --update --newuse --changed-use --deep @world \
+    || warn "@world update had non-fatal issues."
+
+# Verify systemd itself was not pulled in
+if portageq match / sys-apps/systemd &>/dev/null 2>&1; then
+    error "sys-apps/systemd was pulled in — check USE flags and package.mask!"
+fi
+log "@world updated — systemd not present, as expected."
 
 # ── Timezone & Locale ─────────────────────────────────────────────────────────
 section "Timezone & Locale"
@@ -370,12 +424,14 @@ emerge \
     sys-apps/pciutils \
     sys-apps/usbutils \
     sys-auth/elogind \
+    sys-auth/polkit \
     sys-boot/grub \
     sys-fs/dosfstools \
     sys-fs/e2fsprogs \
     sys-libs/pam \
     sys-auth/pambase \
     sys-process/cronie \
+    net-misc/ntp \
     net-misc/curl \
     dev-vcs/git \
     app-editors/neovim
@@ -390,20 +446,20 @@ cat > /etc/hosts << 'EOF'
 EOF
 echo "127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}" >> /etc/hosts
 
+# Keymap — /etc/conf.d/keymaps is OpenRC-native
 sed -i 's/^keymap=.*/keymap="${KEYMAP}"/' /etc/conf.d/keymaps 2>/dev/null || true
 
 # ── OpenRC services ───────────────────────────────────────────────────────────
 section "OpenRC services"
-for svc in NetworkManager elogind dbus udev cronie; do
+for svc in NetworkManager elogind dbus udev cronie ntpd; do
     rc-update add \$svc default 2>/dev/null || warn "rc-update add \$svc failed (non-fatal)"
 done
 rc-update add udev    sysinit 2>/dev/null || true
-rc-update add modules boot    2>/dev/null || true   # needed to load nvidia at boot
+rc-update add modules boot    2>/dev/null || true
 
-# ── GPU — hybrid AMD + NVIDIA proprietary ────────────────────────────────────
+# ── GPU — hybrid AMD + NVIDIA ─────────────────────────────────────────────────
 section "GPU — hybrid AMD + NVIDIA (proprietary)"
 
-# --- AMD side ---
 log "Installing AMD/Mesa stack..."
 emerge \
     media-libs/mesa \
@@ -413,20 +469,17 @@ emerge \
     app-misc/vulkan-tools
 log "AMD/Mesa installed."
 
-# --- NVIDIA proprietary side ---
 log "Installing nvidia-drivers (proprietary)..."
 emerge x11-drivers/nvidia-drivers
 
-# Load nvidia modules at boot
-mkdir -p /etc/modules-load.d
-cat > /etc/modules-load.d/nvidia.conf << 'EOF'
-nvidia
-nvidia_modeset
-nvidia_uvm
-nvidia_drm
+# OpenRC module loading via /etc/conf.d/modules (not systemd modules-load.d)
+cat >> /etc/conf.d/modules << 'EOF'
+
+# NVIDIA (hybrid GPU)
+modules="${modules} nvidia nvidia_modeset nvidia_uvm nvidia_drm"
 EOF
 
-# Enable nvidia-drm KMS — required for Wayland
+# kmod options file — read by kmod directly, not systemd; safe on OpenRC
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << 'EOF'
 options nvidia_drm modeset=1 fbdev=1
@@ -507,12 +560,10 @@ install -m 440 /dev/null /etc/sudoers.d/wheel
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 log "Users created."
 
-# ── Wayland + hybrid GPU environment ─────────────────────────────────────────
-section "Wayland environment (hybrid GPU)"
-USER_HOME="/home/${USERNAME}"
-mkdir -p "\${USER_HOME}/.config/environment.d"
-cat > "\${USER_HOME}/.config/environment.d/wayland.conf" << 'EOF'
-# Wayland
+# ── Environment — /etc/env.d/ is Gentoo/OpenRC native ────────────────────────
+section "Wayland + hybrid GPU environment"
+
+cat > /etc/env.d/90wayland << 'EOF'
 XDG_SESSION_TYPE=wayland
 QT_QPA_PLATFORM=wayland;xcb
 QT_WAYLAND_DISABLE_WINDOWDECORATION=1
@@ -520,15 +571,33 @@ GDK_BACKEND=wayland,x11
 SDL_VIDEODRIVER=wayland
 MOZ_ENABLE_WAYLAND=1
 ELECTRON_OZONE_PLATFORM_HINT=wayland
+EOF
 
-# Hybrid GPU — AMD as default renderer, NVIDIA available via prime-run / env vars
-# To run something on the NVIDIA GPU:
-#   __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
+cat > /etc/env.d/91hybrid-gpu << 'EOF'
+# AMD as default renderer; NVIDIA available via PRIME offload
+# To offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
 LIBVA_DRIVER_NAME=radeonsi
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/nvidia_icd.json
 EOF
 
-# niri Wayland session entry (in case the package doesn't ship one)
+env-update
+
+# ── niri session wrapper (PipeWire launch without systemd user units) ─────────
+if [[ ! -f /usr/bin/niri-session ]]; then
+    cat > /usr/local/bin/niri-session << 'EOF'
+#!/usr/bin/env bash
+export \$(/usr/bin/env -i /bin/sh -c 'source /etc/profile && env' 2>/dev/null | grep -v '^_=')
+pipewire &
+PIPEWIRE_PID=\$!
+wireplumber &
+WP_PID=\$!
+exec niri
+kill \$PIPEWIRE_PID \$WP_PID 2>/dev/null
+EOF
+    chmod +x /usr/local/bin/niri-session
+fi
+
+# ── Wayland session desktop entry for SDDM ───────────────────────────────────
 if [[ ! -f /usr/share/wayland-sessions/niri.desktop ]]; then
     mkdir -p /usr/share/wayland-sessions
     cat > /usr/share/wayland-sessions/niri.desktop << 'EOF'
@@ -540,8 +609,18 @@ Type=Application
 EOF
 fi
 
-chown -R "${USERNAME}:${USERNAME}" "\${USER_HOME}"
-log "User environment configured."
+chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
+log "Environment configured."
+
+# ── Final systemd check ───────────────────────────────────────────────────────
+section "Verifying no systemd installed"
+if portageq match / sys-apps/systemd 2>/dev/null | grep -q systemd; then
+    warn "WARNING: sys-apps/systemd appears to be installed — investigate!"
+    portageq match / sys-apps/systemd
+else
+    log "Confirmed: sys-apps/systemd is NOT installed."
+fi
+log "sys-apps/systemd-utils IS installed (provides udev for OpenRC — expected and correct)."
 
 section "Chroot phase complete"
 echo ""
