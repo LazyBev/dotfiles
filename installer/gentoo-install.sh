@@ -6,7 +6,7 @@
 # Assumptions:
 #   • x86_64 (amd64) system booted in UEFI mode
 #   • Target disk:  /dev/nvme0n1  (edit DISK below)
-#   • AMD GPU       (edit GPU_VENDOR / VIDEO_CARDS below)
+#   • Hybrid AMD (primary/iGPU) + NVIDIA (discrete) GPU
 #   • Internet available on the live environment
 #
 # Usage (as root on the live ISO):
@@ -22,16 +22,16 @@ IFS=$'\n\t'
 # ── EDIT THESE ────────────────────────────────────────────────────────────────
 # =============================================================================
 
-DISK="/dev/nvme0n1"       # target block device
-HOSTNAME="gentoo"
-USERNAME="user"
-TIMEZONE="America/New_York"
+DISK="/dev/nvme0n1"
+HOSTNAME="gentuwu"
+USERNAME="25yari"
+TIMEZONE="Europe/London"
 LOCALE="en_US.UTF-8"
 KEYMAP="us"
 
-# GPU: amd | intel | nvidia
-GPU_VENDOR="amd"
-VIDEO_CARDS="amdgpu radeonsi nvidia"   # passed to VIDEO_CARDS in make.conf
+# Hybrid AMD iGPU / NVIDIA dGPU
+GPU_VENDOR="hybrid-amd-nvidia"
+VIDEO_CARDS="amdgpu radeonsi nvidia"
 
 # =============================================================================
 # ── DERIVED / FIXED ───────────────────────────────────────────────────────────
@@ -40,7 +40,6 @@ VIDEO_CARDS="amdgpu radeonsi nvidia"   # passed to VIDEO_CARDS in make.conf
 NCPU=$(nproc)
 LOG_FILE="/tmp/gentoo-install.log"
 
-# Partition helpers
 _part() {
     [[ "$DISK" == *nvme* || "$DISK" == *mmcblk* ]] \
         && echo "${DISK}p${1}" || echo "${DISK}${1}"
@@ -73,8 +72,8 @@ section() {
 
 section "Pre-flight checks"
 
-[[ $EUID -ne 0 ]]   && error "Must run as root."
-[[ ! -b "$DISK" ]]  && error "Disk $DISK not found."
+[[ $EUID -ne 0 ]]  && error "Must run as root."
+[[ ! -b "$DISK" ]] && error "Disk $DISK not found."
 
 for t in wipefs sgdisk mkfs.fat mkswap wget gpg openssl chroot; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
@@ -83,17 +82,15 @@ done
 ping -c2 -W5 gentoo.org &>/dev/null || error "No internet connection."
 log "Network OK"
 
-# Sync clock (handbook step)
 timedatectl set-ntp true &>/dev/null && sleep 2 || warn "Clock sync failed — continuing"
 
-# Collect passwords
 echo
-read -rsp "  Root password: "           rp1 </dev/tty; echo
-read -rsp "  Confirm root password: "   rp2 </dev/tty; echo
+read -rsp "  Root password: "            rp1 </dev/tty; echo
+read -rsp "  Confirm root password: "    rp2 </dev/tty; echo
 [[ "$rp1" != "$rp2" ]] && error "Root passwords do not match."
 
-read -rsp "  Password for ${USERNAME}: "        up1 </dev/tty; echo
-read -rsp "  Confirm password for ${USERNAME}: " up2 </dev/tty; echo
+read -rsp "  Password for ${USERNAME}: "         up1 </dev/tty; echo
+read -rsp "  Confirm password for ${USERNAME}: "  up2 </dev/tty; echo
 [[ "$up1" != "$up2" ]] && error "User passwords do not match."
 
 ROOT_HASH=$(openssl passwd -6 "$rp1")
@@ -103,7 +100,7 @@ unset rp1 rp2 up1 up2
 log "Pre-flight OK  (CPUs: ${NCPU})"
 
 # =============================================================================
-# STEP 2 — Partition  (handbook: GPT + EFI + swap + root)
+# STEP 2 — Partition
 # =============================================================================
 
 section "Partitioning ${DISK}"
@@ -115,14 +112,14 @@ read -rp "  Type 'yes' to confirm: " _confirm </dev/tty
 wipefs -a "$DISK"
 sgdisk --zap-all "$DISK"
 
-sgdisk -n 1:0:+1G   -t 1:ef00 -c 1:"EFI"  "$DISK"
-sgdisk -n 2:0:+8G   -t 2:8200 -c 2:"swap" "$DISK"
-sgdisk -n 3:0:0     -t 3:8300 -c 3:"root" "$DISK"
+sgdisk -n 1:0:+1G  -t 1:ef00 -c 1:"EFI"  "$DISK"
+sgdisk -n 2:0:+8G  -t 2:8200 -c 2:"swap" "$DISK"
+sgdisk -n 3:0:0    -t 3:8300 -c 3:"root" "$DISK"
 
 partprobe "$DISK"; udevadm settle
 
-mkfs.fat -F32 -n "EFI"   "$PART_EFI"
-mkswap   -L   "swap"     "$PART_SWAP"; swapon "$PART_SWAP"
+mkfs.fat -F32 -n "EFI"  "$PART_EFI"
+mkswap   -L   "swap"    "$PART_SWAP"; swapon "$PART_SWAP"
 mkfs.ext4 -L  "gentoo" -O dir_index,extent,sparse_super2 "$PART_ROOT"
 
 mkdir -p /mnt/gentoo
@@ -133,7 +130,7 @@ mount "$PART_EFI" /mnt/gentoo/boot/efi
 log "Partitions mounted."
 
 # =============================================================================
-# STEP 3 — Stage3 tarball  (handbook: download latest openrc stage3)
+# STEP 3 — Stage3 tarball
 # =============================================================================
 
 section "Stage3 tarball"
@@ -160,7 +157,7 @@ rm -f /mnt/gentoo/stage3.tar.xz
 log "Stage3 installed."
 
 # =============================================================================
-# STEP 4 — Portage configuration  (handbook: make.conf + repos.conf)
+# STEP 4 — Portage configuration
 # =============================================================================
 
 section "Portage configuration"
@@ -179,12 +176,12 @@ FFLAGS="\${COMMON_FLAGS}"
 MAKEOPTS="-j${NCPU} -l${NCPU}"
 EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --keep-going --verbose"
 
-# Accept testing keywords — required for niri and some Wayland libs
 ACCEPT_KEYWORDS="~amd64"
 ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
 
-USE="wayland -systemd -kde -X -gnome -kde udev dbus policykit elogind"
+USE="wayland -systemd -kde -X -gnome udev dbus policykit elogind"
 
+# Hybrid AMD + NVIDIA
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
 
@@ -213,59 +210,47 @@ EOF
 
 # ── package.use ───────────────────────────────────────────────────────────────
 
-# Kernel: dracut-based unified kernel image
 cat > /mnt/gentoo/etc/portage/package.use/kernel << 'EOF'
 sys-kernel/installkernel        dracut
 sys-kernel/gentoo-kernel-bin    initramfs
 virtual/dist-kernel             initramfs
 EOF
 
-# PAM / elogind
 cat > /mnt/gentoo/etc/portage/package.use/system << 'EOF'
 >=sys-auth/pambase-20251104-r1  elogind
 >=media-libs/freetype-2.14.3    harfbuzz
 EOF
 
-# Wayland / wlroots
 cat > /mnt/gentoo/etc/portage/package.use/wayland << 'EOF'
 gui-libs/wlroots   drm gles2 vulkan xwayland
 dev-libs/wayland   -doc
 EOF
 
-# GPU — AMD
-case "$GPU_VENDOR" in
-    amd)
-        cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
-media-libs/mesa  vulkan vulkan-overlay video_cards_amdgpu video_cards_radeonsi
-EOF
-        ;;
-    intel)
-        cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
-media-libs/mesa  vulkan video_cards_intel video_cards_iris
-EOF
-        ;;
-    nvidia)
-        cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
-x11-drivers/nvidia-drivers  wayland
-media-libs/mesa             -nvidia
-EOF
-        echo "x11-drivers/nvidia-drivers  ~amd64" \
-            >> /mnt/gentoo/etc/portage/package.accept_keywords/desktop
-        echo "x11-drivers/nvidia-drivers  NVIDIA-r2" \
-            >> /mnt/gentoo/etc/portage/package.license/nvidia
-        ;;
-esac
+# ── GPU — hybrid AMD + NVIDIA proprietary ────────────────────────────────────
+# Mesa covers the AMD side; nvidia-drivers covers the NVIDIA side.
+# The -nvidia flag on mesa prevents mesa from trying to wrap the nvidia blob.
+cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
+# AMD (mesa)
+media-libs/mesa  vulkan vulkan-overlay video_cards_amdgpu video_cards_radeonsi -nvidia
 
-# PipeWire (sddm uses it for the greeter session)
-cat > /mnt/gentoo/etc/portage/package.use/audio << 'EOF'
-media-video/pipewire    sound-server jack-sdk
-media-sound/wireplumber -systemd
+# NVIDIA proprietary — Wayland + kernel-open disabled (proprietary closed modules)
+x11-drivers/nvidia-drivers  wayland -kernel-open
 EOF
 
-# niri and its Wayland dependencies need ~amd64
+# nvidia-drivers needs ~amd64 and its proprietary licence accepted
 cat > /mnt/gentoo/etc/portage/package.accept_keywords/desktop << 'EOF'
 gui-wm/niri                ~amd64
 dev-libs/wayland-protocols ~amd64
+x11-drivers/nvidia-drivers ~amd64
+EOF
+
+cat > /mnt/gentoo/etc/portage/package.license/nvidia << 'EOF'
+x11-drivers/nvidia-drivers  NVIDIA-r2
+EOF
+
+cat > /mnt/gentoo/etc/portage/package.use/audio << 'EOF'
+media-video/pipewire    sound-server jack-sdk
+media-sound/wireplumber -systemd
 EOF
 
 log "Portage config written."
@@ -276,22 +261,22 @@ log "Portage config written."
 
 section "Generating /etc/fstab"
 
-EFI_UUID=$(blkid -s UUID -o value "$PART_EFI")
+EFI_UUID=$(blkid  -s UUID -o value "$PART_EFI")
 ROOT_UUID=$(blkid -s UUID -o value "$PART_ROOT")
 SWAP_UUID=$(blkid -s UUID -o value "$PART_SWAP")
 
 cat > /mnt/gentoo/etc/fstab << EOF
-# <fs>                                  <mp>        <type>  <opts>              <dump> <pass>
-UUID=${ROOT_UUID}  /           ext4    defaults,noatime    0 1
-UUID=${EFI_UUID}   /boot/efi   vfat    umask=0077          0 2
-UUID=${SWAP_UUID}  none        swap    sw                  0 0
+# <fs>                                  <mp>        <type>  <opts>                        <dump> <pass>
+UUID=${ROOT_UUID}  /           ext4    defaults,noatime            0 1
+UUID=${EFI_UUID}   /boot/efi   vfat    umask=0077                  0 2
+UUID=${SWAP_UUID}  none        swap    sw                          0 0
 tmpfs                                  /tmp        tmpfs   defaults,nosuid,nodev,size=4G  0 0
 EOF
 
 log "fstab written."
 
 # =============================================================================
-# STEP 6 — Chroot environment  (handbook: bind-mount proc/sys/dev)
+# STEP 6 — Chroot environment
 # =============================================================================
 
 section "Preparing chroot"
@@ -315,8 +300,6 @@ log "Chroot ready."
 section "Writing chroot script"
 install -m 700 /dev/null /mnt/gentoo/root/chroot-install.sh
 
-# Variables expanded HERE (host side) are written verbatim into the script.
-# Variables that must be evaluated at chroot runtime are escaped (\$).
 cat > /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
 set -eo pipefail
@@ -339,7 +322,7 @@ export PS1="(chroot) \${PS1:-}"
 section "Syncing Portage tree (emerge-webrsync)"
 emerge-webrsync || error "emerge-webrsync failed."
 
-# ── Profile — handbook recommends amd64/23.0/desktop/openrc ──────────────────
+# ── Profile ───────────────────────────────────────────────────────────────────
 section "Selecting profile"
 eselect profile list
 echo ""
@@ -347,18 +330,17 @@ read -rp "  Enter profile number (default: amd64/23.0/desktop/openrc): " PROFILE
 if [[ -n "\$PROFILE_NUM" ]]; then
     eselect profile set "\$PROFILE_NUM" || warn "Profile set failed."
 else
-    # Try to set the desktop/openrc profile automatically
     PROFILE_NUM=\$(eselect profile list | grep 'desktop/openrc' | grep -v 'plasma\|gnome\|systemd' | head -1 | awk '{print \$1}' | tr -d '[]')
     [[ -n "\$PROFILE_NUM" ]] \
         && { eselect profile set "\$PROFILE_NUM"; log "Set profile \${PROFILE_NUM}."; } \
         || warn "Could not auto-select profile — set manually."
 fi
 
-# ── @world update after profile change (handbook step) ───────────────────────
+# ── @world update ─────────────────────────────────────────────────────────────
 section "Updating @world"
 emerge --update --newuse --deep @world || warn "@world update had non-fatal issues."
 
-# ── Timezone (handbook step) ──────────────────────────────────────────────────
+# ── Timezone & Locale ─────────────────────────────────────────────────────────
 section "Timezone & Locale"
 echo "${TIMEZONE}" > /etc/timezone
 emerge --config sys-libs/timezone-data
@@ -368,18 +350,17 @@ LOC=\$(locale -a | grep -i "\$(echo "${LOCALE}" | tr '[:upper:]' '[:lower:]' | s
 [[ -n "\$LOC" ]] && eselect locale set "\$LOC" || warn "Set locale manually with: eselect locale set"
 set +u; env-update && source /etc/profile; set -u
 
-# ── Linux firmware + CPU microcode ────────────────────────────────────────────
+# ── Firmware ──────────────────────────────────────────────────────────────────
 section "Firmware"
 emerge sys-kernel/linux-firmware sys-firmware/sof-firmware
 log "Firmware installed."
 
-# ── Kernel (dist-kernel — handbook fast path) ─────────────────────────────────
+# ── Kernel ────────────────────────────────────────────────────────────────────
 section "Kernel (gentoo-kernel-bin)"
-# installkernel + dracut handle initramfs generation automatically.
 emerge sys-kernel/gentoo-kernel-bin
 log "Kernel installed."
 
-# ── Base system (handbook packages) ──────────────────────────────────────────
+# ── Base system ───────────────────────────────────────────────────────────────
 section "Base system packages"
 emerge \
     app-admin/sudo \
@@ -398,10 +379,9 @@ emerge \
     net-misc/curl \
     dev-vcs/git \
     app-editors/neovim
-
 log "Base packages installed."
 
-# ── Hostname & /etc/hosts (handbook step) ────────────────────────────────────
+# ── Hostname & hosts ──────────────────────────────────────────────────────────
 section "Hostname"
 echo "${HOSTNAME}" > /etc/hostname
 cat > /etc/hosts << 'EOF'
@@ -410,7 +390,6 @@ cat > /etc/hosts << 'EOF'
 EOF
 echo "127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}" >> /etc/hosts
 
-# ── Keymap ────────────────────────────────────────────────────────────────────
 sed -i 's/^keymap=.*/keymap="${KEYMAP}"/' /etc/conf.d/keymaps 2>/dev/null || true
 
 # ── OpenRC services ───────────────────────────────────────────────────────────
@@ -418,25 +397,42 @@ section "OpenRC services"
 for svc in NetworkManager elogind dbus udev cronie; do
     rc-update add \$svc default 2>/dev/null || warn "rc-update add \$svc failed (non-fatal)"
 done
-rc-update add udev sysinit 2>/dev/null || true
+rc-update add udev    sysinit 2>/dev/null || true
+rc-update add modules boot    2>/dev/null || true   # needed to load nvidia at boot
 
-# ── GPU drivers ───────────────────────────────────────────────────────────────
-section "GPU / Mesa"
-emerge media-libs/mesa media-libs/libva
-case "${GPU_VENDOR}" in
-    amd)
-        emerge media-libs/vulkan-loader
-        ;;
-    intel)
-        emerge media-libs/intel-media-driver media-libs/vulkan-loader
-        ;;
-    nvidia)
-        emerge x11-drivers/nvidia-drivers
-        rc-update add modules boot 2>/dev/null || true
-        echo "nvidia" > /etc/modules-load.d/nvidia.conf
-        ;;
-esac
-log "GPU drivers installed."
+# ── GPU — hybrid AMD + NVIDIA proprietary ────────────────────────────────────
+section "GPU — hybrid AMD + NVIDIA (proprietary)"
+
+# --- AMD side ---
+log "Installing AMD/Mesa stack..."
+emerge \
+    media-libs/mesa \
+    media-libs/libva \
+    media-libs/libva-utils \
+    media-libs/vulkan-loader \
+    app-misc/vulkan-tools
+log "AMD/Mesa installed."
+
+# --- NVIDIA proprietary side ---
+log "Installing nvidia-drivers (proprietary)..."
+emerge x11-drivers/nvidia-drivers
+
+# Load nvidia modules at boot
+mkdir -p /etc/modules-load.d
+cat > /etc/modules-load.d/nvidia.conf << 'EOF'
+nvidia
+nvidia_modeset
+nvidia_uvm
+nvidia_drm
+EOF
+
+# Enable nvidia-drm KMS — required for Wayland
+mkdir -p /etc/modprobe.d
+cat > /etc/modprobe.d/nvidia.conf << 'EOF'
+options nvidia_drm modeset=1 fbdev=1
+EOF
+
+log "NVIDIA drivers installed and KMS enabled."
 
 # ── Wayland base ──────────────────────────────────────────────────────────────
 section "Wayland base libraries"
@@ -474,7 +470,6 @@ log "SDDM installed and enabled."
 # ── PipeWire audio ────────────────────────────────────────────────────────────
 section "PipeWire + WirePlumber"
 emerge media-video/pipewire media-sound/wireplumber media-sound/pavucontrol
-# PipeWire is started as a user session service; no OpenRC daemon needed.
 log "PipeWire installed."
 
 # ── Ghostty terminal ──────────────────────────────────────────────────────────
@@ -490,9 +485,8 @@ emerge \
     media-fonts/fira-code
 log "Fonts installed."
 
-# ── GRUB (handbook step) ──────────────────────────────────────────────────────
+# ── GRUB ──────────────────────────────────────────────────────────────────────
 section "GRUB bootloader"
-# make.conf already sets GRUB_PLATFORMS="efi-64"
 grub-install \
     --target=x86_64-efi \
     --efi-directory=/boot/efi \
@@ -501,7 +495,7 @@ grub-install \
 grub-mkconfig -o /boot/grub/grub.cfg
 log "GRUB installed."
 
-# ── Users (handbook step) ─────────────────────────────────────────────────────
+# ── Users ─────────────────────────────────────────────────────────────────────
 section "User accounts"
 echo "root:${ROOT_HASH}" | chpasswd -e
 
@@ -513,11 +507,12 @@ install -m 440 /dev/null /etc/sudoers.d/wheel
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 log "Users created."
 
-# ── Wayland environment variables ────────────────────────────────────────────
-section "Wayland environment"
+# ── Wayland + hybrid GPU environment ─────────────────────────────────────────
+section "Wayland environment (hybrid GPU)"
 USER_HOME="/home/${USERNAME}"
 mkdir -p "\${USER_HOME}/.config/environment.d"
 cat > "\${USER_HOME}/.config/environment.d/wayland.conf" << 'EOF'
+# Wayland
 XDG_SESSION_TYPE=wayland
 QT_QPA_PLATFORM=wayland;xcb
 QT_WAYLAND_DISABLE_WINDOWDECORATION=1
@@ -525,9 +520,15 @@ GDK_BACKEND=wayland,x11
 SDL_VIDEODRIVER=wayland
 MOZ_ENABLE_WAYLAND=1
 ELECTRON_OZONE_PLATFORM_HINT=wayland
+
+# Hybrid GPU — AMD as default renderer, NVIDIA available via prime-run / env vars
+# To run something on the NVIDIA GPU:
+#   __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
+LIBVA_DRIVER_NAME=radeonsi
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/nvidia_icd.json
 EOF
 
-# SDDM session entry for niri (in case the package doesn't ship one)
+# niri Wayland session entry (in case the package doesn't ship one)
 if [[ ! -f /usr/share/wayland-sessions/niri.desktop ]]; then
     mkdir -p /usr/share/wayland-sessions
     cat > /usr/share/wayland-sessions/niri.desktop << 'EOF'
@@ -557,7 +558,7 @@ section "Entering chroot"
 chroot /mnt/gentoo /bin/bash /root/chroot-install.sh
 
 # =============================================================================
-# STEP 9 — Cleanup & unmount  (handbook step)
+# STEP 9 — Cleanup & unmount
 # =============================================================================
 
 section "Unmounting"
@@ -592,4 +593,6 @@ echo -e "  Next steps:"
 echo -e "   1. ${BOLD}reboot${NC}"
 echo -e "   2. SDDM will start — select the ${BOLD}niri${NC} session"
 echo -e "   3. Open ${BOLD}Ghostty${NC} from the niri launcher"
+echo -e "   4. To offload an app to NVIDIA:"
+echo -e "      ${BOLD}__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>${NC}"
 echo ""
