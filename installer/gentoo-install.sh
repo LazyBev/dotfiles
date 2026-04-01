@@ -89,7 +89,7 @@ done
 ping -c2 -W5 gentoo.org &>/dev/null || error "No internet connection."
 log "Network OK"
 
-pacman -Sy --noconfirm wget || error "Failed to install ntp on live ISO."
+command -v wget &>/dev/null || pacman -Sy --noconfirm wget || error "Failed to install wget on live ISO."
 
 timedatectl set-ntp true && sleep 3 && log "Clock synced." || warn "Clock sync failed — continuing"
 
@@ -261,6 +261,10 @@ sys-apps/dbus                   -systemd elogind
 sys-auth/polkit                 -systemd elogind
 # elogind itself must not pull systemd
 sys-auth/elogind                -systemd
+# SDDM: use elogind for seat/session management, not systemd-logind
+x11-misc/sddm                   elogind -systemd
+# xdg-desktop-portal: no systemd activation
+sys-apps/xdg-desktop-portal     -systemd
 EOF
 
 # ── package.use/wayland ───────────────────────────────────────────────────────
@@ -464,7 +468,9 @@ EOF
 echo "127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}" >> /etc/hosts
 
 # Keymap — /etc/conf.d/keymaps is OpenRC-native
-sed -i 's/^keymap=.*/keymap="${KEYMAP}"/' /etc/conf.d/keymaps 2>/dev/null || true
+# \${KEYMAP} was already expanded by the outer shell when this heredoc was written.
+# Double-quoting here makes that expansion explicit and visible.
+sed -i "s/^keymap=.*/keymap=\"${KEYMAP}\"/" /etc/conf.d/keymaps 2>/dev/null || true
 
 # ── OpenRC services ───────────────────────────────────────────────────────────
 section "OpenRC services"
@@ -603,13 +609,13 @@ env-update
 if [[ ! -f /usr/bin/niri-session ]]; then
     cat > /usr/local/bin/niri-session << 'EOF'
 #!/usr/bin/env bash
-export \$(/usr/bin/env -i /bin/sh -c 'source /etc/profile && env' 2>/dev/null | grep -v '^_=')
+export $(/usr/bin/env -i /bin/sh -c 'source /etc/profile && env' 2>/dev/null | grep -v '^_=')
 pipewire &
-PIPEWIRE_PID=\$!
+PIPEWIRE_PID=$!
 wireplumber &
-WP_PID=\$!
+WP_PID=$!
+trap "kill $PIPEWIRE_PID $WP_PID 2>/dev/null" EXIT
 exec niri
-kill \$PIPEWIRE_PID \$WP_PID 2>/dev/null
 EOF
     chmod +x /usr/local/bin/niri-session
 fi
