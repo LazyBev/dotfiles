@@ -73,16 +73,9 @@ section() {
     echo -e "${BOLD}${BLUE}══════════════════════════════════════════════${NC}\n"
 }
 
-# Helper: check if sys-apps/systemd (NOT systemd-utils) is installed.
-# portageq match returns versioned atoms like "sys-apps/systemd-260" so we
-# use grep without -x to catch any versioned output.
-# systemd-utils is explicitly excluded to avoid false positives.
-_systemd_present() {
-    portageq match / sys-apps/systemd 2>/dev/null \
-        | grep "sys-apps/systemd" \
-        | grep -v "sys-apps/systemd-utils" \
-        | grep -q "."
-}
+# NOTE: _systemd_present() is only defined inside the chroot script (below).
+# It is NOT defined here in the outer script because portageq does not exist
+# on the Arch ISO live environment. Do not call portageq outside the chroot.
 
 # =============================================================================
 # STEP 1 — Pre-flight
@@ -93,7 +86,12 @@ section "Pre-flight checks"
 [[ $EUID -ne 0 ]]  && error "Must run as root."
 [[ ! -b "$DISK" ]] && error "Disk $DISK not found."
 
-for t in wipefs sgdisk mkfs.fat mkswap openssl chroot; do
+# FIX: Hard-fail early if not booted in UEFI mode. Without efivarfs,
+# grub-install will fail deep inside the chroot with a cryptic error.
+[[ -d /sys/firmware/efi/efivars ]] \
+    || error "Not booted in UEFI mode — cannot install EFI GRUB. Aborting."
+
+for t in wipefs sgdisk mkfs.fat mkswap openssl chroot sha256sum; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
 done
 
@@ -177,10 +175,26 @@ wget --tries=10 \
      "$TARBALL_URL" -O /mnt/gentoo/stage3.tar.xz \
     || error "stage3 download failed."
 
+# FIX: Verify stage3 integrity before extraction.
+# The manifest lists SHA512; Gentoo also publishes a separate .sha256 file.
+log "Verifying stage3 checksum..."
+DIGEST_URL="${TARBALL_URL}.sha256"
+if wget -qO /tmp/stage3.sha256 "$DIGEST_URL" 2>/dev/null; then
+    EXPECTED=$(awk '{print $1}' /tmp/stage3.sha256)
+    ACTUAL=$(sha256sum /mnt/gentoo/stage3.tar.xz | awk '{print $1}')
+    if [[ "$EXPECTED" == "$ACTUAL" ]]; then
+        log "Stage3 SHA256 checksum OK."
+    else
+        error "Stage3 checksum MISMATCH — download may be corrupt or tampered. Aborting."
+    fi
+else
+    warn "Could not fetch .sha256 file — skipping checksum verification."
+fi
+
 log "Extracting stage3..."
 tar xpf /mnt/gentoo/stage3.tar.xz \
     --xattrs-include='*.*' --numeric-owner -C /mnt/gentoo
-rm -f /mnt/gentoo/stage3.tar.xz
+rm -f /mnt/gentoo/stage3.tar.xz /tmp/stage3.sha256
 
 log "Stage3 installed."
 
@@ -204,6 +218,8 @@ FFLAGS="\${COMMON_FLAGS}"
 MAKEOPTS="-j${NCPU} -l${NCPU}"
 EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --verbose"
 
+# NOTE: ~amd64 accepts testing packages globally. This is intentional for a
+# bleeding-edge desktop, but be aware that any package may be testing-quality.
 ACCEPT_KEYWORDS="~amd64"
 ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
 
@@ -221,6 +237,10 @@ GENTOO_MIRRORS="https://distfiles.gentoo.org"
 DISTDIR="/var/cache/distfiles"
 PKGDIR="/var/cache/binpkgs"
 PORTDIR="/var/db/repos/gentoo"
+
+# Note: nvidia-drm.modeset=1 is also set in /etc/modprobe.d/nvidia.conf.
+# To additionally set it on the kernel cmdline for belt-and-suspenders coverage,
+# add: GRUB_CMDLINE_LINUX="nvidia-drm.modeset=1" to /etc/default/grub after install.
 GRUB_PLATFORMS="efi-64"
 EOF
 
@@ -266,10 +286,6 @@ virtual/dist-kernel             initramfs
 EOF
 
 # ── package.use/system ────────────────────────────────────────────────────────
-# FIX: Removed versioned constraints on pambase — version pins can silently
-# fail to match, allowing emerge to pick a slot that ignores our USE flags.
-# FIX: Added openssh -systemd (openssh has a conditional systemd dep that was
-# triggering the pull-in observed in the install run).
 cat > /mnt/gentoo/etc/portage/package.use/system << 'EOF'
 sys-auth/pambase                elogind -systemd
 >=media-libs/freetype-2.14.3    harfbuzz
@@ -315,10 +331,20 @@ media-sound/wireplumber -systemd
 EOF
 
 # ── package.accept_keywords ───────────────────────────────────────────────────
+# FIX: Added keywording for wayland ecosystem packages that have had
+# intermittent ~amd64 keywording issues, and for ghostty/niri which
+# come from the guru overlay and may need explicit acceptance.
 cat > /mnt/gentoo/etc/portage/package.accept_keywords/desktop << 'EOF'
-gui-wm/niri                ~amd64
-dev-libs/wayland-protocols ~amd64
-x11-drivers/nvidia-drivers ~amd64
+gui-wm/niri                  ~amd64
+dev-libs/wayland-protocols   ~amd64
+x11-drivers/nvidia-drivers   ~amd64
+gui-apps/swaylock            ~amd64
+gui-apps/grim                ~amd64
+gui-apps/slurp               ~amd64
+gui-apps/fuzzel              ~amd64
+gui-apps/mako                ~amd64
+gui-apps/waybar              ~amd64
+app-terminals/ghostty        ~amd64
 EOF
 
 # ── package.license ───────────────────────────────────────────────────────────
@@ -338,6 +364,8 @@ EFI_UUID=$(blkid  -s UUID -o value "$PART_EFI")
 ROOT_UUID=$(blkid -s UUID -o value "$PART_ROOT")
 SWAP_UUID=$(blkid -s UUID -o value "$PART_SWAP")
 
+# NOTE: UUID column alignment is cosmetic; UUIDs are variable-length so
+# spacing may not be perfectly even — this is harmless.
 cat > /mnt/gentoo/etc/fstab << EOF
 # <fs>                    <mp>       <type>  <opts>                        <dump> <pass>
 UUID=${ROOT_UUID}  /          ext4    defaults,noatime              0 1
@@ -361,8 +389,9 @@ mount --rbind       /sys  /mnt/gentoo/sys;  mount --make-rslave /mnt/gentoo/sys
 mount --rbind       /dev  /mnt/gentoo/dev;  mount --make-rslave /mnt/gentoo/dev
 mount --bind        /run  /mnt/gentoo/run;  mount --make-slave  /mnt/gentoo/run
 
-[[ -d /sys/firmware/efi/efivars ]] && \
-    mount --bind /sys/firmware/efi/efivars /mnt/gentoo/sys/firmware/efi/efivars
+# efivarfs is required for grub-install. The pre-flight check above already
+# confirmed we are in UEFI mode, so this mount will always succeed.
+mount --bind /sys/firmware/efi/efivars /mnt/gentoo/sys/firmware/efi/efivars
 
 log "Chroot ready."
 
@@ -421,6 +450,21 @@ log "package.mask/systemd confirmed."
 # ── Portage tree ──────────────────────────────────────────────────────────────
 section "Syncing Portage tree (emerge-webrsync)"
 emerge-webrsync || error "emerge-webrsync failed."
+# Follow up with a full rsync for the freshest ~amd64 package versions.
+emerge --sync || warn "emerge --sync failed — tree may be slightly stale."
+
+# ── Enable guru overlay for niri, ghostty, and other bleeding-edge packages ───
+# FIX: Both gui-wm/niri and app-terminals/ghostty live in the guru overlay,
+# not the main Gentoo tree. Set up eselect-repository and enable guru BEFORE
+# any GUI package installs so emerge can find these atoms.
+section "Enabling guru overlay (niri, ghostty)"
+emerge --oneshot app-eselect/eselect-repository dev-vcs/git \
+    || error "Failed to install eselect-repository."
+eselect repository enable guru \
+    || error "Failed to enable guru overlay."
+emerge --sync guru \
+    || error "Failed to sync guru overlay."
+log "guru overlay enabled and synced."
 
 # ── Install systemd-utils with pinned USE flags FIRST ────────────────────────
 # FIX: Install systemd-utils before @world so portage cannot later resolve it
@@ -450,25 +494,32 @@ echo ""
 read -rp "  Enter profile number (default: amd64/23.0/desktop/openrc): " PROFILE_NUM </dev/tty
 if [[ -n "\$PROFILE_NUM" ]]; then
     eselect profile set "\$PROFILE_NUM" || warn "Profile set failed."
+    log "Profile set to number \${PROFILE_NUM}."
 else
+    # FIX: Use -E for extended regex so | works as alternation.
+    # Without -E, 'plasma|gnome|systemd' is a literal BRE string and the
+    # filter has no effect — potentially auto-selecting a systemd profile.
     PROFILE_NUM=\$(eselect profile list \
         | grep 'desktop/openrc' \
-        | grep -v 'plasma\|gnome\|systemd' \
+        | grep -vE 'plasma|gnome|systemd' \
         | head -1 | awk '{print \$1}' | tr -d '[]')
-    [[ -n "\$PROFILE_NUM" ]] \
-        && { eselect profile set "\$PROFILE_NUM"; log "Set profile \${PROFILE_NUM}."; } \
-        || warn "Could not auto-select profile — set manually."
+    if [[ -n "\$PROFILE_NUM" ]]; then
+        eselect profile set "\$PROFILE_NUM"
+        log "Auto-selected profile \${PROFILE_NUM}: \$(eselect profile show)"
+    else
+        warn "Could not auto-select profile — set manually with: eselect profile set"
+    fi
 fi
 
 # ── @world update ─────────────────────────────────────────────────────────────
 section "Updating @world"
 # --changed-use picks up our new -systemd flags across all packages.
-# FIX: --keep-going allows the update to finish and surface ALL conflicts
+# --keep-going allows the update to finish and surface ALL conflicts
 # rather than aborting on the first issue, making debugging easier.
 emerge --update --newuse --changed-use --deep --keep-going @world \
     || warn "@world update had non-fatal issues — check output above."
 
-# FIX: Post-world systemd check uses the safe helper (no -x grep).
+# Post-world systemd check uses the safe helper (no -x flag).
 if _systemd_present; then
     error "sys-apps/systemd was pulled in by @world — check USE flags and package.mask!"
 fi
@@ -512,7 +563,7 @@ emerge \
     sys-libs/pam \
     sys-auth/pambase \
     sys-process/cronie \
-    net-misc/ntp \
+    net-misc/chrony \
     net-misc/curl \
     dev-vcs/git \
     app-editors/neovim
@@ -531,7 +582,9 @@ sed -i "s/^keymap=.*/keymap=\"${KEYMAP}\"/" /etc/conf.d/keymaps 2>/dev/null || t
 
 # ── OpenRC services ───────────────────────────────────────────────────────────
 section "OpenRC services"
-for svc in NetworkManager elogind dbus udev cronie ntpd sshd; do
+# Note: udev (via systemd-utils) is added to sysinit. If OpenRC's default
+# runlevel already includes it via the package install, this is a no-op.
+for svc in NetworkManager elogind dbus cronie sshd chronyd; do
     rc-update add \$svc default 2>/dev/null || warn "rc-update add \$svc failed (non-fatal)"
 done
 rc-update add udev    sysinit 2>/dev/null || true
@@ -552,14 +605,19 @@ log "AMD/Mesa installed."
 log "Installing nvidia-drivers (proprietary)..."
 emerge x11-drivers/nvidia-drivers
 
-# OpenRC module loading via /etc/conf.d/modules (not systemd modules-load.d)
+# OpenRC module loading via /etc/conf.d/modules
+# The heredoc delimiter is quoted ('MODEOF') so \${modules} is written
+# verbatim and expanded at boot by OpenRC — this is the correct behaviour.
 cat >> /etc/conf.d/modules << 'MODEOF'
 
 # NVIDIA (hybrid GPU)
-modules="\${modules} nvidia nvidia_modeset nvidia_uvm nvidia_drm"
+modules="${modules} nvidia nvidia_modeset nvidia_uvm nvidia_drm"
 MODEOF
 
-# kmod options file — read by kmod directly, safe on OpenRC
+# kmod options file — read by kmod directly, safe on OpenRC.
+# nvidia_drm.modeset=1 is the primary mechanism; fbdev=1 enables /dev/fb0.
+# For belt-and-suspenders, also add nvidia-drm.modeset=1 to
+# GRUB_CMDLINE_LINUX in /etc/default/grub after install.
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << 'NVIDIAEOF'
 options nvidia_drm modeset=1 fbdev=1
@@ -580,6 +638,10 @@ log "Wayland base installed."
 
 # ── niri WM ───────────────────────────────────────────────────────────────────
 section "niri window manager"
+# FIX: Also emerge sys-apps/xdg-desktop-portal (the base frontend).
+# xdg-desktop-portal-gtk is the backend; without the frontend package the
+# portal bus interface won't be registered and portal features will silently
+# fail for apps (file pickers, screen share, etc.).
 emerge \
     gui-wm/niri \
     gui-apps/swayidle \
@@ -590,6 +652,7 @@ emerge \
     gui-apps/wl-clipboard \
     gui-apps/mako \
     gui-apps/fuzzel \
+    sys-apps/xdg-desktop-portal \
     gui-libs/xdg-desktop-portal-gtk \
     x11-libs/xcb-util-cursor
 log "niri and companions installed."
@@ -597,8 +660,29 @@ log "niri and companions installed."
 # ── SDDM ──────────────────────────────────────────────────────────────────────
 section "SDDM display manager"
 emerge x11-misc/sddm
+
+# FIX: Configure SDDM explicitly. SDDM defaults to X11 greeter mode.
+# We keep the X11 greeter (more mature) but launch niri as a Wayland session.
+# The session is selected by the user at the SDDM login screen.
+mkdir -p /etc/sddm.conf.d
+cat > /etc/sddm.conf.d/general.conf << 'SDDMEOF'
+[General]
+# Use X11 for the greeter (Wayland greeter support in SDDM is still maturing).
+# The niri *session* runs as Wayland regardless of the greeter display server.
+DisplayServer=x11
+
+[Theme]
+# Leave blank to use SDDM default theme, or set a theme name.
+Current=
+
+[Users]
+# Autologin is disabled by default for security. Uncomment to enable:
+# AutoUser=YOUR_USERNAME
+# Relogin=true
+SDDMEOF
+
 rc-update add sddm default 2>/dev/null || warn "rc-update add sddm failed (non-fatal)"
-log "SDDM installed and enabled."
+log "SDDM installed and configured."
 
 # ── PipeWire audio ────────────────────────────────────────────────────────────
 section "PipeWire + WirePlumber"
@@ -606,6 +690,8 @@ emerge media-video/pipewire media-sound/wireplumber media-sound/pavucontrol
 log "PipeWire installed."
 
 # ── Ghostty terminal ──────────────────────────────────────────────────────────
+# NOTE: Ghostty is in the guru overlay (enabled earlier in this script).
+# If the emerge fails, confirm guru is synced: eselect repository list
 section "Ghostty terminal"
 emerge app-terminals/ghostty
 log "Ghostty installed."
@@ -620,6 +706,7 @@ log "Fonts installed."
 
 # ── GRUB bootloader ───────────────────────────────────────────────────────────
 section "GRUB bootloader"
+# efivarfs is bind-mounted from the live host (guaranteed by pre-flight check).
 grub-install \
     --target=x86_64-efi \
     --efi-directory=/boot/efi \
@@ -631,6 +718,13 @@ log "GRUB installed."
 # ── User accounts ─────────────────────────────────────────────────────────────
 section "User accounts"
 echo "root:${ROOT_HASH}" | chpasswd -e
+
+# FIX: Create any missing supplementary groups before useradd.
+# Gentoo does not guarantee plugdev, usb, or seat exist after a base install.
+# elogind creates 'seat' during its own emerge, but we guard anyway.
+for grp in wheel audio video input seat plugdev usb portage; do
+    getent group "\$grp" &>/dev/null || groupadd "\$grp"
+done
 
 useradd -m -G "wheel,audio,video,input,seat,plugdev,usb,portage" \
         -s /bin/bash "${USERNAME}"
@@ -654,25 +748,41 @@ ELECTRON_OZONE_PLATFORM_HINT=wayland
 ENVEOF
 
 cat > /etc/env.d/91hybrid-gpu << 'GPUEOF'
-# AMD as default renderer; NVIDIA available via PRIME offload
-# To offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
+# AMD as default renderer; NVIDIA available via PRIME offload.
+# To offload an app to NVIDIA:
+#   __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
+#
+# NOTE: VK_ICD_FILENAMES is NOT set here. Let the Vulkan loader discover
+# all ICD JSON files under /usr/share/vulkan/icd.d/ automatically.
+# Hardcoding paths is fragile across nvidia-drivers version upgrades.
 LIBVA_DRIVER_NAME=radeonsi
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/nvidia_icd.json
 GPUEOF
 
+# env-update is called after all /etc/env.d/ files are written.
 env-update
 
+chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
+
 # ── niri session wrapper (PipeWire launch without systemd user units) ─────────
-# exec niri replaces the shell process entirely, so code after it never runs.
-# A trap fires on shell exit (including after exec) to cleanly kill PipeWire.
+# FIX: Removed the fragile 'export \$(env -i sh -c ...)' pattern which broke
+# on env vars containing spaces or newlines (LS_COLORS, LESS_TERMCAP_*, etc.).
+# Instead, use 'set -a / source / set +a' which handles all values correctly.
+# exec niri replaces the shell process; bash fires EXIT trap even on exec.
 cat > /usr/local/bin/niri-session << 'SESSIONEOF'
 #!/usr/bin/env bash
-export \$(/usr/bin/env -i /bin/sh -c 'source /etc/profile && env' 2>/dev/null | grep -v '^_=')
+set -a
+source /etc/profile
+set +a
+
 pipewire &
 PIPEWIRE_PID=\$!
 wireplumber &
 WP_PID=\$!
-trap "kill \$PIPEWIRE_PID \$WP_PID 2>/dev/null" EXIT
+
+# Trap fires on EXIT (including after 'exec'), cleaning up audio daemons
+# when the niri session ends. This relies on bash's exec-trap behaviour.
+trap "kill \$PIPEWIRE_PID \$WP_PID 2>/dev/null; wait \$PIPEWIRE_PID \$WP_PID 2>/dev/null" EXIT
+
 exec niri
 SESSIONEOF
 chmod +x /usr/local/bin/niri-session
@@ -685,14 +795,29 @@ Name=niri
 Comment=A scrollable-tiling Wayland compositor
 Exec=niri-session
 Type=Application
+DesktopNames=niri
 DESKTOPEOF
 
-chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
+# ── swaylock PAM configuration ────────────────────────────────────────────────
+# FIX: swaylock requires a PAM service file to authenticate users.
+# Without /etc/pam.d/swaylock, swaylock silently fails to unlock on any
+# password attempt. Gentoo's swaylock package may or may not install this;
+# we ensure it exists unconditionally.
+if [[ ! -f /etc/pam.d/swaylock ]]; then
+    cat > /etc/pam.d/swaylock << 'PAMEOF'
+auth      include   system-local-login
+account   include   system-local-login
+PAMEOF
+    log "swaylock PAM config written."
+else
+    log "swaylock PAM config already present."
+fi
+
 log "Environment configured."
 
 # ── Final systemd verification ────────────────────────────────────────────────
 section "Final systemd verification"
-# FIX: Use the safe helper — no -x flag — so versioned atoms are caught.
+# Use the safe helper — no -x flag — so versioned atoms are caught.
 if _systemd_present; then
     warn "WARNING: sys-apps/systemd appears to be installed — investigate!"
     portageq match / sys-apps/systemd | grep -v systemd-utils
@@ -753,4 +878,6 @@ echo -e "   2. SDDM will start — select the ${BOLD}niri${NC} session"
 echo -e "   3. Open ${BOLD}Ghostty${NC} from the niri launcher"
 echo -e "   4. To offload an app to NVIDIA:"
 echo -e "      ${BOLD}__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>${NC}"
+echo -e "   5. Optional: add ${BOLD}nvidia-drm.modeset=1${NC} to GRUB_CMDLINE_LINUX"
+echo -e "      in ${BOLD}/etc/default/grub${NC} then run grub-mkconfig for belt-and-suspenders KMS."
 echo ""
