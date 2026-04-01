@@ -634,7 +634,7 @@ setup_chroot() {
     debug "Mounting build tmpfs (${TMPFS_SIZE}G) on /var/tmp/portage..."
     mkdir -p /mnt/gentoo/var/tmp/portage
     mount -t tmpfs \
-        -o "size=${TMPFS_SIZE}G,uid=portage,gid=portage,mode=775,noatime" \
+        -o "size=${TMPFS_SIZE}G,uid=250,gid=250,mode=775,noatime" \
         tmpfs /mnt/gentoo/var/tmp/portage
     _log_raw "Portage build tmpfs: ${TMPFS_SIZE}G"
 
