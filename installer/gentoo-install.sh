@@ -555,7 +555,7 @@ EOF
 
     # FIX: package.env override — enable mold linker only for packages that
     # are built AFTER mold itself has been installed.
-    mkdir -p /mnt/gentoo/etc/portage/env
+    mkdir -p /mnt/gentoo/etc/portage/env /mnt/gentoo/etc/portage/package.env
     cat > /mnt/gentoo/etc/portage/env/use-mold.conf << 'EOF'
 LDFLAGS="-Wl,-O1 -Wl,--as-needed -fuse-ld=mold"
 EOF
