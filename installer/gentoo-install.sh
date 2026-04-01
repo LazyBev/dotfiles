@@ -73,6 +73,17 @@ section() {
     echo -e "${BOLD}${BLUE}══════════════════════════════════════════════${NC}\n"
 }
 
+# Helper: check if sys-apps/systemd (NOT systemd-utils) is installed.
+# portageq match returns versioned atoms like "sys-apps/systemd-260" so we
+# use grep without -x to catch any versioned output.
+# systemd-utils is explicitly excluded to avoid false positives.
+_systemd_present() {
+    portageq match / sys-apps/systemd 2>/dev/null \
+        | grep "sys-apps/systemd" \
+        | grep -v "sys-apps/systemd-utils" \
+        | grep -q "."
+}
+
 # =============================================================================
 # STEP 1 — Pre-flight
 # =============================================================================
@@ -228,10 +239,12 @@ sync-rsync-verify-max-age      = 24
 EOF
 
 # ── package.mask — hard-block sys-apps/systemd from ever being installed ──────
+# IMPORTANT: This mask must be in place BEFORE any emerge runs inside chroot.
+# sys-apps/systemd-utils is NOT masked — it provides udev/tmpfiles for OpenRC
+# and does not depend on or activate sys-apps/systemd.
 cat > /mnt/gentoo/etc/portage/package.mask/systemd << 'EOF'
 # Hard-block the full systemd init — we use OpenRC + elogind.
-# sys-apps/systemd-utils is NOT masked; it provides udev/tmpfiles for OpenRC
-# and does not depend on or activate sys-apps/systemd.
+# sys-apps/systemd-utils is NOT masked; it provides udev/tmpfiles for OpenRC.
 sys-apps/systemd
 EOF
 
@@ -253,8 +266,12 @@ virtual/dist-kernel             initramfs
 EOF
 
 # ── package.use/system ────────────────────────────────────────────────────────
+# FIX: Removed versioned constraints on pambase — version pins can silently
+# fail to match, allowing emerge to pick a slot that ignores our USE flags.
+# FIX: Added openssh -systemd (openssh has a conditional systemd dep that was
+# triggering the pull-in observed in the install run).
 cat > /mnt/gentoo/etc/portage/package.use/system << 'EOF'
->=sys-auth/pambase-20251104-r1  elogind -systemd
+sys-auth/pambase                elogind -systemd
 >=media-libs/freetype-2.14.3    harfbuzz
 # NetworkManager: openrc init script, no systemd unit activation
 net-misc/networkmanager         -systemd -systemd-units elogind
@@ -268,6 +285,12 @@ sys-auth/elogind                -systemd
 x11-misc/sddm                   elogind -systemd
 # xdg-desktop-portal: no systemd socket activation
 sys-apps/xdg-desktop-portal     -systemd
+# openssh has a conditional systemd dep — explicitly disable it
+net-misc/openssh                -systemd
+# cronie: no systemd
+sys-process/cronie              -systemd
+# pam: elogind only
+sys-libs/pam                    elogind -systemd
 EOF
 
 # ── package.use/wayland ───────────────────────────────────────────────────────
@@ -350,6 +373,11 @@ log "Chroot ready."
 section "Writing chroot script"
 install -m 700 /dev/null /mnt/gentoo/root/chroot-install.sh
 
+# NOTE on variable escaping in this heredoc (delimiter: CHROOT_EOF, unquoted):
+#   \$VAR  — evaluated at runtime inside chroot (chroot-script variables)
+#   $VAR   — expanded NOW by the outer shell before writing (installer variables)
+#   \${…}  — runtime chroot variable with braces
+
 cat > /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
 set -eo pipefail
@@ -365,18 +393,47 @@ section() {
     echo -e "\${BOLD}\${BLUE}══════════════════════════════════════════════\${NC}\n"
 }
 
+# FIX: Helper uses grep without -x so versioned atoms like
+# "sys-apps/systemd-260" are still caught. systemd-utils is explicitly
+# excluded to prevent false positives.
+_systemd_present() {
+    portageq match / sys-apps/systemd 2>/dev/null \
+        | grep "sys-apps/systemd" \
+        | grep -v "sys-apps/systemd-utils" \
+        | grep -q "."
+}
+
 # set +u guards against unset variables in /etc/profile (e.g. PS1)
 set +u; source /etc/profile; set -u
 export PS1="(chroot) \${PS1:-}"
+
+# ── Verify package.mask is in place before ANY emerge runs ───────────────────
+# FIX: Re-assert the mask inside chroot so it cannot be accidentally missing.
+section "Asserting systemd mask"
+mkdir -p /etc/portage/package.mask
+cat > /etc/portage/package.mask/systemd << 'MASKEOF'
+# Hard-block the full systemd init — OpenRC + elogind system.
+# sys-apps/systemd-utils is NOT masked — it provides udev for OpenRC.
+sys-apps/systemd
+MASKEOF
+log "package.mask/systemd confirmed."
 
 # ── Portage tree ──────────────────────────────────────────────────────────────
 section "Syncing Portage tree (emerge-webrsync)"
 emerge-webrsync || error "emerge-webrsync failed."
 
+# ── Install systemd-utils with pinned USE flags FIRST ────────────────────────
+# FIX: Install systemd-utils before @world so portage cannot later resolve it
+# with different USE flags when satisfying a dep mid-update. --oneshot keeps
+# it out of the world file.
+section "Pinning sys-apps/systemd-utils (udev for OpenRC)"
+emerge --oneshot sys-apps/systemd-utils \
+    || error "systemd-utils install failed."
+log "systemd-utils (udev+tmpfiles only) installed."
+
 # ── Purge systemd if it somehow got pulled in before mask took effect ─────────
 section "Enforcing systemd-free system"
-# grep -x matches the whole line exactly — prevents false-positive on systemd-utils
-if portageq match / sys-apps/systemd 2>/dev/null | grep -qx "sys-apps/systemd"; then
+if _systemd_present; then
     warn "systemd was found — purging before continuing..."
     emerge --deselect sys-apps/systemd 2>/dev/null || true
     emerge --unmerge sys-apps/systemd 2>/dev/null \
@@ -385,12 +442,6 @@ if portageq match / sys-apps/systemd 2>/dev/null | grep -qx "sys-apps/systemd"; 
 else
     log "Confirmed: systemd not present."
 fi
-
-# ── Explicitly install systemd-utils with our pinned USE flags first ──────────
-# This prevents any later package from pulling it in with unwanted USE flags.
-section "Pinning sys-apps/systemd-utils (udev for OpenRC)"
-emerge --oneshot sys-apps/systemd-utils
-log "systemd-utils (udev+tmpfiles only) installed."
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 section "Selecting profile"
@@ -411,14 +462,15 @@ fi
 
 # ── @world update ─────────────────────────────────────────────────────────────
 section "Updating @world"
-# --changed-use picks up our new -systemd flags across all packages
-emerge --update --newuse --changed-use --deep @world \
-    || warn "@world update had non-fatal issues."
+# --changed-use picks up our new -systemd flags across all packages.
+# FIX: --keep-going allows the update to finish and surface ALL conflicts
+# rather than aborting on the first issue, making debugging easier.
+emerge --update --newuse --changed-use --deep --keep-going @world \
+    || warn "@world update had non-fatal issues — check output above."
 
-# Verify systemd itself was not pulled in.
-# grep -x matches the whole line exactly — systemd-utils won't trigger this.
-if portageq match / sys-apps/systemd 2>/dev/null | grep -qx "sys-apps/systemd"; then
-    error "sys-apps/systemd was pulled in — check USE flags and package.mask!"
+# FIX: Post-world systemd check uses the safe helper (no -x grep).
+if _systemd_present; then
+    error "sys-apps/systemd was pulled in by @world — check USE flags and package.mask!"
 fi
 log "@world updated — systemd not present, as expected."
 
@@ -448,6 +500,7 @@ emerge \
     app-admin/sudo \
     app-shells/bash-completion \
     net-misc/networkmanager \
+    net-misc/openssh \
     sys-apps/dbus \
     sys-apps/pciutils \
     sys-apps/usbutils \
@@ -468,19 +521,17 @@ log "Base packages installed."
 # ── Hostname & hosts ──────────────────────────────────────────────────────────
 section "Hostname"
 echo "${HOSTNAME}" > /etc/hostname
-cat > /etc/hosts << 'EOF'
+cat > /etc/hosts << 'HOSTSEOF'
 127.0.0.1   localhost
 ::1         localhost
-EOF
+HOSTSEOF
 echo "127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}" >> /etc/hosts
 
-# \${KEYMAP} was expanded by the outer shell before this heredoc was written.
-# Double-quoting makes that expansion explicit and visible.
 sed -i "s/^keymap=.*/keymap=\"${KEYMAP}\"/" /etc/conf.d/keymaps 2>/dev/null || true
 
 # ── OpenRC services ───────────────────────────────────────────────────────────
 section "OpenRC services"
-for svc in NetworkManager elogind dbus udev cronie ntpd; do
+for svc in NetworkManager elogind dbus udev cronie ntpd sshd; do
     rc-update add \$svc default 2>/dev/null || warn "rc-update add \$svc failed (non-fatal)"
 done
 rc-update add udev    sysinit 2>/dev/null || true
@@ -502,17 +553,17 @@ log "Installing nvidia-drivers (proprietary)..."
 emerge x11-drivers/nvidia-drivers
 
 # OpenRC module loading via /etc/conf.d/modules (not systemd modules-load.d)
-cat >> /etc/conf.d/modules << 'EOF'
+cat >> /etc/conf.d/modules << 'MODEOF'
 
 # NVIDIA (hybrid GPU)
 modules="\${modules} nvidia nvidia_modeset nvidia_uvm nvidia_drm"
-EOF
+MODEOF
 
-# kmod options file — read by kmod directly, not systemd; safe on OpenRC
+# kmod options file — read by kmod directly, safe on OpenRC
 mkdir -p /etc/modprobe.d
-cat > /etc/modprobe.d/nvidia.conf << 'EOF'
+cat > /etc/modprobe.d/nvidia.conf << 'NVIDIAEOF'
 options nvidia_drm modeset=1 fbdev=1
-EOF
+NVIDIAEOF
 
 log "NVIDIA drivers installed and KMS enabled."
 
@@ -567,7 +618,7 @@ emerge \
     media-fonts/fira-code
 log "Fonts installed."
 
-# ── GRUB ──────────────────────────────────────────────────────────────────────
+# ── GRUB bootloader ───────────────────────────────────────────────────────────
 section "GRUB bootloader"
 grub-install \
     --target=x86_64-efi \
@@ -577,7 +628,7 @@ grub-install \
 grub-mkconfig -o /boot/grub/grub.cfg
 log "GRUB installed."
 
-# ── Users ─────────────────────────────────────────────────────────────────────
+# ── User accounts ─────────────────────────────────────────────────────────────
 section "User accounts"
 echo "root:${ROOT_HASH}" | chpasswd -e
 
@@ -592,7 +643,7 @@ log "Users created."
 # ── Environment — /etc/env.d/ is Gentoo/OpenRC native ────────────────────────
 section "Wayland + hybrid GPU environment"
 
-cat > /etc/env.d/90wayland << 'EOF'
+cat > /etc/env.d/90wayland << 'ENVEOF'
 XDG_SESSION_TYPE=wayland
 QT_QPA_PLATFORM=wayland;xcb
 QT_WAYLAND_DISABLE_WINDOWDECORATION=1
@@ -600,21 +651,21 @@ GDK_BACKEND=wayland,x11
 SDL_VIDEODRIVER=wayland
 MOZ_ENABLE_WAYLAND=1
 ELECTRON_OZONE_PLATFORM_HINT=wayland
-EOF
+ENVEOF
 
-cat > /etc/env.d/91hybrid-gpu << 'EOF'
+cat > /etc/env.d/91hybrid-gpu << 'GPUEOF'
 # AMD as default renderer; NVIDIA available via PRIME offload
 # To offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
 LIBVA_DRIVER_NAME=radeonsi
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/nvidia_icd.json
-EOF
+GPUEOF
 
 env-update
 
 # ── niri session wrapper (PipeWire launch without systemd user units) ─────────
 # exec niri replaces the shell process entirely, so code after it never runs.
 # A trap fires on shell exit (including after exec) to cleanly kill PipeWire.
-cat > /usr/local/bin/niri-session << 'EOF'
+cat > /usr/local/bin/niri-session << 'SESSIONEOF'
 #!/usr/bin/env bash
 export \$(/usr/bin/env -i /bin/sh -c 'source /etc/profile && env' 2>/dev/null | grep -v '^_=')
 pipewire &
@@ -623,28 +674,28 @@ wireplumber &
 WP_PID=\$!
 trap "kill \$PIPEWIRE_PID \$WP_PID 2>/dev/null" EXIT
 exec niri
-EOF
+SESSIONEOF
 chmod +x /usr/local/bin/niri-session
 
 # ── Wayland session desktop entry for SDDM ───────────────────────────────────
 mkdir -p /usr/share/wayland-sessions
-cat > /usr/share/wayland-sessions/niri.desktop << 'EOF'
+cat > /usr/share/wayland-sessions/niri.desktop << 'DESKTOPEOF'
 [Desktop Entry]
 Name=niri
 Comment=A scrollable-tiling Wayland compositor
 Exec=niri-session
 Type=Application
-EOF
+DESKTOPEOF
 
 chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
 log "Environment configured."
 
-# ── Final systemd check ───────────────────────────────────────────────────────
-section "Verifying no systemd installed"
-# grep -x matches the whole line exactly — systemd-utils won't false-positive here.
-if portageq match / sys-apps/systemd 2>/dev/null | grep -qx "sys-apps/systemd"; then
+# ── Final systemd verification ────────────────────────────────────────────────
+section "Final systemd verification"
+# FIX: Use the safe helper — no -x flag — so versioned atoms are caught.
+if _systemd_present; then
     warn "WARNING: sys-apps/systemd appears to be installed — investigate!"
-    portageq match / sys-apps/systemd
+    portageq match / sys-apps/systemd | grep -v systemd-utils
 else
     log "Confirmed: sys-apps/systemd is NOT installed."
 fi
