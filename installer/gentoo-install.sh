@@ -425,12 +425,17 @@ install_stage3() {
     manifest=$(wget -qO- "$manifest_url") \
         || error "Failed to download stage3 manifest from ${manifest_url}"
 
-    # The first non-comment, non-blank line is:  <path>  <size>  <checksum>
+    # The manifest is PGP-signed; lines before the actual content include
+    # '-----BEGIN PGP SIGNED MESSAGE-----', 'Hash: SHA512', etc.
+    # Only match lines that start with a Gentoo timestamp directory prefix
+    # of the form YYYYMMDDTHHMMSSZ/stage3-... to skip all header lines.
     local tarball_path
     tarball_path=$(echo "$manifest" \
-        | grep -Ev '^#|^$' \
+        | grep -E '^[0-9]{8}T[0-9]{6}Z/stage3-' \
         | awk 'NR==1{print $1}')
     [[ -z "$tarball_path" ]] && error "Could not parse stage3 path from manifest."
+    [[ "$tarball_path" == *.tar.xz ]] \
+        || error "Parsed stage3 path looks wrong: '${tarball_path}'"
 
     local tarball_url="${base_url}/${tarball_path}"
     local dest="/mnt/gentoo/stage3.tar.xz"
