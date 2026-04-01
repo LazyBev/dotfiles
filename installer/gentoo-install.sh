@@ -89,18 +89,10 @@ done
 ping -c2 -W5 gentoo.org &>/dev/null || error "No internet connection."
 log "Network OK"
 
-pacman -Sy --noconfirm ntp wget || error "Failed to install ntp on live ISO."
+pacman -Sy --noconfirm wget || error "Failed to install ntp on live ISO."
 
 # Stop Arch ISO's timesyncd so ntpd can bind port 123
-systemctl stop systemd-timesyncd 2>/dev/null || true
-timedatectl set-ntp false 2>/dev/null || true
-
-# ntpdate is simpler and more reliable for one-shot sync than ntpd -gq
-if ntpdate pool.ntp.org 2>/dev/null; then
-    log "Clock synced."
-else
-    warn "Clock sync failed — continuing"
-fi
+timedatectl set-ntp true && sleep 3 && log "Clock synced." || warn "Clock sync failed — continuing"
 
 echo
 read -rsp "  Root password: "            rp1 </dev/tty; echo
