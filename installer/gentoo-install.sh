@@ -405,7 +405,7 @@ LDFLAGS="-Wl,-O1 -Wl,--as-needed -fuse-ld=mold"
 
 # ── Parallelism ───────────────────────────────────────────────────────────────
 MAKEOPTS="-j${NCPU} -l${NCPU}"
-EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --keep-going --verbose-conflicts --getbinpkg --binpkg-respect-use=y --autounmask-write"
+EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --keep-going --verbose-conflicts --getbinpkg --binpkg-respect-use=y --autounmask-write --verbose --quiet-build=n"
 PORTAGE_NICENESS=10
 
 # ── Build directory ───────────────────────────────────────────────────────────
@@ -438,7 +438,12 @@ DISTDIR="/var/cache/distfiles"
 PKGDIR="/var/cache/binpkgs"
 PORTDIR="/var/db/repos/gentoo"
 
-# ── Logging ───────────────────────────────────────────────────────────────────
+# ── Output ────────────────────────────────────────────────────────────────────
+# Show full compiler output as packages build
+PORTAGE_VERBOSE=1
+PORTAGE_QUIET=0
+
+
 PORTAGE_ELOG_CLASSES="warn error log"
 PORTAGE_ELOG_SYSTEM="save"
 
