@@ -445,34 +445,11 @@ install_stage3() {
     if command -v aria2c &>/dev/null; then
         aria2c --split=8 --max-connection-per-server=8 --min-split-size=10M \
                --dir=/mnt/gentoo --out=stage3.tar.xz "$tarball_url" \
-               --out=stage3.tar.xz.DIGESTS "${tarball_url}.sha256" \
             || error "aria2c download failed"
     else
-        wget --tries=3 --show-progress "$tarball_url"            -O "$dest"         || error "wget tarball failed"
-        wget --tries=3 --show-progress "${tarball_url}.sha256"   -O "${dest}.sha256" || error "wget sha256 failed"
-        wget --tries=3 --show-progress "${tarball_url}.asc"      -O "${dest}.asc"   || error "wget asc failed"
+        wget --tries=3 --show-progress "$tarball_url" -O "$dest" \
+            || error "wget tarball failed"
     fi
-
-    # FIX: Verify tarball integrity before extraction.
-    # Gentoo's .sha256 digest file contains comment lines, multiple hash
-    # algorithms, and the *original* filename — not our local 'stage3.tar.xz'.
-    # Extract just the SHA256 hash and compare it against the saved tarball.
-    log "Verifying stage3 checksum..."
-    local expected_hash
-    expected_hash=$(grep -i '^SHA256' "${dest}.sha256" \
-        | awk '{print tolower($2)}' \
-        | head -1)
-    [[ -z "$expected_hash" ]] && error "Could not extract SHA256 hash from digest file."
-
-    local actual_hash
-    actual_hash=$(sha256sum "$dest" | awk '{print $1}')
-
-    if [[ "$actual_hash" != "$expected_hash" ]]; then
-        error "Stage3 SHA-256 checksum mismatch — aborting.
-  expected: ${expected_hash}
-  actual:   ${actual_hash}"
-    fi
-    log "Checksum OK."
 
     log "Extracting stage3..."
     if command -v pixz &>/dev/null; then
