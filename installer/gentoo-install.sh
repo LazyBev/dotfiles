@@ -201,7 +201,18 @@ preflight_checks() {
     ping -c 2 -W 5 gentoo.org &>/dev/null || error "No internet connection."
     log "Internet connectivity: OK"
 
-    chronyd -q &>/dev/null || ntpd -gq &>/dev/null || warn "Could not sync clock."
+    debug "Syncing system clock..."
+    if timedatectl set-ntp true &>/dev/null; then
+        # Give ntpd a moment to actually sync
+        sleep 3
+        _log_raw "Clock synced via timedatectl"
+    elif chronyd -q &>/dev/null; then
+        _log_raw "Clock synced via chronyd"
+    elif ntpd -gq &>/dev/null; then
+        _log_raw "Clock synced via ntpd"
+    else
+        warn "Could not sync clock — continuing anyway."
+    fi
 
     # Speed up stage3 download using parallel wget if available
     command -v aria2c &>/dev/null && _log_raw "aria2c available — will use for downloads"
@@ -484,7 +495,7 @@ EOF
     _log_raw "repos.conf written"
 
     log "Writing binrepos.conf (Gentoo binary host)..."
-    cat > /mnt/gentoo/etc/portage/binrepos.conf << 'EOF'
+    cat > /mnt/gentoo/etc/portage/binrepos.conf/gentoo-binhost.conf << 'EOF'
 [binhost]
 priority = 9999
 sync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/
