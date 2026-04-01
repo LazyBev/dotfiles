@@ -89,6 +89,8 @@ done
 ping -c2 -W5 gentoo.org &>/dev/null || error "No internet connection."
 log "Network OK"
 
+pacman -Sy --noconfirm ntp || error "Failed to install ntp on live ISO."
+
 # ntpd -gq: step the clock once and exit — no timedatectl/systemd needed
 ntpd -gq &>/dev/null && log "Clock synced." || warn "Clock sync failed — continuing"
 
