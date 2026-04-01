@@ -91,14 +91,10 @@ log "Network OK"
 
 pacman -Sy --noconfirm ntp wget || error "Failed to install ntp on live ISO."
 
-# ntpd -gq: step the clock once and exit — no timedatectl/systemd needed
-# Clock sync with retries
-for i in 1 2 3; do
-    ntpd -gq && { log "Clock synced."; break; } || {
-        warn "Clock sync attempt $i failed, retrying in 5s..."
-        sleep 5
-    }
-done
+systemctl stop systemd-timesyncd 2>/dev/null || true
+timedatectl set-ntp false 2>/dev/null || true
+
+ntpd -gq && log "Clock synced." || warn "Clock sync failed
 
 echo
 read -rsp "  Root password: "            rp1 </dev/tty; echo
