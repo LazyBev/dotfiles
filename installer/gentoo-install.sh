@@ -155,7 +155,7 @@ TARBALL_PATH=$(echo "$MANIFEST" \
 
 TARBALL_URL="${BASE_URL}/${TARBALL_PATH}"
 log "Downloading: ${TARBALL_URL}"
-wget --tries=5 \
+wget --tries=10 \
      --continue \
      --timeout=30 \
      --waitretry=10 \
