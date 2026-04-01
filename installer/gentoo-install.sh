@@ -7,7 +7,7 @@
 #   • x86_64 (amd64) system booted in UEFI mode
 #   • Target disk:  /dev/nvme0n1  (edit DISK below)
 #   • Hybrid AMD (primary/iGPU) + NVIDIA (discrete) proprietary drivers
-#   • Internet available on the live environment
+#   • Run from an Arch ISO (archiso) as root
 #   • Pure OpenRC — no systemd as init; systemd-utils present ONLY for udev
 #
 # Note on systemd-utils:
@@ -16,7 +16,7 @@
 #   We pin it to USE="udev tmpfiles kmod -boot -sysusers -kernel-install"
 #   so only the device manager and tmpfiles components are built.
 #
-# Usage (as root on the live ISO):
+# Usage (as root on archiso):
 #   bash gentoo-install.sh
 #
 # Log:  /tmp/gentoo-install.log
@@ -30,9 +30,9 @@ IFS=$'\n\t'
 # =============================================================================
 
 DISK="/dev/nvme0n1"
-HOSTNAME="gentoo"
-USERNAME="user"
-TIMEZONE="America/New_York"
+HOSTNAME="gentuwu"
+USERNAME="25yari"
+TIMEZONE="Europe/London"
 LOCALE="en_US.UTF-8"
 KEYMAP="us"
 
@@ -89,9 +89,12 @@ done
 ping -c2 -W5 gentoo.org &>/dev/null || error "No internet connection."
 log "Network OK"
 
-command -v wget &>/dev/null || pacman -Sy --noconfirm wget || error "Failed to install wget on live ISO."
+# wget is almost always present on archiso; install only if missing
+command -v wget &>/dev/null || pacman -Sy --noconfirm wget \
+    || error "Failed to install wget on live ISO."
 
-timedatectl set-ntp true && sleep 3 && log "Clock synced." || warn "Clock sync failed — continuing"
+timedatectl set-ntp true && sleep 3 && log "Clock synced." \
+    || warn "Clock sync failed — continuing"
 
 echo
 read -rsp "  Root password: "            rp1 </dev/tty; echo
@@ -234,9 +237,9 @@ EOF
 
 # ── package.use/systemd-utils — pin to only what OpenRC needs ─────────────────
 cat > /mnt/gentoo/etc/portage/package.use/systemd-utils << 'EOF'
-# udev   — device manager (replaces eudev, which was removed from Gentoo)
+# udev     — device manager (replaces eudev, which was removed from Gentoo)
 # tmpfiles — needed by several packages to set up /run, /tmp entries at boot
-# kmod   — allow udev to load kernel modules
+# kmod     — allow udev to load kernel modules
 # Everything else (boot, sysusers, kernel-install, ukify) is systemd-specific
 # tooling we do not want on an OpenRC system.
 sys-apps/systemd-utils  udev tmpfiles kmod -boot -sysusers -kernel-install
@@ -263,7 +266,7 @@ sys-auth/polkit                 -systemd elogind
 sys-auth/elogind                -systemd
 # SDDM: use elogind for seat/session management, not systemd-logind
 x11-misc/sddm                   elogind -systemd
-# xdg-desktop-portal: no systemd activation
+# xdg-desktop-portal: no systemd socket activation
 sys-apps/xdg-desktop-portal     -systemd
 EOF
 
@@ -313,11 +316,11 @@ ROOT_UUID=$(blkid -s UUID -o value "$PART_ROOT")
 SWAP_UUID=$(blkid -s UUID -o value "$PART_SWAP")
 
 cat > /mnt/gentoo/etc/fstab << EOF
-# <fs>                                  <mp>        <type>  <opts>                        <dump> <pass>
-UUID=${ROOT_UUID}  /           ext4    defaults,noatime            0 1
-UUID=${EFI_UUID}   /boot/efi   vfat    umask=0077                  0 2
-UUID=${SWAP_UUID}  none        swap    sw                          0 0
-tmpfs                                  /tmp        tmpfs   defaults,nosuid,nodev,size=4G  0 0
+# <fs>                    <mp>       <type>  <opts>                        <dump> <pass>
+UUID=${ROOT_UUID}  /          ext4    defaults,noatime              0 1
+UUID=${EFI_UUID}   /boot/efi  vfat    umask=0077                    0 2
+UUID=${SWAP_UUID}  none       swap    sw                            0 0
+tmpfs              /tmp       tmpfs   defaults,nosuid,nodev,size=4G 0 0
 EOF
 
 log "fstab written."
@@ -362,15 +365,18 @@ section() {
     echo -e "\${BOLD}\${BLUE}══════════════════════════════════════════════\${NC}\n"
 }
 
+# set +u guards against unset variables in /etc/profile (e.g. PS1)
 set +u; source /etc/profile; set -u
 export PS1="(chroot) \${PS1:-}"
 
 # ── Portage tree ──────────────────────────────────────────────────────────────
 section "Syncing Portage tree (emerge-webrsync)"
 emerge-webrsync || error "emerge-webrsync failed."
+
 # ── Purge systemd if it somehow got pulled in before mask took effect ─────────
 section "Enforcing systemd-free system"
-if portageq match / sys-apps/systemd 2>/dev/null | grep -q systemd; then
+# grep -x matches the whole line exactly — prevents false-positive on systemd-utils
+if portageq match / sys-apps/systemd 2>/dev/null | grep -qx "sys-apps/systemd"; then
     warn "systemd was found — purging before continuing..."
     emerge --deselect sys-apps/systemd 2>/dev/null || true
     emerge --unmerge sys-apps/systemd 2>/dev/null \
@@ -409,8 +415,9 @@ section "Updating @world"
 emerge --update --newuse --changed-use --deep @world \
     || warn "@world update had non-fatal issues."
 
-# Verify systemd itself was not pulled in
-if portageq match / sys-apps/systemd &>/dev/null 2>&1; then
+# Verify systemd itself was not pulled in.
+# grep -x matches the whole line exactly — systemd-utils won't trigger this.
+if portageq match / sys-apps/systemd 2>/dev/null | grep -qx "sys-apps/systemd"; then
     error "sys-apps/systemd was pulled in — check USE flags and package.mask!"
 fi
 log "@world updated — systemd not present, as expected."
@@ -467,9 +474,8 @@ cat > /etc/hosts << 'EOF'
 EOF
 echo "127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}" >> /etc/hosts
 
-# Keymap — /etc/conf.d/keymaps is OpenRC-native
-# \${KEYMAP} was already expanded by the outer shell when this heredoc was written.
-# Double-quoting here makes that expansion explicit and visible.
+# \${KEYMAP} was expanded by the outer shell before this heredoc was written.
+# Double-quoting makes that expansion explicit and visible.
 sed -i "s/^keymap=.*/keymap=\"${KEYMAP}\"/" /etc/conf.d/keymaps 2>/dev/null || true
 
 # ── OpenRC services ───────────────────────────────────────────────────────────
@@ -499,7 +505,7 @@ emerge x11-drivers/nvidia-drivers
 cat >> /etc/conf.d/modules << 'EOF'
 
 # NVIDIA (hybrid GPU)
-modules="${modules} nvidia nvidia_modeset nvidia_uvm nvidia_drm"
+modules="\${modules} nvidia nvidia_modeset nvidia_uvm nvidia_drm"
 EOF
 
 # kmod options file — read by kmod directly, not systemd; safe on OpenRC
@@ -606,38 +612,37 @@ EOF
 env-update
 
 # ── niri session wrapper (PipeWire launch without systemd user units) ─────────
-if [[ ! -f /usr/bin/niri-session ]]; then
-    cat > /usr/local/bin/niri-session << 'EOF'
+# exec niri replaces the shell process entirely, so code after it never runs.
+# A trap fires on shell exit (including after exec) to cleanly kill PipeWire.
+cat > /usr/local/bin/niri-session << 'EOF'
 #!/usr/bin/env bash
-export $(/usr/bin/env -i /bin/sh -c 'source /etc/profile && env' 2>/dev/null | grep -v '^_=')
+export \$(/usr/bin/env -i /bin/sh -c 'source /etc/profile && env' 2>/dev/null | grep -v '^_=')
 pipewire &
-PIPEWIRE_PID=$!
+PIPEWIRE_PID=\$!
 wireplumber &
-WP_PID=$!
-trap "kill $PIPEWIRE_PID $WP_PID 2>/dev/null" EXIT
+WP_PID=\$!
+trap "kill \$PIPEWIRE_PID \$WP_PID 2>/dev/null" EXIT
 exec niri
 EOF
-    chmod +x /usr/local/bin/niri-session
-fi
+chmod +x /usr/local/bin/niri-session
 
 # ── Wayland session desktop entry for SDDM ───────────────────────────────────
-if [[ ! -f /usr/share/wayland-sessions/niri.desktop ]]; then
-    mkdir -p /usr/share/wayland-sessions
-    cat > /usr/share/wayland-sessions/niri.desktop << 'EOF'
+mkdir -p /usr/share/wayland-sessions
+cat > /usr/share/wayland-sessions/niri.desktop << 'EOF'
 [Desktop Entry]
 Name=niri
 Comment=A scrollable-tiling Wayland compositor
 Exec=niri-session
 Type=Application
 EOF
-fi
 
 chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
 log "Environment configured."
 
 # ── Final systemd check ───────────────────────────────────────────────────────
 section "Verifying no systemd installed"
-if portageq match / sys-apps/systemd 2>/dev/null | grep -q systemd; then
+# grep -x matches the whole line exactly — systemd-utils won't false-positive here.
+if portageq match / sys-apps/systemd 2>/dev/null | grep -qx "sys-apps/systemd"; then
     warn "WARNING: sys-apps/systemd appears to be installed — investigate!"
     portageq match / sys-apps/systemd
 else
