@@ -542,7 +542,44 @@ log "Firmware installed."
 
 # ── Kernel ────────────────────────────────────────────────────────────────────
 section "Kernel (gentoo-kernel-bin)"
-emerge sys-kernel/gentoo-kernel-bin
+
+# FIX: Mount /boot/efi before the kernel install so the postinst phase can
+# write the kernel image and EFI stub. Without this the dist-kernel helpers
+# call 'die' immediately because the target path doesn't exist.
+if ! mountpoint -q /boot/efi; then
+    EFI_DEV=\$(findmnt -n -o SOURCE /boot/efi 2>/dev/null \
+               || awk '\$2=="/boot/efi"{print \$1}' /proc/mounts \
+               || blkid -t TYPE=vfat -o device | head -1)
+    if [[ -n "\$EFI_DEV" ]]; then
+        mkdir -p /boot/efi
+        mount "\$EFI_DEV" /boot/efi
+        log "/boot/efi mounted from \$EFI_DEV"
+    else
+        # Fall back: the outer script bind-mounted efivarfs but /boot/efi itself
+        # is an ext4 sub-directory here. Check fstab and mount everything.
+        mkdir -p /boot/efi
+        mount -a 2>/dev/null || warn "mount -a failed — /boot/efi may not be mounted."
+        mountpoint -q /boot/efi || error "/boot/efi is not mounted — kernel postinst will fail."
+    fi
+fi
+
+# FIX: Install dracut and sys-kernel/installkernel with the correct USE flags
+# BEFORE gentoo-kernel-bin. The gentoo-kernel-bin postinst delegates to
+# installkernel which calls dracut to build the initramfs and install the
+# image. If either is absent or built without the 'dracut' USE flag the
+# postinst calls die "Kernel install failed".
+emerge --oneshot sys-kernel/dracut \
+    || error "dracut install failed."
+log "dracut installed."
+
+# installkernel is already pinned to 'dracut -systemd' in package.use/kernel.
+# --oneshot keeps it out of the world file.
+emerge --oneshot sys-kernel/installkernel \
+    || error "installkernel install failed."
+log "installkernel installed."
+
+emerge sys-kernel/gentoo-kernel-bin \
+    || error "gentoo-kernel-bin install failed."
 log "Kernel installed."
 
 # ── Base system ───────────────────────────────────────────────────────────────
