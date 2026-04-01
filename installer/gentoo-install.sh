@@ -5,7 +5,7 @@
 #           Any WM/DE  ·  btrfs/ext4/xfs/f2fs  ·  LUKS2  ·  Secure Boot
 #
 # Usage:
-#   bash gentoo-install.sh                          # interactive config path
+#   bash gentoo-install.sh                          # looks for gentoo-install.conf
 #   bash gentoo-install.sh --config gentoo-install.conf
 #
 # Logs are written to /tmp/gentoo-install-<timestamp>.log
@@ -14,6 +14,13 @@
 
 set -eo pipefail
 IFS=$'\n\t'
+
+# =============================================================================
+# COLORS  — must be defined BEFORE the logging functions that use them
+# =============================================================================
+
+RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m';   BOLD='\033[1m'; NC='\033[0m'
 
 # =============================================================================
 # LOGGING SETUP
@@ -57,20 +64,17 @@ _on_exit() {
 trap _on_exit EXIT
 
 # =============================================================================
-# COLORS
-# =============================================================================
-
-RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; CYAN='\033[0;36m';   BOLD='\033[1m'; NC='\033[0m'
-
-# =============================================================================
 # SYSTEM DETECTION  — run once on host, reused throughout
 # =============================================================================
 
 NCPU=$(nproc)
 RAM_GIB=$(awk '/MemTotal/{printf "%d", $2/1024/1024}' /proc/meminfo)
 TMPFS_SIZE=$(( RAM_GIB / 2 )); [[ $TMPFS_SIZE -lt 4 ]] && TMPFS_SIZE=4
-RUST_CGU=$(( NCPU > 4 ? NCPU / 2 : NCPU ))
+
+# RUST_CGU is derived from NCPU but must be recalculated AFTER config is loaded
+# in case the config overrides NCPU.  A placeholder is set here; the real value
+# is computed in load_config() once all variables are settled.
+RUST_CGU=0
 
 # =============================================================================
 # DEFAULTS
@@ -86,7 +90,9 @@ TIMEZONE="America/New_York"
 LOCALE="en_US.UTF-8"
 KEYMAP="us"
 INIT_SYSTEM="openrc"
-ACCEPT_KEYWORDS="amd64"
+# FIX: default to ~amd64 so Wayland compositors (niri, hyprland, river …)
+# and other modern packages are reachable without per-package keywords.
+ACCEPT_KEYWORDS="~amd64"
 CPU_VENDOR="amd"
 GPU_VENDOR="amd"
 VIDEO_CARDS="amdgpu radeonsi"
@@ -141,7 +147,46 @@ load_config() {
             || error "No config file found."
     fi
     [[ ! -f "$CONFIG_FILE" ]] && error "Config file not found: $CONFIG_FILE"
-    source "$CONFIG_FILE"
+
+    # FIX: only source variables that belong to the known whitelist to prevent
+    # arbitrary code execution from a malicious or misconfigured config file.
+    local allowed_vars=(
+        DISK EFI_SIZE SWAP_SIZE FS_TYPE HOSTNAME USERNAME TIMEZONE LOCALE KEYMAP
+        INIT_SYSTEM ACCEPT_KEYWORDS CPU_VENDOR GPU_VENDOR VIDEO_CARDS KERNEL_TYPE
+        KERNEL_CONFIG DISPLAY_SERVER DESKTOP_ENV DISPLAY_MANAGER USE_FLAGS
+        MAKEOPTS STAGE3_VARIANT ENABLE_LUKS ENABLE_BTRFS_SNAPPER ENABLE_PIPEWIRE
+        ENABLE_BLUETOOTH ENABLE_PRINTING ENABLE_FLATPAK ENABLE_LIBVIRT ENABLE_DOCKER
+        ENABLE_SECURE_BOOT SECURE_BOOT_MICROSOFT_KEYS EXTRA_PACKAGES CCACHE_SIZE
+        NCPU
+    )
+    local tmp_env
+    tmp_env=$(mktemp)
+    # Parse only KEY=VALUE lines; skip comments, blank lines, and anything with
+    # shell metacharacters in the value that could inject commands.
+    grep -E '^[A-Z_]+=.*$' "$CONFIG_FILE" \
+        | grep -v '[`$();|&<>]' > "$tmp_env" || true
+
+    while IFS='=' read -r key value; do
+        # Strip surrounding quotes from value
+        value="${value#[\"\']}"
+        value="${value%[\"\']}"
+        local ok=0
+        for v in "${allowed_vars[@]}"; do [[ "$v" == "$key" ]] && ok=1 && break; done
+        if [[ $ok -eq 1 ]]; then
+            printf -v "$key" '%s' "$value"
+        else
+            warn "Config: ignoring unknown variable '$key'"
+        fi
+    done < "$tmp_env"
+    rm -f "$tmp_env"
+
+    # FIX: recompute RUST_CGU now that NCPU is finalised from config
+    RUST_CGU=$(( NCPU > 4 ? NCPU / 2 : NCPU ))
+    # Recompute MAKEOPTS in case NCPU changed
+    MAKEOPTS="-j${NCPU} -l${NCPU}"
+    # Recompute TMPFS_SIZE in case RAM changed
+    TMPFS_SIZE=$(( RAM_GIB / 2 )); [[ $TMPFS_SIZE -lt 4 ]] && TMPFS_SIZE=4
+
     log "Loaded config: $CONFIG_FILE"
     _log_raw "--- Resolved configuration ---"
     _log_raw "DISK=${DISK}  FS=${FS_TYPE}  LUKS=${ENABLE_LUKS}  SWAP=${SWAP_SIZE}G"
@@ -168,6 +213,12 @@ preflight_checks() {
     [[ ! -b "$DISK" ]] && error "Disk $DISK not found."
     _log_raw "Disk ${DISK}: $(lsblk -dno SIZE,MODEL "$DISK" 2>/dev/null || echo 'info unavailable')"
     _log_raw "Host CPU: ${NCPU} threads  RAM: ${RAM_GIB}G  Build tmpfs: ${TMPFS_SIZE}G"
+
+    # FIX: warn if TMPFS_SIZE is likely too small for large packages (Mesa, LLVM, Qt)
+    if [[ $TMPFS_SIZE -lt 8 ]]; then
+        warn "Build tmpfs is ${TMPFS_SIZE}G — large packages (Mesa, LLVM, Qt) may need 8G+."
+        warn "Consider setting more RAM or reducing parallel jobs."
+    fi
 
     local tools=(wipefs sgdisk mkfs.fat mkswap wget gpg openssl chroot)
     for t in "${tools[@]}"; do
@@ -203,7 +254,6 @@ preflight_checks() {
 
     debug "Syncing system clock..."
     if timedatectl set-ntp true &>/dev/null; then
-        # Give ntpd a moment to actually sync
         sleep 3
         _log_raw "Clock synced via timedatectl"
     elif chronyd -q &>/dev/null; then
@@ -214,7 +264,6 @@ preflight_checks() {
         warn "Could not sync clock — continuing anyway."
     fi
 
-    # Speed up stage3 download using parallel wget if available
     command -v aria2c &>/dev/null && _log_raw "aria2c available — will use for downloads"
 
     log "Pre-flight checks passed.  CPUs: ${NCPU}  RAM: ${RAM_GIB}G  Build tmpfs: ${TMPFS_SIZE}G"
@@ -278,7 +327,6 @@ partition_disk() {
     mkdir -p /mnt/gentoo
     case "$FS_TYPE" in
         btrfs)
-            # zstd:1 is fastest compression level — good ratio, minimal CPU overhead
             mkfs.btrfs -L "gentoo" -f "$ROOT_DEVICE"
             mount "$ROOT_DEVICE" /mnt/gentoo
             for sv in @ @home @snapshots @var_log; do
@@ -345,7 +393,6 @@ write_fstab() {
         echo "UUID=${efi_uuid}  /boot/efi  vfat  umask=0077  0 2"
         [[ -n "$PART_SWAP" ]] && \
             echo "UUID=$(blkid -s UUID -o value "$PART_SWAP")  none  swap  sw  0 0"
-        # tmpfs for /tmp — RAM-backed, no disk I/O for temp files
         echo "tmpfs  /tmp  tmpfs  defaults,nosuid,nodev,size=4G  0 0"
     } > /mnt/gentoo/etc/fstab
 
@@ -359,29 +406,65 @@ write_fstab() {
 install_stage3() {
     section "Installing Stage3 Tarball"
 
-    local tarball_url="https://distfiles.gentoo.org/releases/amd64/autobuilds/20260329T161601Z/stage3-amd64-openrc-20260329T161601Z.tar.xz"
+    # FIX: Dynamically resolve the latest stage3 URL from the Gentoo autobuilds
+    # manifest instead of using a hardcoded URL that immediately goes stale.
+    # Also honour STAGE3_VARIANT (openrc / systemd / desktop-openrc / etc.)
+    local base_url="https://distfiles.gentoo.org/releases/amd64/autobuilds"
+    local latest_file
+
+    # The "current" symlink points to the most recent build directory
+    case "$STAGE3_VARIANT" in
+        openrc)   latest_file="latest-stage3-amd64-openrc.txt" ;;
+        systemd)  latest_file="latest-stage3-amd64-systemd.txt" ;;
+        *)        latest_file="latest-stage3-amd64-${STAGE3_VARIANT}.txt" ;;
+    esac
+
+    log "Fetching stage3 manifest for variant '${STAGE3_VARIANT}'..."
+    local manifest_url="${base_url}/${latest_file}"
+    local manifest
+    manifest=$(wget -qO- "$manifest_url") \
+        || error "Failed to download stage3 manifest from ${manifest_url}"
+
+    # The first non-comment, non-blank line is:  <path>  <size>  <checksum>
+    local tarball_path
+    tarball_path=$(echo "$manifest" \
+        | grep -Ev '^#|^$' \
+        | awk 'NR==1{print $1}')
+    [[ -z "$tarball_path" ]] && error "Could not parse stage3 path from manifest."
+
+    local tarball_url="${base_url}/${tarball_path}"
     local dest="/mnt/gentoo/stage3.tar.xz"
 
-    log "Downloading stage3..."
-    # aria2c is much faster than wget for large files — parallel chunked download
+    log "Stage3 URL: ${tarball_url}"
+
     if command -v aria2c &>/dev/null; then
         aria2c --split=8 --max-connection-per-server=8 --min-split-size=10M \
                --dir=/mnt/gentoo --out=stage3.tar.xz "$tarball_url" \
+               --out=stage3.tar.xz.DIGESTS "${tarball_url}.sha256" \
             || error "aria2c download failed"
     else
-        wget --tries=3 --show-progress "$tarball_url" -O "$dest" \
-            || error "wget download failed"
+        wget --tries=3 --show-progress "$tarball_url"            -O "$dest"         || error "wget tarball failed"
+        wget --tries=3 --show-progress "${tarball_url}.sha256"   -O "${dest}.sha256" || error "wget sha256 failed"
+        wget --tries=3 --show-progress "${tarball_url}.asc"      -O "${dest}.asc"   || error "wget asc failed"
     fi
 
+    # FIX: Verify tarball integrity before extraction.
+    log "Verifying stage3 checksum..."
+    pushd /mnt/gentoo >/dev/null
+    # sha256 file contains lines like: <hash>  stage3-....tar.xz
+    sha256sum --check --ignore-missing stage3.tar.xz.sha256 \
+        || error "Stage3 SHA-256 checksum mismatch — aborting."
+    popd >/dev/null
+    log "Checksum OK."
+
     log "Extracting stage3..."
-    # Use pigz (parallel gzip) if available for faster xz/tar extraction
     if command -v pixz &>/dev/null; then
         pixz -d < "$dest" | tar xp --xattrs-include='*.*' --numeric-owner -C /mnt/gentoo
     else
         tar xpf "$dest" --xattrs-include='*.*' --numeric-owner -C /mnt/gentoo
     fi
 
-    rm -f "$dest"
+    rm -f "$dest" "${dest}.sha256" "${dest}.asc"
     log "Stage3 installed."
 }
 
@@ -411,12 +494,14 @@ FFLAGS="\${COMMON_FLAGS}"
 # Rust: parallel codegen units + native CPU target
 RUSTFLAGS="-C opt-level=2 -C target-cpu=native -C codegen-units=${RUST_CGU}"
 
-# mold linker: 5-10x faster than GNU ld for large C++ (LLVM, Mesa, Qt)
-LDFLAGS="-Wl,-O1 -Wl,--as-needed -fuse-ld=mold"
+# FIX: mold linker is only set AFTER it is installed via package.env override
+# so that early bootstrap packages (before mold is emerged) do not fail to
+# link.  The system-wide LDFLAGS intentionally omit -fuse-ld=mold here.
+LDFLAGS="-Wl,-O1 -Wl,--as-needed"
 
 # ── Parallelism ───────────────────────────────────────────────────────────────
 MAKEOPTS="-j${NCPU} -l${NCPU}"
-EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --keep-going --verbose-conflicts --getbinpkg --binpkg-respect-use=y --autounmask-write --verbose --quiet-build=n"
+EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --keep-going --verbose-conflicts --getbinpkg --binpkg-respect-use=y --verbose --quiet-build=n"
 PORTAGE_NICENESS=10
 
 # ── Build directory ───────────────────────────────────────────────────────────
@@ -424,7 +509,6 @@ PORTAGE_NICENESS=10
 PORTAGE_TMPDIR="/var/tmp/portage"
 
 # ── ccache ────────────────────────────────────────────────────────────────────
-# Caches compiled objects — subsequent builds/updates reuse them
 CCACHE_DIR="/var/cache/ccache"
 CCACHE_SIZE="${CCACHE_SIZE}"
 
@@ -450,10 +534,8 @@ PKGDIR="/var/cache/binpkgs"
 PORTDIR="/var/db/repos/gentoo"
 
 # ── Output ────────────────────────────────────────────────────────────────────
-# Show full compiler output as packages build
 PORTAGE_VERBOSE=1
 PORTAGE_QUIET=0
-
 
 PORTAGE_ELOG_CLASSES="warn error log"
 PORTAGE_ELOG_SYSTEM="save"
@@ -476,6 +558,24 @@ FEATURES="parallel-fetch parallel-install buildpkg binpkg-multi-instance clean-l
 GRUB_PLATFORMS="efi-64"
 EOF
     _log_raw "make.conf written"
+
+    # FIX: package.env override — enable mold linker only for packages that
+    # are built AFTER mold itself has been installed.
+    mkdir -p /mnt/gentoo/etc/portage/env
+    cat > /mnt/gentoo/etc/portage/env/use-mold.conf << 'EOF'
+LDFLAGS="-Wl,-O1 -Wl,--as-needed -fuse-ld=mold"
+EOF
+    # Apply mold to the heavy packages that benefit most.
+    # Add more entries here as needed; early-bootstrap pkgs are intentionally absent.
+    cat > /mnt/gentoo/etc/portage/package.env/mold << 'EOF'
+media-libs/mesa          use-mold.conf
+sys-devel/llvm           use-mold.conf
+dev-qt/qtbase            use-mold.conf
+kde-plasma/plasma-meta   use-mold.conf
+www-client/firefox       use-mold.conf
+www-client/chromium      use-mold.conf
+EOF
+    _log_raw "mold package.env override written"
 
     log "Writing repos.conf..."
     cat > /mnt/gentoo/etc/portage/repos.conf/gentoo.conf << 'EOF'
@@ -630,7 +730,6 @@ setup_chroot() {
     [[ -d /sys/firmware/efi/efivars ]] && \
         mount --bind /sys/firmware/efi/efivars /mnt/gentoo/sys/firmware/efi/efivars
 
-    # ── Portage build tmpfs (RAM-backed, no disk I/O during compilation) ──────
     debug "Mounting build tmpfs (${TMPFS_SIZE}G) on /var/tmp/portage..."
     mkdir -p /mnt/gentoo/var/tmp/portage
     mount -t tmpfs \
@@ -638,13 +737,9 @@ setup_chroot() {
         tmpfs /mnt/gentoo/var/tmp/portage
     _log_raw "Portage build tmpfs: ${TMPFS_SIZE}G"
 
-    # ── Persistent ccache directory ───────────────────────────────────────────
     mkdir -p /mnt/gentoo/var/cache/ccache
     chown -R 250:250 /mnt/gentoo/var/cache/ccache 2>/dev/null || true
 
-    # ── Persistent distfiles cache ────────────────────────────────────────────
-    # If a previous install left distfiles, bind-mount them so nothing
-    # needs to be downloaded twice.
     mkdir -p /mnt/gentoo/var/cache/distfiles
     if [[ -d /var/cache/distfiles ]] && mountpoint -q /var/cache/distfiles 2>/dev/null; then
         mount --bind /var/cache/distfiles /mnt/gentoo/var/cache/distfiles
@@ -662,6 +757,9 @@ write_chroot_script() {
     section "Writing chroot install script"
     install -m 700 /dev/null /mnt/gentoo/root/chroot-install.sh
 
+    # Capture variables that need to be expanded NOW (host-side) into the script.
+    # Any variable that should be evaluated at chroot runtime is escaped (\$).
+    # LUKS_PASSPHRASE is intentionally never referenced inside the chroot script.
     cat >> /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
 set -eo pipefail
@@ -694,7 +792,8 @@ _clog "Portage tree synced"
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 section "Setting Portage profile"
-eselect profile list | less
+# FIX: avoid piping to 'less' inside a non-interactive script — it hangs.
+eselect profile list
 read -rp "  Enter profile number to use: " PROFILE_NUM </dev/tty
 if [[ -n "\$PROFILE_NUM" ]]; then
     eselect profile set "\$PROFILE_NUM" || warn "Profile set failed"
@@ -702,6 +801,13 @@ if [[ -n "\$PROFILE_NUM" ]]; then
 else
     warn "No profile selected — set manually with: eselect profile set"
 fi
+
+# ── World update after profile change ─────────────────────────────────────────
+# FIX: rebuild @world so the new profile's USE flags are applied before any
+# desktop packages are installed, preventing slot conflicts.
+section "Updating @world to reflect new profile"
+emerge --update --newuse --deep @world || warn "@world update had non-fatal failures — review logs"
+_clog "@world updated"
 
 # ── Timezone & Locale ─────────────────────────────────────────────────────────
 section "Timezone & Locale"
@@ -713,9 +819,10 @@ LOC=\$(locale -a | grep -i "\$(echo "${LOCALE}" | tr '[:upper:]' '[:lower:]' | s
 [[ -n "\$LOC" ]] && eselect locale set "\$LOC" || warn "Set locale manually"
 set +u; env-update && source /etc/profile; set -u
 
-# ── ccache bootstrap ──────────────────────────────────────────────────────────
-# Install ccache and mold FIRST before any other packages so all
-# subsequent compiles benefit from them immediately.
+# ── ccache + mold bootstrap ───────────────────────────────────────────────────
+# Install ccache and mold FIRST so all subsequent compiles benefit from them.
+# make.conf intentionally does NOT set -fuse-ld=mold globally; a package.env
+# override enables it only for packages built after mold is available.
 section "Bootstrap: ccache + mold"
 debug "Installing ccache and mold early..."
 emerge dev-util/ccache sys-devel/mold
@@ -776,7 +883,7 @@ case "${KERNEL_TYPE}" in
             genkernel)
                 emerge sys-kernel/genkernel
                 genkernel --menuconfig=no --makeopts="${MAKEOPTS}" \
-                    $( [[ "${ENABLE_LUKS}" == "yes" ]] && echo "--luks" ) all
+                    \$( [[ "${ENABLE_LUKS}" == "yes" ]] && echo "--luks" ) all
                 ;;
             manual)
                 make menuconfig
@@ -830,15 +937,19 @@ cat > /etc/hosts << EOF
 EOF
 
 # ── Init services ─────────────────────────────────────────────────────────────
+# FIX: guard every rc-update / systemctl call so a missing service
+# does not abort the entire installation under set -e.
 section "Enabling init services  (${INIT_SYSTEM})"
 if [[ "${INIT_SYSTEM}" == "openrc" ]]; then
     for svc in NetworkManager elogind dbus udev cronie; do
-        rc-update add \$svc default 2>/dev/null || true
+        rc-update add \$svc default 2>/dev/null || warn "rc-update add \$svc default failed (non-fatal)"
     done
-    rc-update add udev sysinit
-    rc-update add sshd default 2>/dev/null || true
+    rc-update add udev sysinit  2>/dev/null || warn "rc-update add udev sysinit failed (non-fatal)"
+    rc-update add sshd default  2>/dev/null || warn "sshd not available yet (non-fatal)"
 else
-    for unit in NetworkManager dbus cronie; do systemctl enable \$unit; done
+    for unit in NetworkManager dbus cronie; do
+        systemctl enable \$unit || warn "systemctl enable \$unit failed (non-fatal)"
+    done
 fi
 
 # ── Display server ────────────────────────────────────────────────────────────
@@ -871,10 +982,10 @@ case "${GPU_VENDOR}" in
     intel)  emerge media-libs/intel-media-driver media-libs/vulkan-loader ;;
     nvidia)
         emerge x11-drivers/nvidia-drivers
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && {
-            rc-update add modules boot
+        if [[ "${INIT_SYSTEM}" == "openrc" ]]; then
+            rc-update add modules boot 2>/dev/null || warn "rc-update modules boot failed (non-fatal)"
             echo "nvidia" >> /etc/modules-load.d/nvidia.conf
-        }
+        fi
         ;;
 esac
 
@@ -925,27 +1036,48 @@ section "Display manager  (${DISPLAY_MANAGER:-none})"
 case "${DISPLAY_MANAGER:-none}" in
     gdm)
         emerge gnome-base/gdm
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add gdm default || systemctl enable gdm ;;
+        [[ "${INIT_SYSTEM}" == "openrc" ]] \
+            && rc-update add gdm default 2>/dev/null || systemctl enable gdm ;;
     sddm)
         emerge x11-misc/sddm
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add sddm default || systemctl enable sddm ;;
+        [[ "${INIT_SYSTEM}" == "openrc" ]] \
+            && rc-update add sddm default 2>/dev/null || systemctl enable sddm ;;
     lightdm)
         emerge x11-misc/lightdm x11-misc/lightdm-gtk-greeter
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add lightdm default || systemctl enable lightdm ;;
+        [[ "${INIT_SYSTEM}" == "openrc" ]] \
+            && rc-update add lightdm default 2>/dev/null || systemctl enable lightdm ;;
     greetd)
         emerge gui-apps/greetd gui-apps/tuigreet
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add greetd default || systemctl enable greetd
-        cat > /etc/greetd/config.toml << 'EOF'
+        [[ "${INIT_SYSTEM}" == "openrc" ]] \
+            && rc-update add greetd default 2>/dev/null || systemctl enable greetd
+
+        # FIX: use DESKTOP_ENV to determine the session command instead of
+        # hardcoding niri-session regardless of what was configured.
+        GREETD_CMD="${DESKTOP_ENV}"
+        case "${DESKTOP_ENV}" in
+            niri)     GREETD_CMD="niri-session" ;;
+            sway)     GREETD_CMD="sway" ;;
+            hyprland) GREETD_CMD="Hyprland" ;;
+            river)    GREETD_CMD="river" ;;
+            labwc)    GREETD_CMD="labwc" ;;
+            cosmic)   GREETD_CMD="cosmic-session" ;;
+            gnome)    GREETD_CMD="gnome-session" ;;
+            kde)      GREETD_CMD="startplasma-wayland" ;;
+            *)        GREETD_CMD="${DESKTOP_ENV}" ;;
+        esac
+
+        cat > /etc/greetd/config.toml << EOF
 [terminal]
 vt = 1
 [default_session]
-command = "tuigreet --time --remember --cmd niri-session"
+command = "tuigreet --time --remember --cmd \${GREETD_CMD}"
 user = "greeter"
 EOF
         ;;
     ly)
         emerge x11-misc/ly
-        [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add ly default || systemctl enable ly ;;
+        [[ "${INIT_SYSTEM}" == "openrc" ]] \
+            && rc-update add ly default 2>/dev/null || systemctl enable ly ;;
     none) log "No display manager — TTY auto-start will be used." ;;
 esac
 
@@ -953,23 +1085,30 @@ esac
 if [[ "${ENABLE_PIPEWIRE}" == "yes" ]]; then
     section "PipeWire audio"
     emerge media-video/pipewire media-sound/wireplumber media-sound/pavucontrol
-    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add pipewire default || true
+    [[ "${INIT_SYSTEM}" == "openrc" ]] \
+        && rc-update add pipewire default 2>/dev/null || true
 fi
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_BLUETOOTH}" == "yes" ]]; then
     section "Bluetooth"
     emerge net-wireless/bluez app-misc/blueman
-    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add bluetooth default || systemctl enable bluetooth
+    [[ "${INIT_SYSTEM}" == "openrc" ]] \
+        && rc-update add bluetooth default 2>/dev/null \
+        || systemctl enable bluetooth || warn "bluetooth enable failed (non-fatal)"
 fi
 
 # ── Printing ──────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_PRINTING}" == "yes" ]]; then
     section "Printing (CUPS + Avahi)"
     emerge net-print/cups net-dns/avahi app-text/ghostscript-gpl
-    [[ "${INIT_SYSTEM}" == "openrc" ]] && {
-        rc-update add cupsd default; rc-update add avahi-daemon default
-    } || { systemctl enable cups; systemctl enable avahi-daemon; }
+    if [[ "${INIT_SYSTEM}" == "openrc" ]]; then
+        rc-update add cupsd default    2>/dev/null || warn "cupsd enable failed (non-fatal)"
+        rc-update add avahi-daemon default 2>/dev/null || warn "avahi enable failed (non-fatal)"
+    else
+        systemctl enable cups         || warn "cups enable failed (non-fatal)"
+        systemctl enable avahi-daemon || warn "avahi enable failed (non-fatal)"
+    fi
 fi
 
 # ── Flatpak ───────────────────────────────────────────────────────────────────
@@ -983,14 +1122,18 @@ fi
 if [[ "${ENABLE_LIBVIRT}" == "yes" ]]; then
     section "Libvirt / QEMU"
     emerge app-emulation/libvirt app-emulation/qemu app-emulation/virt-manager
-    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add libvirtd default || systemctl enable libvirtd
+    [[ "${INIT_SYSTEM}" == "openrc" ]] \
+        && rc-update add libvirtd default 2>/dev/null \
+        || systemctl enable libvirtd || warn "libvirtd enable failed (non-fatal)"
 fi
 
 # ── Docker / Podman ───────────────────────────────────────────────────────────
 if [[ "${ENABLE_DOCKER}" == "yes" ]]; then
     section "Containers"
     emerge app-containers/docker app-containers/podman app-containers/docker-compose
-    [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add docker default || systemctl enable docker
+    [[ "${INIT_SYSTEM}" == "openrc" ]] \
+        && rc-update add docker default 2>/dev/null \
+        || systemctl enable docker || warn "docker enable failed (non-fatal)"
 fi
 
 # ── Snapper ───────────────────────────────────────────────────────────────────
@@ -998,13 +1141,13 @@ if [[ "${ENABLE_BTRFS_SNAPPER}" == "yes" && "${FS_TYPE}" == "btrfs" ]]; then
     section "Snapper"
     emerge app-backup/snapper
     snapper -c root create-config /
-    [[ "${INIT_SYSTEM}" == "openrc" ]] && {
-        rc-update add snapper-timeline default
-        rc-update add snapper-cleanup default
-    } || {
-        systemctl enable snapper-timeline.timer
-        systemctl enable snapper-cleanup.timer
-    }
+    if [[ "${INIT_SYSTEM}" == "openrc" ]]; then
+        rc-update add snapper-timeline default 2>/dev/null || warn "snapper-timeline enable failed (non-fatal)"
+        rc-update add snapper-cleanup default  2>/dev/null || warn "snapper-cleanup enable failed (non-fatal)"
+    else
+        systemctl enable snapper-timeline.timer || warn "snapper-timeline.timer enable failed (non-fatal)"
+        systemctl enable snapper-cleanup.timer  || warn "snapper-cleanup.timer enable failed (non-fatal)"
+    fi
 fi
 
 # ── Extra packages ────────────────────────────────────────────────────────────
@@ -1063,14 +1206,13 @@ fi
 section "User accounts"
 echo "root:${ROOT_HASH}" | chpasswd -e
 
-NIRI_CMD="niri"
-command -v niri-session &>/dev/null && NIRI_CMD="niri-session"
+# FIX: build the supplementary group list as a single -G argument.
+# Multiple -G flags are not valid for useradd and would cause failures.
+_GROUPS="wheel,audio,video,input,seat,plugdev,usb,portage"
+[[ "${ENABLE_LIBVIRT}" == "yes" ]] && _GROUPS="\${_GROUPS},libvirt"
+[[ "${ENABLE_DOCKER}"  == "yes" ]] && _GROUPS="\${_GROUPS},docker"
 
-useradd -m \
-    -G wheel,audio,video,input,seat,plugdev,usb,portage \
-    $( [[ "${ENABLE_LIBVIRT}" == "yes" ]] && echo "-G libvirt" ) \
-    $( [[ "${ENABLE_DOCKER}"  == "yes" ]] && echo "-G docker"  ) \
-    -s /bin/bash "${USERNAME}"
+useradd -m -G "\${_GROUPS}" -s /bin/bash "${USERNAME}"
 echo "${USERNAME}:${USER_HASH}" | chpasswd -e
 
 install -m 440 /dev/null /etc/sudoers.d/wheel
@@ -1080,14 +1222,19 @@ echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 section "Session auto-start"
 USER_HOME="/home/${USERNAME}"
 
+# FIX: the inner heredoc delimiter is quoted ('BEOF') so that \${cmd} is
+# treated as a literal shell variable reference at runtime, not expanded
+# during write_chroot_script() on the host.
 _write_autostart() {
     local cmd="\$1"
-    cat >> "\${USER_HOME}/.bash_profile" << BEOF
+    cat >> "\${USER_HOME}/.bash_profile" << 'BEOF'
 
-if [[ -z "\\\$DISPLAY" && -z "\\\$WAYLAND_DISPLAY" && "\\\${XDG_VTNR}" -eq 1 ]]; then
-    exec \${cmd}
-fi
+if [[ -z "\$DISPLAY" && -z "\$WAYLAND_DISPLAY" && "\${XDG_VTNR}" -eq 1 ]]; then
 BEOF
+    # The exec line must contain the runtime value of cmd, so it is written
+    # separately without quoting the delimiter.
+    echo "    exec \${cmd}" >> "\${USER_HOME}/.bash_profile"
+    echo "fi" >> "\${USER_HOME}/.bash_profile"
 }
 
 if [[ "${DISPLAY_MANAGER:-none}" != "none" ]]; then
@@ -1095,7 +1242,10 @@ if [[ "${DISPLAY_MANAGER:-none}" != "none" ]]; then
 else
     case "${DESKTOP_ENV}" in
         sway)     _write_autostart "sway" ;;
-        niri)     _write_autostart "\${NIRI_CMD}" ;;
+        niri)
+            NIRI_CMD="niri"
+            command -v niri-session &>/dev/null && NIRI_CMD="niri-session"
+            _write_autostart "\${NIRI_CMD}" ;;
         hyprland) _write_autostart "Hyprland" ;;
         river)    _write_autostart "river" ;;
         labwc)    _write_autostart "labwc" ;;
