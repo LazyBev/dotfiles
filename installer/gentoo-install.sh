@@ -155,7 +155,12 @@ TARBALL_PATH=$(echo "$MANIFEST" \
 
 TARBALL_URL="${BASE_URL}/${TARBALL_PATH}"
 log "Downloading: ${TARBALL_URL}"
-wget --tries=3 --show-progress "$TARBALL_URL" -O /mnt/gentoo/stage3.tar.xz \
+wget --tries=5 \
+     --continue \
+     --timeout=30 \
+     --waitretry=10 \
+     --show-progress \
+     "$TARBALL_URL" -O /mnt/gentoo/stage3.tar.xz \
     || error "stage3 download failed."
 
 log "Extracting stage3..."
