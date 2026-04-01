@@ -454,12 +454,24 @@ install_stage3() {
     fi
 
     # FIX: Verify tarball integrity before extraction.
+    # Gentoo's .sha256 digest file contains comment lines, multiple hash
+    # algorithms, and the *original* filename — not our local 'stage3.tar.xz'.
+    # Extract just the SHA256 hash and compare it against the saved tarball.
     log "Verifying stage3 checksum..."
-    pushd /mnt/gentoo >/dev/null
-    # sha256 file contains lines like: <hash>  stage3-....tar.xz
-    sha256sum --check --ignore-missing stage3.tar.xz.sha256 \
-        || error "Stage3 SHA-256 checksum mismatch — aborting."
-    popd >/dev/null
+    local expected_hash
+    expected_hash=$(grep -i '^SHA256' "${dest}.sha256" \
+        | awk '{print tolower($2)}' \
+        | head -1)
+    [[ -z "$expected_hash" ]] && error "Could not extract SHA256 hash from digest file."
+
+    local actual_hash
+    actual_hash=$(sha256sum "$dest" | awk '{print $1}')
+
+    if [[ "$actual_hash" != "$expected_hash" ]]; then
+        error "Stage3 SHA-256 checksum mismatch — aborting.
+  expected: ${expected_hash}
+  actual:   ${actual_hash}"
+    fi
     log "Checksum OK."
 
     log "Extracting stage3..."
