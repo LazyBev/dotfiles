@@ -98,6 +98,7 @@ DESKTOP_ENV="none"
 DISPLAY_MANAGER="none"
 USE_FLAGS="wayland -X -gnome -kde -plasma udev dbus policykit"
 MAKEOPTS="-j$(nproc) -l$(nproc)"
+EMERGE_DEFAULT_OPTS="--jobs=$(nproc) --load-average=$(nproc) --with-bdeps=y --keep-going --verbose-conflicts --getbinpkg --binpkg-respect-use=y"
 STAGE3_VARIANT="openrc"
 ENABLE_LUKS="no"
 ENABLE_BTRFS_SNAPPER="no"
@@ -458,23 +459,73 @@ configure_portage() {
     _log_raw "Portage config dirs created"
 
     log "Writing make.conf..."
+    # Detect CPU thread count on the host for MAKEOPTS
+    local ncpu
+    ncpu=$(nproc)
+    # RAM in GiB — used to size PORTAGE_TMPDIR safely
+    local ram_gib
+    ram_gib=$(awk '/MemTotal/{printf "%d", $2/1024/1024}' /proc/meminfo)
+    # Give tmpfs half of RAM, minimum 4G, for build workspace
+    local tmpfs_size=$(( ram_gib / 2 ))
+    [[ $tmpfs_size -lt 4 ]] && tmpfs_size=4
+    _log_raw "CPU threads: ${ncpu}  RAM: ${ram_gib}G  tmpfs build size: ${tmpfs_size}G"
+
     cat > /mnt/gentoo/etc/portage/make.conf << EOF
 # =============================================================================
 # make.conf — generated $(date -u '+%Y-%m-%dT%H:%M:%SZ')
 # =============================================================================
 
+# ── Compiler flags ────────────────────────────────────────────────────────────
+# -O2 -pipe -march=native: safe optimisation + no temp files on disk
 COMMON_FLAGS="-O2 -pipe -march=native"
 CFLAGS="\${COMMON_FLAGS}"
 CXXFLAGS="\${COMMON_FLAGS}"
 FCFLAGS="\${COMMON_FLAGS}"
 FFLAGS="\${COMMON_FLAGS}"
-RUSTFLAGS="-C opt-level=2 -C target-cpu=native"
-LDFLAGS="-Wl,-O1 -Wl,--as-needed"
 
-MAKEOPTS="${MAKEOPTS}"
-EMERGE_DEFAULT_OPTS="--jobs=$(nproc) --load-average=$(nproc) --with-bdeps=y --keep-going --verbose-conflicts"
-PORTAGE_NICENESS=15
+# Rust: match CPU optimisation level and target
+RUSTFLAGS="-C opt-level=2 -C target-cpu=native -C codegen-units=$(( ncpu > 4 ? ncpu / 2 : ncpu ))"
 
+# Use mold as the system linker — dramatically faster than ld/gold for large
+# C++ projects (LLVM, Mesa, Qt). Falls back silently if not present.
+LDFLAGS="-Wl,-O1 -Wl,--as-needed -fuse-ld=mold"
+
+# ── Parallelism ───────────────────────────────────────────────────────────────
+# -j + -l: use all threads; -l cap prevents OOM when many jobs run at once
+MAKEOPTS="-j${ncpu} -l${ncpu}"
+
+# Emerge parallel jobs + binary package preference
+EMERGE_DEFAULT_OPTS="--jobs=${ncpu} --load-average=${ncpu} --with-bdeps=y --keep-going --verbose-conflicts --getbinpkg --binpkg-respect-use=y --autounmask-write"
+
+# Lower niceness so compiles don't starve interactive use
+PORTAGE_NICENESS=10
+
+# ── Build in RAM ──────────────────────────────────────────────────────────────
+# Building in tmpfs eliminates disk I/O during compilation entirely.
+# Sized at half of system RAM (${tmpfs_size}G detected).
+PORTAGE_TMPDIR="/var/tmp/portage"
+
+# ── ccache: compiler cache ────────────────────────────────────────────────────
+# Reuses object files from previous builds — huge speedup on rebuilds/updates.
+# Requires dev-util/ccache to be installed (added to base packages below).
+CCACHE_DIR="/var/cache/ccache"
+CCACHE_SIZE="10G"
+FEATURES="ccache \${FEATURES}"
+
+# ── Portage features ──────────────────────────────────────────────────────────
+# parallel-fetch:   download next distfile while current package builds
+# parallel-install: install completed packages while others still build
+# buildpkg:         cache every built package as a local .gpkg binary
+# binpkg-multi-instance: allow multiple versions of same pkg in PKGDIR
+# clean-logs:       remove old build logs automatically
+# split-elog:       one elog file per package instead of one giant file
+# compress-build-logs: gzip build logs to save disk space
+# ipc-sandbox:      isolate builds from host IPC (security + reproducibility)
+# network-sandbox:  prevent packages phoning home during build
+# userfetch:        fetch distfiles as portage user, not root
+FEATURES="parallel-fetch parallel-install buildpkg binpkg-multi-instance clean-logs split-elog compress-build-logs ipc-sandbox network-sandbox userfetch ccache"
+
+# ── USE flags ─────────────────────────────────────────────────────────────────
 USE="${USE_FLAGS}"
 
 ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
@@ -486,21 +537,23 @@ LINGUAS="en en_US"
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
 
+# ── Mirrors ───────────────────────────────────────────────────────────────────
 GENTOO_MIRRORS="https://distfiles.gentoo.org"
 WEBSYNC_MIRROR="https://distfiles.gentoo.org"
 
+# ── Paths ─────────────────────────────────────────────────────────────────────
 DISTDIR="/var/cache/distfiles"
 PKGDIR="/var/cache/binpkgs"
 PORTDIR="/var/db/repos/gentoo"
 
+# ── Logging ───────────────────────────────────────────────────────────────────
 PORTAGE_ELOG_CLASSES="warn error log"
 PORTAGE_ELOG_SYSTEM="save"
 
-FEATURES="parallel-fetch parallel-install buildpkg clean-logs split-elog"
-
+# ── Bootloader ────────────────────────────────────────────────────────────────
 GRUB_PLATFORMS="efi-64"
 EOF
-    _log_raw "make.conf written"
+    _log_raw "make.conf written (ncpu=${ncpu}, tmpfs=${tmpfs_size}G)"
 
     log "Writing repos.conf..."
     cat > /mnt/gentoo/etc/portage/repos.conf/gentoo.conf << 'EOF'
@@ -518,6 +571,14 @@ sync-rsync-verify-max-age = 24
 sync-webrsync-verify-signature = no
 EOF
     _log_raw "repos.conf written"
+
+    log "Writing binrepos.conf (Gentoo binary host)..."
+    cat > /mnt/gentoo/etc/portage/binrepos.conf << 'EOF'
+[binhost]
+priority = 9999
+sync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/
+EOF
+    _log_raw "binrepos.conf written"
 
     _configure_portage_kernel
     _configure_portage_display
@@ -671,6 +732,24 @@ setup_chroot() {
     else
         _log_raw "efivars: not present (non-EFI?), skipped"
     fi
+
+    # Mount a dedicated tmpfs for Portage builds — building in RAM eliminates
+    # all disk I/O during compilation. Size to half of available RAM.
+    local ram_gib
+    ram_gib=$(awk '/MemTotal/{printf "%d", $2/1024/1024}' /proc/meminfo)
+    local tmpfs_size=$(( ram_gib / 2 ))
+    [[ $tmpfs_size -lt 4 ]] && tmpfs_size=4
+    debug "Mounting build tmpfs (${tmpfs_size}G) on /var/tmp/portage..."
+    mkdir -p /mnt/gentoo/var/tmp/portage
+    mount -t tmpfs -o "size=${tmpfs_size}G,uid=portage,gid=portage,mode=775,noatime" \
+        tmpfs /mnt/gentoo/var/tmp/portage
+    _log_raw "Portage tmpfs mounted: ${tmpfs_size}G"
+
+    # Persistent ccache directory — survives across installs/reboots
+    debug "Preparing ccache directory..."
+    mkdir -p /mnt/gentoo/var/cache/ccache
+    chown -R 250:250 /mnt/gentoo/var/cache/ccache 2>/dev/null || true
+    _log_raw "ccache dir prepared: /var/cache/ccache"
 
     log "Chroot environment ready."
 }
@@ -849,6 +928,8 @@ emerge \
     app-admin/sudo \
     app-editors/neovim \
     app-shells/bash-completion \
+    dev-util/ccache \
+    dev-util/mold \
     dev-vcs/git \
     net-misc/curl \
     net-misc/wget \
@@ -866,6 +947,17 @@ emerge \
     sys-process/cronie \
     net-misc/networkmanager
 _clog "Base packages installed"
+
+# Initialise ccache so it's ready for subsequent emerges
+debug "Initialising ccache..."
+mkdir -p /var/cache/ccache
+ccache --max-size=10G
+ccache --set-config=compression=true
+ccache --set-config=compression_level=1
+ccache --set-config=hash_dir=false
+ccache --set-config=sloppiness=pch_defines,time_macros,include_file_mtime,include_file_ctime
+chown -R portage:portage /var/cache/ccache
+_clog "ccache initialised (10G, compressed)"
 
 case "${FS_TYPE}" in
     xfs)  emerge sys-fs/xfsprogs;   _clog "xfsprogs installed" ;;
@@ -1325,6 +1417,7 @@ cleanup() {
         /mnt/gentoo/sys
         /mnt/gentoo/dev
         /mnt/gentoo/run
+        /mnt/gentoo/var/tmp/portage
         /mnt/gentoo/var/log
         /mnt/gentoo/home
         /mnt/gentoo/.snapshots
