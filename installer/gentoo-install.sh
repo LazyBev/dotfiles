@@ -641,7 +641,7 @@ log "Installing AMD/Mesa stack..."
 emerge \
     media-libs/mesa \
     media-libs/libva \
-    media-libs/libva-utils \
+    media-video/libva-utils \
     media-libs/vulkan-loader \
     app-misc/vulkan-tools
 log "AMD/Mesa installed."
