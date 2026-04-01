@@ -532,25 +532,43 @@ log "Firmware installed."
 # ── Kernel ────────────────────────────────────────────────────────────────────
 section "Kernel (gentoo-kernel-bin)"
 
-# FIX: Mount /boot/efi before the kernel install so the postinst phase can
-# write the kernel image and EFI stub. Without this the dist-kernel helpers
-# call 'die' immediately because the target path doesn't exist.
+# FIX: Mount /boot/efi using the UUID from fstab before the kernel postinst.
+# installkernel checks for a mounted EFI partition; if absent it falls back to
+# treating /boot as flat and the dracut chroot-check then aborts.
+mkdir -p /boot/efi
 if ! mountpoint -q /boot/efi; then
-    EFI_DEV=\$(findmnt -n -o SOURCE /boot/efi 2>/dev/null \
-               || awk '\$2=="/boot/efi"{print \$1}' /proc/mounts \
-               || blkid -t TYPE=vfat -o device | head -1)
-    if [[ -n "\$EFI_DEV" ]]; then
-        mkdir -p /boot/efi
-        mount "\$EFI_DEV" /boot/efi
-        log "/boot/efi mounted from \$EFI_DEV"
+    EFI_UUID=\$(awk '\$2=="/boot/efi"{print \$1}' /etc/fstab \
+               | sed 's/UUID=//')
+    if [[ -n "\$EFI_UUID" ]]; then
+        mount UUID="\$EFI_UUID" /boot/efi \
+            && log "/boot/efi mounted (UUID=\$EFI_UUID)" \
+            || error "Failed to mount /boot/efi — kernel postinst will fail."
     else
-        # Fall back: the outer script bind-mounted efivarfs but /boot/efi itself
-        # is an ext4 sub-directory here. Check fstab and mount everything.
-        mkdir -p /boot/efi
-        mount -a 2>/dev/null || warn "mount -a failed — /boot/efi may not be mounted."
-        mountpoint -q /boot/efi || error "/boot/efi is not mounted — kernel postinst will fail."
+        # fstab entry missing — find the vfat partition directly
+        EFI_DEV=\$(blkid -t TYPE=vfat -o device | head -1)
+        [[ -n "\$EFI_DEV" ]] || error "Cannot find EFI partition — aborting."
+        mount "\$EFI_DEV" /boot/efi \
+            && log "/boot/efi mounted from \$EFI_DEV" \
+            || error "Failed to mount /boot/efi."
     fi
 fi
+
+# FIX: Provide /etc/cmdline so dracut does not abort when run inside a chroot.
+# dracut's 05-check-chroot.install detects the chroot and refuses to continue
+# unless either /etc/cmdline or /etc/cmdline.d/<file> supplies a kernel cmdline.
+# We write a sensible default; the user can adjust after first boot.
+mkdir -p /etc/cmdline.d
+cat > /etc/cmdline.d/00-root.conf << 'CMDEOF'
+root=LABEL=gentoo rootfstype=ext4 ro quiet
+CMDEOF
+log "/etc/cmdline.d/00-root.conf written for dracut."
+
+# FIX: Also touch the override file that bypasses the chroot check entirely.
+# This is the canonical workaround documented in the installkernel source:
+#   touch /etc/kernel/preinst.d/05-check-chroot.install
+mkdir -p /etc/kernel/preinst.d
+touch /etc/kernel/preinst.d/05-check-chroot.install
+log "dracut chroot check bypassed."
 
 # FIX: Install dracut and sys-kernel/installkernel with the correct USE flags
 # BEFORE gentoo-kernel-bin. The gentoo-kernel-bin postinst delegates to
