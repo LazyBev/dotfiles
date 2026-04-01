@@ -157,7 +157,7 @@ load_config() {
     _log_raw "--- Resolved configuration ---"
     _log_raw "DISK=${DISK}  FS=${FS_TYPE}  LUKS=${ENABLE_LUKS}  SWAP=${SWAP_SIZE}G"
     _log_raw "HOSTNAME=${HOSTNAME}  USER=${USERNAME}"
-    _log_raw "INIT=${INIT_SYSTEM}  KERNEL=${KERNEL_TYPE}  DISPLAY=${DISPLAY_SERVER}  DE=${DESKTOP_ENV}"
+    _log_raw "INIT=${INIT_SYSTEM}  KERNEL=${KERNEL_TYPE}  DISPLAY=${DISPLAY_SERVER}  DE=${DESKTOP_ENV}  DM=${DISPLAY_MANAGER}"
     _log_raw "CPU=${CPU_VENDOR}  GPU=${GPU_VENDOR}  VIDEO_CARDS=${VIDEO_CARDS}"
     _log_raw "KEYWORDS=${ACCEPT_KEYWORDS}  STAGE3=${STAGE3_VARIANT}"
     _log_raw "PIPEWIRE=${ENABLE_PIPEWIRE}  BT=${ENABLE_BLUETOOTH}  PRINT=${ENABLE_PRINTING}"
@@ -528,7 +528,6 @@ EOF
     log "Portage configuration complete."
 }
 
-# NEW: kernel USE flags — fixes the installkernel dracut requirement
 _configure_portage_kernel() {
     debug "Configuring kernel USE flags (type: ${KERNEL_TYPE})..."
     cat > /mnt/gentoo/etc/portage/package.use/kernel << 'EOF'
@@ -707,8 +706,6 @@ section() {
 }
 
 # ── Environment ───────────────────────────────────────────────────────────────
-# Disable nounset around profile sourcing — some profile.d scripts (e.g.
-# debuginfod.sh) reference variables that may not be set in a chroot.
 set +u
 source /etc/profile
 set -u
@@ -743,7 +740,7 @@ fi
 section "Timezone & Locale"
 debug "Setting timezone: ${TIMEZONE}"
 echo "${TIMEZONE}" > /etc/timezone
-emerge -q --config sys-libs/timezone-data
+emerge --config sys-libs/timezone-data
 _clog "Timezone set: ${TIMEZONE}"
 
 echo "${LOCALE} UTF-8" >> /etc/locale.gen
@@ -762,12 +759,12 @@ set +u; env-update && source /etc/profile; set -u
 section "Firmware & Microcode  (CPU: ${CPU_VENDOR})"
 [[ "${CPU_VENDOR}" == "intel" ]] && {
     debug "Installing Intel microcode..."
-    emerge -q sys-firmware/intel-microcode
+    emerge sys-firmware/intel-microcode
     _clog "intel-microcode installed"
 }
 debug "Installing linux-firmware..."
-emerge --ask -q sys-kernel/linux-firmware
-emerge --ask -q sys-firmware/sof-firmware
+emerge sys-kernel/linux-firmware
+emerge sys-firmware/sof-firmware
 _clog "linux-firmware installed"
 
 # ── Kernel ────────────────────────────────────────────────────────────────────
@@ -791,14 +788,14 @@ _clog "dracut chroot check suppressed"
 case "${KERNEL_TYPE}" in
     dist)
         debug "Installing gentoo-kernel-bin (pre-compiled)..."
-        emerge -q sys-kernel/gentoo-kernel-bin
+        emerge sys-kernel/gentoo-kernel-bin
         _clog "gentoo-kernel-bin installed"
         ;;
     sources|hardened|rt)
         case "${KERNEL_TYPE}" in
-            sources)  emerge -q sys-kernel/gentoo-sources ;;
-            hardened) emerge -q sys-kernel/hardened-sources ;;
-            rt)       emerge -q sys-kernel/rt-sources ;;
+            sources)  emerge sys-kernel/gentoo-sources ;;
+            hardened) emerge sys-kernel/hardened-sources ;;
+            rt)       emerge sys-kernel/rt-sources ;;
         esac
         eselect kernel set 1
         KVER=\$(eselect kernel show | tail -1 | xargs | sed 's|.*/||')
@@ -825,7 +822,7 @@ case "${KERNEL_TYPE}" in
                 _clog "Kernel compiled and installed"
                 ;;
             genkernel)
-                emerge -q sys-kernel/genkernel
+                emerge sys-kernel/genkernel
                 log "Running genkernel..."
                 genkernel --menuconfig=no \
                           --makeopts="${MAKEOPTS}" \
@@ -848,7 +845,7 @@ esac
 # ── Base system packages ──────────────────────────────────────────────────────
 section "Base system packages"
 debug "Emerging base packages..."
-emerge -q \
+emerge \
     app-admin/sudo \
     app-editors/neovim \
     app-shells/bash-completion \
@@ -871,12 +868,12 @@ emerge -q \
 _clog "Base packages installed"
 
 case "${FS_TYPE}" in
-    xfs)  emerge -q sys-fs/xfsprogs;   _clog "xfsprogs installed" ;;
-    f2fs) emerge -q sys-fs/f2fs-tools; _clog "f2fs-tools installed" ;;
+    xfs)  emerge sys-fs/xfsprogs;   _clog "xfsprogs installed" ;;
+    f2fs) emerge sys-fs/f2fs-tools; _clog "f2fs-tools installed" ;;
 esac
 
 [[ "${ENABLE_LUKS}" == "yes" ]] && {
-    emerge -q sys-fs/cryptsetup
+    emerge sys-fs/cryptsetup
     _clog "cryptsetup installed"
 }
 
@@ -911,7 +908,7 @@ fi
 section "Display server packages  (${DISPLAY_SERVER})"
 if [[ "${DISPLAY_SERVER}" == "x11" || "${DISPLAY_SERVER}" == "both" ]]; then
     debug "Installing X11 packages..."
-    emerge -q \
+    emerge \
         x11-base/xorg-server \
         x11-apps/xinit \
         x11-misc/xkeyboard-config \
@@ -923,7 +920,7 @@ fi
 
 if [[ "${DISPLAY_SERVER}" == "wayland" || "${DISPLAY_SERVER}" == "both" ]]; then
     debug "Installing Wayland packages..."
-    emerge -q \
+    emerge \
         dev-libs/wayland \
         dev-libs/wayland-protocols \
         x11-base/xwayland \
@@ -936,21 +933,21 @@ fi
 # ── GPU drivers ───────────────────────────────────────────────────────────────
 section "GPU drivers  (${GPU_VENDOR})"
 debug "Installing Mesa and VA-API..."
-emerge -q media-libs/mesa media-libs/libva media-video/libva-utils
+emerge media-libs/mesa media-libs/libva media-video/libva-utils
 _clog "Mesa + libva installed"
 
 case "${GPU_VENDOR}" in
     amd)
-        emerge -q media-libs/vulkan-loader dev-util/vulkan-tools
+        emerge media-libs/vulkan-loader dev-util/vulkan-tools
         _clog "AMD Vulkan packages installed"
         ;;
     intel)
-        emerge -q media-libs/intel-media-driver media-libs/vulkan-loader
+        emerge media-libs/intel-media-driver media-libs/vulkan-loader
         _clog "Intel media driver + Vulkan installed"
         ;;
     nvidia)
         debug "Installing NVIDIA proprietary driver..."
-        emerge -q x11-drivers/nvidia-drivers
+        emerge x11-drivers/nvidia-drivers
         [[ "${INIT_SYSTEM}" == "openrc" ]] && {
             rc-update add modules boot
             echo "nvidia" >> /etc/modules-load.d/nvidia.conf
@@ -964,67 +961,67 @@ section "Desktop environment  (${DESKTOP_ENV})"
 debug "Installing DE/WM packages..."
 case "${DESKTOP_ENV}" in
     gnome)
-        emerge -q gnome-base/gnome gnome-base/gnome-extra-apps
+        emerge gnome-base/gnome gnome-base/gnome-extra-apps
         _clog "GNOME installed"
         ;;
     kde)
-        emerge -q kde-plasma/plasma-meta kde-apps/kde-apps-meta
+        emerge kde-plasma/plasma-meta kde-apps/kde-apps-meta
         _clog "KDE Plasma installed"
         ;;
     cosmic)
-        emerge -q gui-wm/cosmic-comp gui-apps/cosmic-term gui-apps/cosmic-files \
-                   gui-apps/cosmic-launcher gui-apps/cosmic-settings
+        emerge gui-wm/cosmic-comp gui-apps/cosmic-term gui-apps/cosmic-files \
+               gui-apps/cosmic-launcher gui-apps/cosmic-settings
         _clog "COSMIC installed"
         ;;
     sway)
-        emerge -q gui-wm/sway gui-apps/swaybar gui-apps/swaybg gui-apps/swayidle \
-                   gui-apps/swaylock gui-apps/foot gui-apps/fuzzel gui-apps/mako \
-                   gui-apps/grim gui-apps/slurp gui-apps/wl-clipboard \
-                   gui-libs/xdg-desktop-portal-gtk
+        emerge gui-wm/sway gui-apps/swaybar gui-apps/swaybg gui-apps/swayidle \
+               gui-apps/swaylock gui-apps/foot gui-apps/fuzzel gui-apps/mako \
+               gui-apps/grim gui-apps/slurp gui-apps/wl-clipboard \
+               gui-libs/xdg-desktop-portal-gtk
         _clog "Sway installed"
         ;;
     niri)
-        emerge -q gui-wm/niri gui-apps/swayidle gui-apps/swaylock gui-apps/foot \
-                   gui-apps/fuzzel gui-apps/mako gui-apps/waybar gui-apps/grim \
-                   gui-apps/slurp gui-apps/wl-clipboard \
-                   gui-libs/xdg-desktop-portal-gtk x11-libs/xcb-util-cursor
+        emerge gui-wm/niri gui-apps/swayidle gui-apps/swaylock gui-apps/foot \
+               gui-apps/fuzzel gui-apps/mako gui-apps/waybar gui-apps/grim \
+               gui-apps/slurp gui-apps/wl-clipboard \
+               gui-libs/xdg-desktop-portal-gtk x11-libs/xcb-util-cursor
         _clog "niri installed"
         ;;
     hyprland)
-        emerge -q gui-wm/hyprland gui-apps/swayidle gui-apps/swaylock gui-apps/foot \
-                   gui-apps/fuzzel gui-apps/mako gui-apps/waybar gui-apps/grim \
-                   gui-apps/slurp gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
+        emerge gui-wm/hyprland gui-apps/swayidle gui-apps/swaylock gui-apps/foot \
+               gui-apps/fuzzel gui-apps/mako gui-apps/waybar gui-apps/grim \
+               gui-apps/slurp gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
         _clog "Hyprland installed"
         ;;
     river)
-        emerge -q gui-wm/river gui-apps/foot gui-apps/fuzzel gui-apps/mako \
-                   gui-apps/waybar gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
+        emerge gui-wm/river gui-apps/foot gui-apps/fuzzel gui-apps/mako \
+               gui-apps/waybar gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
         _clog "river installed"
         ;;
     labwc)
-        emerge -q gui-wm/labwc gui-apps/foot gui-apps/fuzzel gui-apps/mako \
-                   gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
+        emerge gui-wm/labwc gui-apps/foot gui-apps/fuzzel gui-apps/mako \
+               gui-apps/wl-clipboard gui-libs/xdg-desktop-portal-gtk
         _clog "labwc installed"
         ;;
     xfce)
-        emerge -q xfce-base/xfce4-meta
+        emerge xfce-base/xfce4-meta
         _clog "XFCE installed"
         ;;
     lxqt)
-        emerge -q lxqt-base/lxqt-meta
+        emerge lxqt-base/lxqt-meta
         _clog "LXQt installed"
         ;;
     openbox)
-        emerge -q x11-wm/openbox x11-misc/obconf x11-apps/xrandr x11-misc/tint2 x11-misc/rofi
+        emerge x11-wm/openbox x11-misc/obconf x11-apps/xrandr x11-misc/tint2 x11-misc/rofi
         _clog "Openbox installed"
         ;;
     i3)
-        emerge -q x11-wm/i3 x11-misc/i3status x11-misc/i3lock x11-misc/rofi \
-                   x11-apps/xrandr x11-misc/picom
+        emerge x11-wm/i3 x11-misc/i3status x11-misc/i3lock x11-misc/rofi \
+               x11-apps/xrandr x11-misc/picom
         _clog "i3 installed"
         ;;
     dwm)
-        emerge -q x11-wm/dwm x11-misc/dmenu x11-misc/st
+        emerge x11-wm/dwm x11-misc/dmenu x11-misc/st
         _clog "dwm installed"
         ;;
     none|custom)
@@ -1037,22 +1034,22 @@ esac
 section "Display manager  (${DISPLAY_MANAGER:-none})"
 case "${DISPLAY_MANAGER:-none}" in
     gdm)
-        emerge -q gnome-base/gdm
+        emerge gnome-base/gdm
         [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add gdm default || systemctl enable gdm
         _clog "GDM installed and enabled"
         ;;
     sddm)
-        emerge -q x11-misc/sddm
+        emerge x11-misc/sddm
         [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add sddm default || systemctl enable sddm
         _clog "SDDM installed and enabled"
         ;;
     lightdm)
-        emerge -q x11-misc/lightdm x11-misc/lightdm-gtk-greeter
+        emerge x11-misc/lightdm x11-misc/lightdm-gtk-greeter
         [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add lightdm default || systemctl enable lightdm
         _clog "LightDM installed and enabled"
         ;;
     greetd)
-        emerge -q gui-apps/greetd gui-apps/tuigreet
+        emerge gui-apps/greetd gui-apps/tuigreet
         if [[ "${INIT_SYSTEM}" == "openrc" ]]; then
             rc-update add greetd default
         else
@@ -1069,7 +1066,7 @@ EOF
         _clog "greetd + tuigreet installed and enabled"
         ;;
     ly)
-        emerge -q x11-misc/ly
+        emerge x11-misc/ly
         [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add ly default || systemctl enable ly
         _clog "ly installed and enabled"
         ;;
@@ -1083,7 +1080,7 @@ esac
 if [[ "${ENABLE_PIPEWIRE}" == "yes" ]]; then
     section "PipeWire audio"
     debug "Installing PipeWire + WirePlumber..."
-    emerge -q media-video/pipewire media-sound/wireplumber media-sound/pavucontrol
+    emerge media-video/pipewire media-sound/wireplumber media-sound/pavucontrol
     [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add pipewire default || true
     _clog "PipeWire installed"
 fi
@@ -1091,7 +1088,7 @@ fi
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_BLUETOOTH}" == "yes" ]]; then
     section "Bluetooth"
-    emerge -q net-wireless/bluez app-misc/blueman
+    emerge net-wireless/bluez app-misc/blueman
     [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add bluetooth default || systemctl enable bluetooth
     _clog "Bluetooth installed"
 fi
@@ -1099,7 +1096,7 @@ fi
 # ── Printing ──────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_PRINTING}" == "yes" ]]; then
     section "Printing (CUPS + Avahi)"
-    emerge -q net-print/cups net-dns/avahi app-text/ghostscript-gpl
+    emerge net-print/cups net-dns/avahi app-text/ghostscript-gpl
     [[ "${INIT_SYSTEM}" == "openrc" ]] && {
         rc-update add cupsd default; rc-update add avahi-daemon default
     } || { systemctl enable cups; systemctl enable avahi-daemon; }
@@ -1109,7 +1106,7 @@ fi
 # ── Flatpak ───────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_FLATPAK}" == "yes" ]]; then
     section "Flatpak"
-    emerge -q sys-apps/flatpak
+    emerge sys-apps/flatpak
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     _clog "Flatpak installed + Flathub remote added"
 fi
@@ -1117,7 +1114,7 @@ fi
 # ── Libvirt / QEMU ────────────────────────────────────────────────────────────
 if [[ "${ENABLE_LIBVIRT}" == "yes" ]]; then
     section "Libvirt / QEMU"
-    emerge -q app-emulation/libvirt app-emulation/qemu app-emulation/virt-manager
+    emerge app-emulation/libvirt app-emulation/qemu app-emulation/virt-manager
     [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add libvirtd default || systemctl enable libvirtd
     _clog "Libvirt + QEMU installed"
 fi
@@ -1125,7 +1122,7 @@ fi
 # ── Docker / Podman ───────────────────────────────────────────────────────────
 if [[ "${ENABLE_DOCKER}" == "yes" ]]; then
     section "Containers"
-    emerge -q app-containers/docker app-containers/podman app-containers/docker-compose
+    emerge app-containers/docker app-containers/podman app-containers/docker-compose
     [[ "${INIT_SYSTEM}" == "openrc" ]] && rc-update add docker default || systemctl enable docker
     _clog "Docker + Podman installed"
 fi
@@ -1133,7 +1130,7 @@ fi
 # ── Snapper ───────────────────────────────────────────────────────────────────
 if [[ "${ENABLE_BTRFS_SNAPPER}" == "yes" && "${FS_TYPE}" == "btrfs" ]]; then
     section "Snapper (btrfs snapshots)"
-    emerge -q app-backup/snapper
+    emerge app-backup/snapper
     snapper -c root create-config /
     [[ "${INIT_SYSTEM}" == "openrc" ]] && {
         rc-update add snapper-timeline default
@@ -1150,13 +1147,13 @@ if [[ -n "${EXTRA_PACKAGES}" ]]; then
     section "Extra packages"
     debug "Installing: ${EXTRA_PACKAGES}"
     # shellcheck disable=SC2086
-    emerge -q ${EXTRA_PACKAGES}
+    emerge ${EXTRA_PACKAGES}
     _clog "Extra packages installed: ${EXTRA_PACKAGES}"
 fi
 
 # ── Fonts & themes ────────────────────────────────────────────────────────────
 section "Fonts & themes"
-emerge -q \
+emerge \
     media-fonts/noto \
     media-fonts/noto-emoji \
     media-fonts/fira-code \
@@ -1166,7 +1163,7 @@ _clog "Fonts and themes installed"
 
 # ── GRUB ──────────────────────────────────────────────────────────────────────
 section "GRUB bootloader"
-emerge -q sys-boot/grub
+emerge sys-boot/grub
 
 GRUB_CMDLINE="quiet loglevel=3 mitigations=auto"
 [[ "${ENABLE_LUKS}" == "yes" ]] && GRUB_CMDLINE="\${GRUB_CMDLINE} rd.luks=1"
