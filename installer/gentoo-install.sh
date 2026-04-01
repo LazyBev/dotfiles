@@ -184,7 +184,7 @@ FCFLAGS="\${COMMON_FLAGS}"
 FFLAGS="\${COMMON_FLAGS}"
 
 MAKEOPTS="-j${NCPU} -l${NCPU}"
-EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --keep-going --verbose"
+EMERGE_DEFAULT_OPTS="--jobs=${NCPU} --load-average=${NCPU} --with-bdeps=y --verbose"
 
 ACCEPT_KEYWORDS="~amd64"
 ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
@@ -360,6 +360,17 @@ export PS1="(chroot) \${PS1:-}"
 # ── Portage tree ──────────────────────────────────────────────────────────────
 section "Syncing Portage tree (emerge-webrsync)"
 emerge-webrsync || error "emerge-webrsync failed."
+# ── Purge systemd if it somehow got pulled in before mask took effect ─────────
+section "Enforcing systemd-free system"
+if portageq match / sys-apps/systemd 2>/dev/null | grep -q systemd; then
+    warn "systemd was found — purging before continuing..."
+    emerge --deselect sys-apps/systemd 2>/dev/null || true
+    emerge --unmerge sys-apps/systemd 2>/dev/null \
+        || error "Failed to unmerge systemd — check USE flags manually."
+    log "systemd purged."
+else
+    log "Confirmed: systemd not present."
+fi
 
 # ── Explicitly install systemd-utils with our pinned USE flags first ──────────
 # This prevents any later package from pulling it in with unwanted USE flags.
