@@ -82,7 +82,7 @@ section "Pre-flight checks"
 [[ $EUID -ne 0 ]]  && error "Must run as root."
 [[ ! -b "$DISK" ]] && error "Disk $DISK not found."
 
-for t in wipefs sgdisk mkfs.fat mkswap wget openssl chroot ntpd; do
+for t in wipefs sgdisk mkfs.fat mkswap openssl chroot; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
 done
 
@@ -91,7 +91,6 @@ log "Network OK"
 
 pacman -Sy --noconfirm wget || error "Failed to install ntp on live ISO."
 
-# Stop Arch ISO's timesyncd so ntpd can bind port 123
 timedatectl set-ntp true && sleep 3 && log "Clock synced." || warn "Clock sync failed — continuing"
 
 echo
