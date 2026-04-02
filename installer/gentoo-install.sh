@@ -215,7 +215,7 @@ ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
 # Global -systemd ensures no package silently pulls in systemd deps.
 # elogind replaces systemd-logind for seat/session management.
 # udev USE flag is satisfied by sys-apps/systemd-utils[udev] (not sys-apps/systemd).
-USE="wayland -systemd -kde -X -gnome udev dbus policykit elogind -systemd-units"
+USE="wayland X -systemd -kde -gnome udev dbus policykit elogind -systemd-units"
 
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
@@ -302,11 +302,6 @@ EOF
 cat > /mnt/gentoo/etc/portage/package.use/wayland << 'EOF'
 gui-libs/wlroots   drm gles2 vulkan xwayland
 dev-libs/wayland   -doc
-# gtk+3 (pulled in by nvidia-drivers tools) needs X on these libs
->=x11-libs/gtk+-3  X
->=media-libs/libepoxy-1.5  X
->=x11-libs/cairo-1.18      X
->=media-libs/libglvnd-1.7  X
 EOF
 
 # ── package.use/gpu ───────────────────────────────────────────────────────────
