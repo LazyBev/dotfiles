@@ -702,7 +702,7 @@ emerge \
     gui-apps/mako \
     gui-apps/fuzzel \
     sys-apps/xdg-desktop-portal \
-    gui-libs/xdg-desktop-portal-gtk \
+    gui-libs/xdg-desktop-portal-wlr \
     x11-libs/xcb-util-cursor
 log "niri and companions installed."
 
