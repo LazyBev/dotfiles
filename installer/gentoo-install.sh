@@ -643,7 +643,7 @@ emerge \
     media-libs/libva \
     media-video/libva-utils \
     media-libs/vulkan-loader \
-    app-misc/vulkan-tools
+    dev-util/vulkan-tools
 log "AMD/Mesa installed."
 
 log "Installing nvidia-drivers (proprietary)..."
