@@ -312,7 +312,7 @@ EOF
 # ── package.use/gpu ───────────────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
 # AMD (mesa) — -nvidia prevents mesa wrapping the blob
-media-libs/mesa  vulkan vulkan-overlay video_cards_amdgpu video_cards_radeonsi -nvidia
+media-libs/mesa  X vulkan vulkan-overlay video_cards_amdgpu video_cards_radeonsi -nvidia
 
 # NVIDIA proprietary — Wayland support, no kernel-open, no systemd
 x11-drivers/nvidia-drivers  wayland -kernel-open -systemd
