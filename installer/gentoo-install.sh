@@ -308,6 +308,8 @@ EOF
 cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
 # AMD (mesa) — -nvidia prevents mesa wrapping the blob
 media-libs/mesa  X vulkan vulkan-overlay video_cards_amdgpu video_cards_radeonsi -nvidia
+# libdrm: use amdgpu, not legacy radeon
+x11-libs/libdrm  video_cards_amdgpu -video_cards_radeon
 
 # NVIDIA proprietary — Wayland support, no kernel-open, no systemd
 x11-drivers/nvidia-drivers  wayland -kernel-open -systemd
@@ -327,6 +329,7 @@ cat > /mnt/gentoo/etc/portage/package.accept_keywords/desktop << 'EOF'
 gui-wm/niri                  ~amd64
 dev-libs/wayland-protocols   ~amd64
 x11-drivers/nvidia-drivers   ~amd64
+x11-libs/libdrm              ~amd64
 gui-apps/swaylock            ~amd64
 gui-apps/grim                ~amd64
 gui-apps/slurp               ~amd64
