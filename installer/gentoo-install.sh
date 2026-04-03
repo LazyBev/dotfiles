@@ -257,6 +257,12 @@ cat > /mnt/gentoo/etc/portage/package.mask/systemd << 'EOF'
 sys-apps/systemd
 EOF
 
+# Mask legacy ATI DDX driver — pulls in video_cards_radeon on libdrm which is
+# masked. We use amdgpu/radeonsi; xf86-video-ati is not needed.
+cat > /mnt/gentoo/etc/portage/package.mask/xf86-video-ati << 'EOF'
+x11-drivers/xf86-video-ati
+EOF
+
 # ── package.use/systemd-utils — pin to only what OpenRC needs ─────────────────
 cat > /mnt/gentoo/etc/portage/package.use/systemd-utils << 'EOF'
 # udev     — device manager (replaces eudev, which was removed from Gentoo)
@@ -436,6 +442,11 @@ cat > /etc/portage/package.mask/systemd << 'MASKEOF'
 # Hard-block the full systemd init — OpenRC + elogind system.
 # sys-apps/systemd-utils is NOT masked — it provides udev for OpenRC.
 sys-apps/systemd
+MASKEOF
+
+# Mask legacy ATI DDX — pulls in masked libdrm[video_cards_radeon].
+cat > /etc/portage/package.mask/xf86-video-ati << 'MASKEOF'
+x11-drivers/xf86-video-ati
 MASKEOF
 log "package.mask/systemd confirmed."
 
