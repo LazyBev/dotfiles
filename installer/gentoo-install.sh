@@ -215,7 +215,7 @@ ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
 # Global -systemd ensures no package silently pulls in systemd deps.
 # elogind replaces systemd-logind for seat/session management.
 # udev USE flag is satisfied by sys-apps/systemd-utils[udev] (not sys-apps/systemd).
-USE="wayland X -systemd -kde -gnome udev dbus policykit elogind -systemd-units"
+USE="wayland X alsa udev -systemd -kde -gnome dbus policykit elogind -systemd-units"
 
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
