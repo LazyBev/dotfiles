@@ -215,7 +215,7 @@ ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"
 # Global -systemd ensures no package silently pulls in systemd deps.
 # elogind replaces systemd-logind for seat/session management.
 # udev USE flag is satisfied by sys-apps/systemd-utils[udev] (not sys-apps/systemd).
-USE="wayland X alsa udev -systemd -kde -gnome dbus policykit elogind -systemd-units"
+USE="wayland X alsa udev opengl -systemd -kde -gnome dbus policykit elogind -systemd-units"
 
 VIDEO_CARDS="${VIDEO_CARDS}"
 INPUT_DEVICES="libinput"
@@ -288,8 +288,6 @@ sys-auth/polkit                 -systemd elogind
 sys-auth/elogind                -systemd
 # SDDM: use elogind for seat/session management, not systemd-logind
 x11-misc/sddm                   elogind -systemd
-# Qt6/qtbase: wayland USE requires opengl
-dev-qt/qtbase                   opengl
 # xdg-desktop-portal: no systemd socket activation
 sys-apps/xdg-desktop-portal     -systemd
 # openssh has a conditional systemd dep — explicitly disable it
