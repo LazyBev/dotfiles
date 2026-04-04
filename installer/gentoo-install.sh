@@ -327,7 +327,7 @@ EOF
 # ── package.use/audio ─────────────────────────────────────────────────────────
 cat > /mnt/gentoo/etc/portage/package.use/audio << 'EOF'
 media-video/pipewire    sound-server jack-sdk -systemd
-media-sound/wireplumber -systemd
+media-video/wireplumber -systemd
 EOF
 
 # ── package.accept_keywords ───────────────────────────────────────────────────
@@ -747,7 +747,7 @@ log "SDDM installed and configured."
 
 # ── PipeWire audio ────────────────────────────────────────────────────────────
 section "PipeWire + WirePlumber"
-emerge media-video/pipewire media-sound/wireplumber media-sound/pavucontrol
+emerge media-video/pipewire media-video/wireplumber media-sound/pavucontrol
 log "PipeWire installed."
 
 # ── Ghostty terminal ──────────────────────────────────────────────────────────
