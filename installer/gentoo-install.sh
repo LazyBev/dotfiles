@@ -316,6 +316,9 @@ cat > /mnt/gentoo/etc/portage/package.use/gpu << 'EOF'
 media-libs/mesa  X vulkan vulkan-overlay video_cards_amdgpu video_cards_radeonsi -nvidia
 # libdrm: use amdgpu, not legacy radeon
 x11-libs/libdrm  video_cards_amdgpu -video_cards_radeon
+# xorg-drivers: amdgpu + nvidia DDX only; radeonsi is a Mesa/Gallium driver
+# not an Xorg DDX — excluding it here prevents xf86-video-ati being pulled in.
+x11-base/xorg-drivers  video_cards_amdgpu video_cards_nvidia -video_cards_radeon -video_cards_radeonsi
 
 # NVIDIA proprietary — Wayland support, no kernel-open, no systemd
 x11-drivers/nvidia-drivers  wayland -kernel-open -systemd
