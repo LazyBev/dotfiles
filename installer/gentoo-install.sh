@@ -774,7 +774,7 @@ log "PipeWire installed."
 # NOTE: Ghostty is in the guru overlay (enabled earlier in this script).
 # If the emerge fails, confirm guru is synced: eselect repository list
 section "Ghostty terminal"
-emerge app-terminals/ghostty
+emerge -av ghostty
 log "Ghostty installed."
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
