@@ -543,7 +543,27 @@ set +u; env-update && source /etc/profile; set -u
 
 # ── Firmware ──────────────────────────────────────────────────────────────────
 section "Firmware"
-emerge sys-kernel/linux-firmware sys-firmware/sof-firmware
+# FIX: linux-firmware is large and fetched from kernel.org mirrors which can
+# have transient DNS/connectivity failures. Retry up to 3 times with a short
+# backoff, and offer multiple mirrors via GENTOO_MIRRORS as fallback.
+FIRMWARE_OK=0
+for attempt in 1 2 3; do
+    log "Firmware install attempt \${attempt}/3..."
+    if emerge sys-kernel/linux-firmware sys-firmware/sof-firmware; then
+        FIRMWARE_OK=1
+        break
+    else
+        warn "Firmware emerge failed on attempt \${attempt} — waiting 30s before retry..."
+        # Rotate mirror on each retry
+        case \$attempt in
+            1) GENTOO_MIRRORS="https://distfiles.gentoo.org" ;;
+            2) GENTOO_MIRRORS="https://ftp.halifax.rwth-aachen.de/gentoo" ;;
+        esac
+        export GENTOO_MIRRORS
+        sleep 30
+    fi
+done
+[[ "\$FIRMWARE_OK" -eq 1 ]] || error "Firmware install failed after 3 attempts — check network."
 log "Firmware installed."
 
 # ── Kernel ────────────────────────────────────────────────────────────────────
