@@ -206,7 +206,7 @@ xbps-install -y sddm || error "SDDM install failed."
 mkdir -p /etc/sddm.conf.d
 cat > /etc/sddm.conf.d/general.conf << 'EOF'
 [General]
-DisplayServer=x11
+DisplayServer=wayland
 
 [Theme]
 Current=
@@ -276,7 +276,12 @@ _sv_enable() {
 }
 
 _sv_enable dbus
+
+# Remove any stale elogind symlink first — void-installer may have left one
+# pointing at the wrong target, causing the "already running" spam loop.
+rm -f /var/service/elogind
 _sv_enable elogind
+
 _sv_enable NetworkManager
 _sv_enable sshd
 _sv_enable cronie
@@ -293,7 +298,7 @@ section "System-wide environment"
 
 cat > /etc/profile.d/90-wayland.sh << 'EOF'
 export XDG_SESSION_TYPE=wayland
-export QT_QPA_PLATFORM=wayland;xcb
+export QT_QPA_PLATFORM="wayland;xcb"
 export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
 export GDK_BACKEND=wayland,x11
 export SDL_VIDEODRIVER=wayland
