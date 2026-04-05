@@ -93,6 +93,33 @@
 #             intentionally installed if xbps considers them "orphaned". Changed
 #             to -O only (cache cleanup) to avoid silent uninstalls. Orphan
 #             removal left as an opt-in with a comment.
+#
+# [FIX] niri-session: unset WAYLAND_DISPLAY and DISPLAY before exec'ing niri.
+#       If niri-session is invoked from an environment that already has
+#       WAYLAND_DISPLAY set (e.g. a manual 'su -' test from a TTY that inherited
+#       the var), niri tries to connect as a Wayland *client* to that socket
+#       rather than creating a new compositor instance, producing:
+#         WaylandError(Connection(Os { ... }))
+#       Unsetting both variables before exec niri forces niri to start as a
+#       fresh compositor. SDDM autologin via PAM does not hit this path, but
+#       belt-and-suspenders is warranted given how often this is tested manually.
+#
+# [FIX] niri-session: XDG_RUNTIME_DIR guard added. elogind sets this via PAM
+#       during a normal login, but manual invocations (sudo, su) skip PAM and
+#       leave it unset. When unset, PipeWire, pipewire-pulse, and wireplumber
+#       all fail immediately:
+#         "could not find a suitable runtime directory
+#          (no $PULSE_RUNTIME_PATH and $XDG_RUNTIME_DIR)"
+#       The session now falls back to /run/user/$(id -u) and creates the
+#       directory if it doesn't exist, which is exactly what elogind would
+#       have created. This makes manual testing via sudo work correctly and
+#       adds resilience if elogind PAM fires after niri-session starts.
+#
+# [FIX] niri-session: XDG_RUNTIME_DIR created before pipewire sleep. The
+#       previous version started the pipewire sleep subshell before ensuring
+#       XDG_RUNTIME_DIR existed. On a race where elogind was slow, pipewire
+#       started before the directory was present and exited immediately. The
+#       mkdir now happens before the sleep subshell is forked.
 # =============================================================================
 set -euo pipefail
 IFS=$'\n\t'
@@ -117,8 +144,6 @@ section() {
 
 # =============================================================================
 # ── HELPER: runit service enable ──────────────────────────────────────────────
-# [FIX] Moved here from the runit section so it's available to SSD TRIM and any
-#       other section that needs it before the runit block runs.
 # =============================================================================
 _sv_enable() {
     local svc="$1"
@@ -163,24 +188,17 @@ log "Pre-flight OK — target user: ${USERNAME}, home: ${USER_HOME}"
 
 # =============================================================================
 # ── REPOS ─────────────────────────────────────────────────────────────────────
-# Per Handbook: nonfree is a separate repo package. Install it first so
-# NVIDIA drivers and other nonfree packages are available in the same run.
-# void-repo-multilib adds 32-bit glibc packages (Steam, Wine, nvidia-32bit).
 # =============================================================================
 section "Repositories (nonfree + multilib)"
 
 xbps-install -Sy void-repo-nonfree void-repo-multilib \
     || warn "Repo packages may already be installed — continuing."
 
-# [FIX] xbps-install -Sy with no package arguments is a no-op on current xbps.
-#       -S (sync indexes only) is the correct flag for a metadata-only refresh.
 xbps-install -S
 log "Nonfree + multilib repos enabled and indexes synced."
 
 # =============================================================================
 # ── XBPS SELF-UPDATE + FULL SYSTEM UPDATE ────────────────────────────────────
-# Per Handbook: always update xbps itself first — older xbps may not handle
-# newer package metadata correctly.
 # =============================================================================
 section "xbps self-update + full system update"
 
@@ -190,12 +208,6 @@ log "System fully up to date."
 
 # =============================================================================
 # ── FIRMWARE ──────────────────────────────────────────────────────────────────
-# Per Handbook (config/firmware):
-#   linux-firmware     — full upstream firmware blob set
-#   linux-firmware-amd — AMD GPU/CPU microcode
-#   sof-firmware       — Intel/AMD audio DSP firmware (many modern systems need this)
-# Note: as of linux-firmware-20260309_1, Void compresses firmware with zstd.
-# Ensure the running kernel supports zstd before updating firmware.
 # =============================================================================
 section "Firmware"
 
@@ -208,14 +220,6 @@ log "Firmware installed."
 
 # =============================================================================
 # ── GPU — AMD/Mesa (primary iGPU) ─────────────────────────────────────────────
-# Per Handbook (graphics-drivers/amd):
-#   mesa-dri           — OpenGL via radeonsi; REQUIRED by all GBM-based Wayland
-#                        compositors. niri uses GBM.
-#   mesa-vulkan-radeon — Vulkan (RADV driver)
-#   mesa-vaapi         — VA-API hardware video decode (radeonsi backend)
-#   mesa-vdpau         — VDPAU hardware video decode (mpv, VLC)
-#   vulkan-loader      — runtime Vulkan ICD loader (used by both AMD and NVIDIA)
-#   libva-utils        — vainfo for VA-API verification
 # =============================================================================
 section "GPU — AMD/Mesa (iGPU)"
 
@@ -227,33 +231,12 @@ xbps-install -y \
     libva-utils \
     || error "AMD/Mesa install failed."
 
-# mesa-vdpau is a separate subpackage — split out so a failure doesn't abort
-# the whole AMD stack (may not be available on all repo states).
 xbps-install -y mesa-vdpau \
     || warn "mesa-vdpau failed — non-fatal, VDPAU decode unavailable."
 log "AMD/Mesa stack installed."
 
 # =============================================================================
 # ── GPU — NVIDIA proprietary (discrete dGPU, PRIME offload) ──────────────────
-# Per Handbook (graphics-drivers/nvidia):
-#   - Cards 800+    → 'nvidia' package (DKMS — requires linux-headers)
-#   - Cards 600/700 → 'nvidia470'
-#   - Cards 400/500 → 'nvidia390'
-#   nvidia-libs         — 64-bit OpenGL/Vulkan userspace
-#   nvidia-libs-32bit   — 32-bit compat for Steam/Wine
-#
-# Per Handbook (graphics-drivers/optimus — PRIME Render Offload):
-#   Recommended method for hybrid AMD+NVIDIA systems.
-#   The 'prime-run' wrapper script ships with the nvidia package.
-#   Usage: prime-run <application>
-#   Manual: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
-#
-# nvidia_drm.modeset=1  — required for Wayland (GBM output)
-# fbdev=1               — framebuffer console on NVIDIA GPU
-#
-# [HARDENING] linux-headers added: the 'nvidia' package is DKMS-based. Without
-#             kernel headers present, the DKMS build during xbps-reconfigure
-#             fails silently and no nvidia.ko is produced.
 # =============================================================================
 section "GPU — NVIDIA proprietary (dGPU, PRIME offload)"
 
@@ -263,19 +246,14 @@ xbps-install -y linux-headers \
 xbps-install -y nvidia nvidia-libs \
     || error "NVIDIA install failed."
 
-# 32-bit NVIDIA compat — requires void-repo-multilib; non-fatal if unavailable
 xbps-install -y nvidia-libs-32bit \
     || warn "nvidia-libs-32bit not found — non-fatal, 32-bit NVIDIA compat unavailable."
 
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << 'EOF'
-# Enable KMS (required for Wayland) and fbdev console on NVIDIA GPU.
 options nvidia_drm modeset=1 fbdev=1
 EOF
 
-# [FIX] /etc/modules-load.d/ is a systemd convention and is NOT processed by
-#       Void's runit boot. Void reads /etc/modules-load on boot via the
-#       kernel-modules runit service. Write to both locations for maximum compat.
 mkdir -p /etc/modules-load.d
 cat > /etc/modules-load.d/nvidia.conf << 'EOF'
 nvidia
@@ -284,7 +262,6 @@ nvidia_uvm
 nvidia_drm
 EOF
 
-# Void runit native location (processed by /etc/sv/kernel-modules if enabled)
 cat > /etc/modules-load << 'EOF'
 nvidia
 nvidia_modeset
@@ -296,21 +273,9 @@ log "NVIDIA proprietary driver installed."
 log "  KMS: nvidia_drm modeset=1 fbdev=1"
 log "  linux-headers installed for DKMS build."
 log "  PRIME offload: prime-run <app>"
-log "  Manual: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>"
 
 # =============================================================================
 # ── CORE SYSTEM PACKAGES ──────────────────────────────────────────────────────
-# Per Handbook (config/services, session-management):
-#   dbus        — system IPC bus; must be enabled before elogind + NetworkManager
-#   elogind     — manages logins, provides XDG_RUNTIME_DIR and seat access for
-#                 Wayland. Requires the system dbus service to be running.
-#   polkit      — privilege escalation; required for NetworkManager non-root use.
-#                 polkitd is socket-activated — no runit symlink needed.
-#   eudev       — udev device management (Void's eudev fork)
-#   socklog-void — Void's recommended runit-native logging solution.
-#                  Logs go to /var/log/socklog/ per facility.
-#   chrony      — NTP time sync. More accurate than openntpd on modern hardware.
-#   rtkit       — realtime scheduling for PipeWire (reduces audio xruns)
 # =============================================================================
 section "Core system packages"
 
@@ -348,19 +313,6 @@ log "Core packages installed."
 
 # =============================================================================
 # ── WAYLAND BASE ──────────────────────────────────────────────────────────────
-# Per Handbook (graphical-session/wayland):
-#   mesa-dri required by GBM compositors (already installed above).
-#   qt5-wayland / qt6-wayland: enable Qt Wayland backend.
-#     Activate with QT_QPA_PLATFORM=wayland (set in /etc/profile.d below).
-#   xorg-server-xwayland: XWayland compatibility server. The system is fully
-#     Wayland-native (SDDM greeter, niri compositor, all env vars set). XWayland
-#     runs as a nested X server inside the Wayland session only when an X11 app
-#     requests it — it does not make the session "X11". Without it, legacy X11
-#     apps (some games, older Electron builds, etc.) fail to start at all.
-#   xwayland-satellite: rootless XWayland for niri (handles X11 app windows as
-#     native Wayland surfaces, enabling proper tiling of X11 apps).
-#   libxkbcommon + xkeyboard-config: keyboard map handling for compositors.
-#   XDG_RUNTIME_DIR: provided automatically by elogind at login.
 # =============================================================================
 section "Wayland base"
 
@@ -379,21 +331,6 @@ log "Wayland base installed."
 
 # =============================================================================
 # ── NIRI + WAYLAND TOOLS ──────────────────────────────────────────────────────
-# Per Handbook (graphical-session/wayland): niri is a packaged standalone
-# Wayland compositor (scrolling-tiling). Uses GBM — mesa-dri required.
-#
-# xdg-desktop-portal + xdg-desktop-portal-wlr:
-#   Portal backend for screen capture, file picker, etc. (wlroots-compatible)
-# xdg-desktop-portal-gtk: GTK portal backend (file dialogs, app chooser)
-# xdg-user-dirs: creates ~/Desktop, ~/Downloads, ~/Music, etc.
-# xcb-util-cursor: cursor theme support — missing = invisible cursor in niri.
-# swaylock: screen locker. REQUIRES /etc/pam.d/swaylock to authenticate.
-# dunst: notification daemon (D-Bus org.freedesktop.Notifications)
-# fuzzel: Wayland-native app launcher.
-# grim + slurp: screenshot pipeline for Wayland.
-# wl-clipboard: wl-copy/wl-paste clipboard tools.
-# swayidle: idle management (lock, dpms off, suspend on inactivity).
-# Waybar: status bar with Wayland support.
 # =============================================================================
 section "niri WM + Wayland tools"
 
@@ -422,19 +359,6 @@ log "niri and companion tools installed."
 
 # =============================================================================
 # ── SDDM ──────────────────────────────────────────────────────────────────────
-# Per Handbook (graphical-session/kde): SDDM requires the dbus service to be
-# enabled. Enable dbus before enabling sddm.
-#
-# DisplayServer=x11 (greeter only): As of SDDM 0.20, the greeter itself runs on
-# X11 by default. A Wayland greeter exists but is experimental and not packaged
-# separately in Void — 'sddm-wayland-plasma' does not exist in the Void repos.
-# This does NOT affect the session: SDDM launches niri-session which runs fully
-# native Wayland. The X11 greeter exits completely once the session starts.
-# The full Wayland stack is: SDDM greeter (X11, temporary) → niri (Wayland,
-# native GBM/KMS) → all apps on Wayland → XWayland nested for X11 app compat.
-#
-# xorg-minimal is required by SDDM's X11 greeter (it needs an Xorg server to
-# render the login screen). It is not used by niri or any app in the session.
 # =============================================================================
 section "SDDM display manager"
 
@@ -460,25 +384,6 @@ log "SDDM installed (greeter: X11, session: niri/Wayland — autologin: ${USERNA
 
 # =============================================================================
 # ── PIPEWIRE + WIREPLUMBER ────────────────────────────────────────────────────
-# Per Handbook (config/media/pipewire):
-#  1. Install 'pipewire' — wireplumber is the session manager.
-#  2. Link 10-wireplumber.conf — tells PipeWire to load wireplumber.
-#  3. Link 20-pipewire-pulse.conf — PulseAudio compat interface.
-#  4. alsa-pipewire + conf.d symlinks — makes PipeWire the default ALSA device.
-#  5. PipeWire MUST run as the logged-in user (not as a system service).
-#     Per Handbook: launch it from the compositor startup script.
-#  6. Requires an active D-Bus user session bus + XDG_RUNTIME_DIR.
-#     elogind provides XDG_RUNTIME_DIR; SDDM + elogind provides the session bus.
-#  7. rtkit (installed in core packages) provides realtime scheduling.
-#
-# [FIX] Path existence checks added before symlinking. The example conf paths
-#       vary across Void package versions. Broken symlinks cause pipewire to
-#       fail silently at startup.
-#
-# [FIX] pipewire-pulse and wireplumber are now started explicitly as separate
-#       processes from niri-session. The conf.d symlinks alone are not sufficient
-#       on Void — wireplumber and pipewire-pulse must each be exec'd by the user
-#       session alongside the main pipewire process.
 # =============================================================================
 section "PipeWire + WirePlumber"
 
@@ -490,7 +395,6 @@ xbps-install -y \
     pulseaudio-utils \
     || error "PipeWire install failed."
 
-# System-wide PipeWire config — symlink example configs with path validation
 mkdir -p /etc/pipewire/pipewire.conf.d
 
 _pw_symlink() {
@@ -503,18 +407,15 @@ _pw_symlink() {
     fi
 }
 
-# wireplumber conf — try both known Void paths
 _pw_symlink \
     /usr/share/pipewire/pipewire.conf.d/10-wireplumber.conf \
     /etc/pipewire/pipewire.conf.d/10-wireplumber.conf
-# Fallback path seen on some Void installs
 if [[ ! -L /etc/pipewire/pipewire.conf.d/10-wireplumber.conf ]]; then
     _pw_symlink \
         /usr/share/examples/wireplumber/10-wireplumber.conf \
         /etc/pipewire/pipewire.conf.d/10-wireplumber.conf
 fi
 
-# pipewire-pulse conf
 _pw_symlink \
     /usr/share/pipewire/pipewire.conf.d/20-pipewire-pulse.conf \
     /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf
@@ -524,7 +425,6 @@ if [[ ! -L /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf ]]; then
         /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf
 fi
 
-# Make PipeWire the default ALSA output device
 mkdir -p /etc/alsa/conf.d
 _pw_symlink \
     /usr/share/alsa/alsa.conf.d/50-pipewire.conf \
@@ -534,7 +434,6 @@ _pw_symlink \
     /etc/alsa/conf.d/99-pipewire-default.conf
 
 log "PipeWire + WirePlumber configured."
-log "  PipeWire, WirePlumber, pipewire-pulse launched per-user from niri-session."
 
 # =============================================================================
 # ── GHOSTTY TERMINAL ──────────────────────────────────────────────────────────
@@ -546,10 +445,6 @@ log "Ghostty installed."
 
 # =============================================================================
 # ── BLUETOOTH ─────────────────────────────────────────────────────────────────
-# Per Handbook (config/bluetooth):
-#   bluez provides bluetoothd and bluetoothctl.
-#   Enable the bluetoothd runit service.
-#   User must be in the 'bluetooth' group (added in groups section below).
 # =============================================================================
 section "Bluetooth"
 
@@ -558,9 +453,6 @@ log "Bluetooth (bluez) installed."
 
 # =============================================================================
 # ── FONTS ─────────────────────────────────────────────────────────────────────
-# Per Handbook (graphical-session/fonts): some Wayland compositors including
-# niri do NOT depend on fonts. Missing fonts cause most GUI apps to break.
-# Always install at least one font package.
 # =============================================================================
 section "Fonts"
 
@@ -576,28 +468,6 @@ log "Fonts installed and font cache rebuilt."
 
 # =============================================================================
 # ── RUNIT SERVICES ────────────────────────────────────────────────────────────
-# Per Handbook (config/services/index):
-#   Enabling: ln -sf /etc/sv/<n> /var/service/<n>
-#   runit picks up new symlinks within a few seconds automatically.
-#   All services in /etc/sv/ are available; active ones live in /var/service/.
-#
-# Enable order (dependencies first):
-#   dbus         — system bus; elogind + NetworkManager both require it
-#   elogind      — seat/session management; needs dbus running first
-#   udevd        — eudev device management
-#   NetworkManager — needs dbus; polkit for non-root access (socket-activated)
-#   sshd         — remote access
-#   socklog-unix — syslog receiver (socklog-void)
-#   nanoklogd    — kernel log forwarder (socklog-void)
-#   cronie       — cron daemon
-#   chronyd      — NTP time sync
-#   bluetoothd   — Bluetooth daemon
-#   sddm         — display manager; must be enabled last (depends on dbus)
-#
-# NOT enabled as system services:
-#   pipewire    — per Handbook must run as the current user, not as root/system
-#   wireplumber — same: per-user, launched from niri-session
-#   acpid       — per Handbook: do NOT use with elogind (conflicts)
 # =============================================================================
 section "runit services"
 
@@ -611,32 +481,17 @@ _sv_enable nanoklogd
 _sv_enable cronie
 _sv_enable chronyd
 _sv_enable bluetoothd
-_sv_enable sddm   # enable last; depends on dbus
+_sv_enable sddm
 
 log "runit services enabled."
-log "  pipewire/wireplumber — NOT system services (run per-user from niri-session)"
-log "  acpid               — NOT enabled (conflicts with elogind per Handbook)"
 
 # =============================================================================
 # ── SYSTEM-WIDE ENVIRONMENT ───────────────────────────────────────────────────
-# Per Handbook (graphical-session/wayland):
-#   XDG_SESSION_TYPE=wayland     — required by some apps to pick Wayland backend
-#   QT_QPA_PLATFORM=wayland;xcb  — Qt apps use Wayland; xcb is X11 fallback
-#   SDL_VIDEODRIVER=wayland       — SDL apps use Wayland backend
-#   GDK_BACKEND=wayland,x11       — GTK prefer Wayland, fall back to X11
-#   MOZ_ENABLE_WAYLAND=1          — legacy; Firefox now auto-detects (harmless)
-#   ELECTRON_OZONE_PLATFORM_HINT  — Electron apps use Wayland backend
-#   XDG_RUNTIME_DIR               — set by elogind at login; do NOT hardcode
-#
-# Per Handbook (graphics-drivers/amd + optimus):
-#   LIBVA_DRIVER_NAME=radeonsi — VA-API defaults to AMD iGPU
-#   VDPAU_DRIVER=radeonsi      — VDPAU defaults to AMD iGPU
 # =============================================================================
 section "System-wide environment"
 
 cat > /etc/profile.d/90-wayland.sh << 'EOF'
 # Void Linux — Wayland environment
-# Ref: https://docs.voidlinux.org/config/graphical-session/wayland.html
 export XDG_SESSION_TYPE=wayland
 export QT_QPA_PLATFORM="wayland;xcb"
 export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
@@ -649,93 +504,72 @@ EOF
 
 cat > /etc/profile.d/91-hybrid-gpu.sh << 'EOF'
 # Void Linux — Hybrid GPU (AMD iGPU primary, NVIDIA dGPU via PRIME offload)
-# Ref: https://docs.voidlinux.org/config/graphical-session/graphics-drivers/optimus.html
-
-# VA-API and VDPAU default to AMD iGPU
 export LIBVA_DRIVER_NAME=radeonsi
 export VDPAU_DRIVER=radeonsi
-
-# PRIME offload for per-application NVIDIA use:
-#   prime-run <app>
-#   or: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
 EOF
 
 chmod +x /etc/profile.d/90-wayland.sh /etc/profile.d/91-hybrid-gpu.sh
-log "Environment profile scripts written to /etc/profile.d/."
+log "Environment profile scripts written."
 
 # =============================================================================
 # ── NIRI SESSION WRAPPER ──────────────────────────────────────────────────────
-# Per Handbook (config/media/pipewire): PipeWire must be launched from the
-# compositor startup script as the logged-in user.
-#
-# Per Handbook (session-management): SDDM + elogind provides XDG_RUNTIME_DIR
-# and the D-Bus session bus at login. dbus-run-session is not needed.
-#
-# LIBSEAT_BACKEND=logind: prevents "seatd not present" warnings from libseat
-# when elogind is in use (the correct backend here is logind, not seatd).
-#
-# [FIX] --systemd removed from dbus-update-activation-environment.
-#       The --systemd flag exports vars to systemd's user manager (sd-bus),
-#       which does not exist on Void/runit. Passing it caused a silent failure
-#       that left the D-Bus activation environment incomplete, preventing
-#       PipeWire from connecting to the session bus on startup.
-#
-# [FIX] PipeWire now starts with a sleep 2 delay to allow elogind to fully
-#       establish XDG_RUNTIME_DIR and the D-Bus session bus before PipeWire
-#       tries to acquire the org.freedesktop.ReserveDevice1 name. Without this
-#       delay, PipeWire races the bus and produces the lockfile/DISPLAY errors
-#       seen in the screenshot.
-#
-# [FIX] wireplumber and pipewire-pulse started explicitly as separate processes.
-#       The conf.d symlinks instruct pipewire to *attempt* to load them as
-#       modules, but on Void the module path may not match the examples path,
-#       causing silent failures. Running them as sibling processes is the
-#       correct, reliable approach on non-systemd systems.
-#
-# [HARDENING] Stale PipeWire lockfile cleanup on session start. A previous
-#             crashed session leaves /run/user/$UID/pipewire-0.lock behind,
-#             blocking the next pipewire instance with "Resource temporarily
-#             unavailable". Clean it at session start.
 # =============================================================================
 section "niri session wrapper"
 
 cat > /usr/local/bin/niri-session << 'EOF'
 #!/usr/bin/env bash
 # niri session launcher — Void Linux / runit / elogind
-# Starts PipeWire stack as current user, then execs niri.
+
 set -a
 # shellcheck source=/etc/profile
 source /etc/profile
 set +a
 
-# Tell libseat to use elogind (prevents "seatd not found" noise)
+# Tell libseat to use elogind
 export LIBSEAT_BACKEND=logind
 
-# [FIX] keyboard intermittent: wait for udev to finish device scanning before
-# niri initialises libinput. Without this, niri races elogind's seat activation
-# and input devices are missing or unresponsive on some boots. udevadm settle
-# blocks until udev has finished processing all pending events.
+# [FIX] Ensure XDG_RUNTIME_DIR is set. Under a normal SDDM/PAM login elogind
+# sets this automatically. Under manual invocations (sudo, su) PAM is bypassed
+# and the variable is absent, which causes pipewire, pipewire-pulse, and
+# wireplumber to all fail immediately with:
+#   "could not find a suitable runtime directory"
+# Fall back to the canonical path elogind would have used and create it.
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    warn_msg="XDG_RUNTIME_DIR was unset — falling back to ${XDG_RUNTIME_DIR}"
+    echo "[niri-session] WARNING: ${warn_msg}" >&2
+fi
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 0700 "${XDG_RUNTIME_DIR}"
+
+# [FIX] Unset any inherited Wayland/X11 display variables. If niri-session is
+# invoked from an environment that already has WAYLAND_DISPLAY set (e.g. a
+# manual 'su -' test from a TTY that inherited the variable), niri will attempt
+# to connect as a Wayland *client* to the existing socket instead of creating a
+# new compositor instance. This produces:
+#   WaylandError(Connection(Os { code: 2, kind: NotFound, ... }))
+# Unsetting these before exec forces niri to initialise as a fresh compositor.
+unset WAYLAND_DISPLAY DISPLAY
+
+# Wait for udev to finish scanning before libinput initialises
 udevadm settle 2>/dev/null || true
 
-# Export Wayland display vars into D-Bus activation environment.
-# NOTE: --systemd flag intentionally omitted — systemd user manager does not
-# exist on Void/runit. The flag causes silent failure and a broken activation env.
+# Export session vars into D-Bus activation environment.
+# --systemd intentionally omitted: systemd user manager does not exist on Void.
 if command -v dbus-update-activation-environment &>/dev/null; then
     dbus-update-activation-environment \
-        WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE 2>/dev/null || true
+        XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP 2>/dev/null || true
 fi
 
-# Clean up any stale PipeWire lockfile from a previously crashed session.
-# Without this, pipewire fails with "Resource temporarily unavailable" on the
-# lockfile and refuses to start.
-PIPEWIRE_LOCK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0.lock"
+# Clean up any stale PipeWire lockfile from a previously crashed session
+PIPEWIRE_LOCK="${XDG_RUNTIME_DIR}/pipewire-0.lock"
 if [[ -f "$PIPEWIRE_LOCK" ]]; then
     rm -f "$PIPEWIRE_LOCK"
 fi
 
-# Start PipeWire stack after a brief delay to allow the D-Bus session bus and
-# XDG_RUNTIME_DIR (provided by elogind) to be fully ready.
-# All three processes are background siblings; they're cleaned up on EXIT.
+# Start PipeWire stack. XDG_RUNTIME_DIR is now guaranteed to exist before this
+# subshell is forked, so pipewire will find its socket directory immediately.
+# sleep 2 still guards against the D-Bus session bus not yet being ready.
 (
     sleep 2
     pipewire &
@@ -758,7 +592,6 @@ exec niri
 EOF
 chmod +x /usr/local/bin/niri-session
 
-# Register niri-session as a valid Wayland session for SDDM
 mkdir -p /usr/share/wayland-sessions
 cat > /usr/share/wayland-sessions/niri.desktop << 'EOF'
 [Desktop Entry]
@@ -773,34 +606,10 @@ log "niri-session wrapper → /usr/local/bin/niri-session"
 log "niri.desktop → /usr/share/wayland-sessions/niri.desktop"
 
 # =============================================================================
-# ── NIRI CONFIG SNIPPETS (NVIDIA render device + keyboard fix) ────────────────
-# niri config.kdl changes needed for:
-#
-#  1. NVIDIA as render device:
-#     niri picks the first render node it finds. On AMD+NVIDIA hybrid systems
-#     this is usually renderD128 (AMD iGPU). To force NVIDIA, set render-device
-#     to the NVIDIA PCI path under /dev/dri/by-path/. This makes niri render
-#     via NVIDIA GBM directly.
-#     Ref: https://github.com/niri-wm/niri/wiki/Getting-Started#nvidia
-#
-#  2. Keyboard intermittent:
-#     If the xkb block in config.kdl is empty, niri queries
-#     org.freedesktop.locale1 (systemd-localed) over D-Bus for the layout.
-#     That service does not exist on Void/runit. The query fails silently and
-#     niri may start with no keymap, causing intermittent keyboard behaviour.
-#     Fix: explicitly set layout "us" (or your layout) in the xkb block.
-#
-#  3. fuzzel not launching:
-#     fuzzel launched via spawn-at-startup races xdg-desktop-portal startup
-#     and exits silently if the portal isn't ready. Use a keybind instead.
-#     fuzzel should NOT be in spawn-at-startup.
-#
-# Writes a snippet file the user merges into ~/.config/niri/config.kdl.
-# config.kdl is user-owned (managed by dotfiles) so we don't edit it directly.
+# ── NIRI CONFIG SNIPPETS ──────────────────────────────────────────────────────
 # =============================================================================
 section "niri config snippets (NVIDIA render device + keyboard fix)"
 
-# Detect NVIDIA render device PCI path at install time (best-effort)
 NVIDIA_RENDER_PATH=""
 if [[ -d /dev/dri/by-path ]]; then
     while IFS= read -r -d '' link; do
@@ -821,32 +630,22 @@ cat > "$SNIPPET_FILE" << KDLEOF
 // Merge these into your ~/.config/niri/config.kdl
 // ============================================================
 
-// [1] NVIDIA render device — forces niri compositor to render via NVIDIA GBM.
-// If the path below is wrong, run: ls -l /dev/dri/by-path/
-// then cross-reference with: lspci | grep -i nvidia
+// [1] NVIDIA render device
 render-device "${NVIDIA_RENDER_PATH:-/dev/dri/by-path/pci-REPLACE_ME-render}"
 
 // [2] Keyboard fix — explicit layout prevents niri querying systemd-localed
-// (which doesn't exist on Void/runit), fixing intermittent keyboard issues.
 input {
     keyboard {
         xkb {
             layout "us"
-            // Change "us" to your actual layout e.g. "gb", "de", "fr"
-            // Uncomment to add a compose key:
-            // options "compose:ralt"
         }
     }
 }
 
-// [3] dunst — must be spawned at startup (notification daemon)
-// Add at the top level of config.kdl (not inside any block):
+// [3] dunst
 spawn-at-startup "dunst"
 
-// [4] fuzzel — use a keybind ONLY, do NOT use spawn-at-startup.
-// fuzzel races xdg-desktop-portal on startup and exits silently if the
-// portal isn't ready yet. A keybind fires on demand and always works.
-// Add inside your binds { } block:
+// [4] fuzzel — keybind only, NOT spawn-at-startup
 // binds {
 //     Mod+D { spawn "fuzzel"; }
 // }
@@ -857,18 +656,13 @@ chown "${USERNAME}:${USERNAME}" "$SNIPPET_FILE"
 if [[ -n "$NVIDIA_RENDER_PATH" ]]; then
     log "NVIDIA render device detected: ${NVIDIA_RENDER_PATH}"
 else
-    warn "Could not auto-detect NVIDIA render device (lspci may not be ready yet)."
-    warn "  After boot: ls -l /dev/dri/by-path/ and: lspci | grep -i nvidia"
+    warn "Could not auto-detect NVIDIA render device."
+    warn "  After boot: ls -l /dev/dri/by-path/ && lspci | grep -i nvidia"
     warn "  Then update render-device in: ${SNIPPET_FILE}"
 fi
-log "niri config snippet → ${SNIPPET_FILE}"
-log "  Merge into ~/.config/niri/config.kdl before first login."
 
 # =============================================================================
 # ── SWAYLOCK PAM CONFIG ───────────────────────────────────────────────────────
-# swaylock uses PAM to authenticate at screen unlock. Without this file,
-# swaylock will NEVER successfully unlock — the screen stays locked forever.
-# Void does not ship this file by default; it must be created manually.
 # =============================================================================
 section "swaylock PAM config"
 
@@ -877,26 +671,13 @@ if [[ ! -f /etc/pam.d/swaylock ]]; then
 auth      include   system-local-login
 account   include   system-local-login
 EOF
-    log "swaylock PAM config written to /etc/pam.d/swaylock."
+    log "swaylock PAM config written."
 else
     log "swaylock PAM config already present — skipping."
 fi
 
 # =============================================================================
 # ── USER GROUP MEMBERSHIP ─────────────────────────────────────────────────────
-# Per Handbook (config/users-and-groups) and session-management docs:
-#
-#   input     — REQUIRED for keyboard/pointer in niri. elogind uses this for
-#               seat device access. Without it: mouse works, keyboard does NOT.
-#   audio     — Direct ALSA/PipeWire device access (belt-and-suspenders with elogind)
-#   video     — GPU and V4L2 (webcam) device access
-#   optical   — CD/DVD drive access
-#   storage   — Removable storage (udisks2 auto-mount)
-#   network   — NetworkManager without sudo
-#   wheel     — sudo privilege escalation
-#   bluetooth — bluetoothctl without sudo
-#
-# Changes take effect on NEXT LOGIN (or reboot).
 # =============================================================================
 section "User group membership"
 
@@ -916,8 +697,6 @@ log "Group membership configured. Takes effect on next login."
 
 # =============================================================================
 # ── SUDO CONFIGURATION ────────────────────────────────────────────────────────
-# Ensure wheel group has sudo access.
-# Void installer sets this, but a manual base install may not.
 # =============================================================================
 section "sudo configuration"
 
@@ -925,16 +704,13 @@ SUDOERS_WHEEL="/etc/sudoers.d/wheel"
 if [[ ! -f "$SUDOERS_WHEEL" ]]; then
     echo "%wheel ALL=(ALL:ALL) ALL" > "$SUDOERS_WHEEL"
     chmod 440 "$SUDOERS_WHEEL"
-    log "Wheel group granted sudo access via ${SUDOERS_WHEEL}."
+    log "Wheel group granted sudo access."
 else
     log "sudo wheel config already present — skipping."
 fi
 
 # =============================================================================
 # ── SSD TRIM ──────────────────────────────────────────────────────────────────
-# Per Handbook (config/ssd): periodic TRIM keeps SSD performance healthy.
-# On Void/runit, use fstrim via cron since there's no systemd timer.
-# Note: _sv_enable is defined at the top of this script.
 # =============================================================================
 section "SSD TRIM (weekly cron)"
 
@@ -974,15 +750,6 @@ fi
 
 # =============================================================================
 # ── GTK THEME ─────────────────────────────────────────────────────────────────
-# gsettings requires a running D-Bus session + display — can't run as root.
-# Install a first-boot XDG autostart .desktop file to apply on first login.
-#
-# [FIX] Original wrote a bare .sh file to ~/.config/autostart/. Niri does not
-#       natively execute files from that directory — it is an XDG autostart
-#       convention that requires an XDG-compliant session manager or portal.
-#       Converted to a proper .desktop file which xdg-autostart-service (if
-#       installed) and GNOME-compatible portals can process. The .sh is still
-#       the payload; the .desktop wraps it correctly.
 # =============================================================================
 section "GTK theme"
 
@@ -995,7 +762,6 @@ fi
 
 mkdir -p "${USER_HOME}/.config/autostart"
 
-# The payload script: applies the theme, then self-deletes
 cat > "${USER_HOME}/.config/autostart/apply-gtk-theme.sh" << 'GTKEOF'
 #!/usr/bin/env bash
 gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
@@ -1005,7 +771,6 @@ rm -- "${USER_HOME}/.config/autostart/apply-gtk-theme.desktop"
 GTKEOF
 chmod +x "${USER_HOME}/.config/autostart/apply-gtk-theme.sh"
 
-# XDG autostart .desktop file so the script runs on first graphical login
 cat > "${USER_HOME}/.config/autostart/apply-gtk-theme.desktop" << DTEOF
 [Desktop Entry]
 Type=Application
@@ -1015,10 +780,7 @@ X-GNOME-Autostart-enabled=true
 OnlyShowIn=niri;
 DTEOF
 
-log "GTK autostart theme .desktop written — applies on first login then self-deletes."
-log "  Note: requires xdg-autostart-service or similar to execute on niri."
-log "  Alternatively, add 'spawn-at-startup \"${USER_HOME}/.config/autostart/apply-gtk-theme.sh\"'"
-log "  to ~/.config/niri/config.kdl for one-time execution (then remove the line)."
+log "GTK autostart theme .desktop written."
 
 # =============================================================================
 # ── SDDM ASTRONAUT THEME ──────────────────────────────────────────────────────
@@ -1030,7 +792,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-th
 log "SDDM astronaut theme install attempted."
 
 # =============================================================================
-# ── KVANTUM (Qt theme) ────────────────────────────────────────────────────────
+# ── KVANTUM ───────────────────────────────────────────────────────────────────
 # =============================================================================
 section "Kvantum config"
 
@@ -1041,9 +803,6 @@ log "Kvantum theme set to catppuccin-frappe-mauve."
 
 # =============================================================================
 # ── FIX OWNERSHIP ─────────────────────────────────────────────────────────────
-# [FIX] Moved to after ALL user-home writes (dotfiles, GTK autostart, Kvantum)
-#       so the single chown pass catches everything written to $USER_HOME.
-#       In the original, files written after the chown were left root-owned.
 # =============================================================================
 section "Fixing ownership of ${USER_HOME}"
 
@@ -1052,24 +811,14 @@ log "Ownership of ${USER_HOME} fixed → ${USERNAME}:${USERNAME}"
 
 # =============================================================================
 # ── XBPS CACHE CLEANUP ────────────────────────────────────────────────────────
-# -O: remove cached package archive files (downloaded .xbps files).
-#
-# [FIX] Removed -o (orphan removal) from default run. xbps considers a package
-#       "orphaned" if nothing in the dependency tree explicitly requires it,
-#       which catches many intentionally-installed leaf packages (terminal apps,
-#       fonts, CLI tools, etc.) and silently removes them. -O alone is safe.
-#       To remove orphans intentionally: xbps-remove -Rcon (interactive review).
 # =============================================================================
 section "XBPS cache cleanup"
 
 xbps-remove -O || warn "xbps cache cleanup had non-fatal issues."
 log "Package download cache cleaned."
-log "  Orphan removal skipped — run 'xbps-remove -Rcon' manually to review orphans."
 
 # =============================================================================
 # ── XBPS RECONFIGURE ──────────────────────────────────────────────────────────
-# Runs post-install hooks for all packages. Required after installing DKMS
-# packages (nvidia) and firmware to ensure kernel modules are built.
 # =============================================================================
 section "Finalising (xbps-reconfigure -fa)"
 
@@ -1099,7 +848,6 @@ echo -e "   Check WirePlumber: ${BOLD}wpctl status${NC}"
 echo ""
 echo -e "${BOLD}  NVIDIA PRIME offload:${NC}"
 echo -e "   ${BOLD}prime-run <app>${NC}"
-echo -e "   ${BOLD}__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>${NC}"
 echo ""
 echo -e "${BOLD}  Verify GPU/audio:${NC}"
 echo -e "   ${BOLD}vainfo${NC}            — AMD VA-API"
