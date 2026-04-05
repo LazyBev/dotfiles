@@ -66,13 +66,13 @@
 #       file that XDG-compliant launchers (and niri via xdg-desktop-portal) can
 #       pick up, and also added it to niri's config spawn block comment.
 #
-# [FIX] SDDM wayland greeter: DisplayServer=wayland requires sddm-wayland-plasma
-#       in addition to the base sddm package on Void. The base sddm package uses
-#       the Qt/X11 greeter by default. Setting DisplayServer=wayland without
-#       sddm-wayland-plasma causes SDDM to fail to start entirely. Both packages
-#       are now installed and DisplayServer=wayland is set — the entire stack
-#       (greeter → niri → apps) is fully Wayland-native. XWayland is retained
-#       for X11 app compat inside the session, but runs nested, not as the host.
+# [FIX] SDDM greeter: 'sddm-wayland-plasma' does not exist in the Void repos —
+#       it is a Fedora/Arch package name. SDDM on Void runs its greeter on X11
+#       (DisplayServer=x11). This is correct and expected: the greeter is a
+#       temporary login screen only. Once autologin fires, SDDM launches
+#       niri-session which runs fully native Wayland on GBM/KMS. The greeter
+#       exits. The niri session and all apps within it are 100% Wayland.
+#       XWayland is available nested inside the session for X11 app compat only.
 #
 # [FIX] Ownership of /etc files: the final chown -R over $USER_HOME is correct,
 #       but the GTK autostart and Kvantum files written earlier were owned by
@@ -388,7 +388,7 @@ log "Wayland base installed."
 # xdg-user-dirs: creates ~/Desktop, ~/Downloads, ~/Music, etc.
 # xcb-util-cursor: cursor theme support — missing = invisible cursor in niri.
 # swaylock: screen locker. REQUIRES /etc/pam.d/swaylock to authenticate.
-# mako: Wayland notification daemon (D-Bus org.freedesktop.Notifications)
+# dunst: notification daemon (D-Bus org.freedesktop.Notifications)
 # fuzzel: Wayland-native app launcher.
 # grim + slurp: screenshot pipeline for Wayland.
 # wl-clipboard: wl-copy/wl-paste clipboard tools.
@@ -406,7 +406,7 @@ xbps-install -y \
     grim \
     slurp \
     wl-clipboard \
-    mako \
+    dunst \
     fuzzel \
     xdg-desktop-portal \
     xdg-desktop-portal-wlr \
@@ -711,6 +711,12 @@ set +a
 # Tell libseat to use elogind (prevents "seatd not found" noise)
 export LIBSEAT_BACKEND=logind
 
+# [FIX] keyboard intermittent: wait for udev to finish device scanning before
+# niri initialises libinput. Without this, niri races elogind's seat activation
+# and input devices are missing or unresponsive on some boots. udevadm settle
+# blocks until udev has finished processing all pending events.
+udevadm settle 2>/dev/null || true
+
 # Export Wayland display vars into D-Bus activation environment.
 # NOTE: --systemd flag intentionally omitted — systemd user manager does not
 # exist on Void/runit. The flag causes silent failure and a broken activation env.
@@ -765,6 +771,98 @@ EOF
 
 log "niri-session wrapper → /usr/local/bin/niri-session"
 log "niri.desktop → /usr/share/wayland-sessions/niri.desktop"
+
+# =============================================================================
+# ── NIRI CONFIG SNIPPETS (NVIDIA render device + keyboard fix) ────────────────
+# niri config.kdl changes needed for:
+#
+#  1. NVIDIA as render device:
+#     niri picks the first render node it finds. On AMD+NVIDIA hybrid systems
+#     this is usually renderD128 (AMD iGPU). To force NVIDIA, set render-device
+#     to the NVIDIA PCI path under /dev/dri/by-path/. This makes niri render
+#     via NVIDIA GBM directly.
+#     Ref: https://github.com/niri-wm/niri/wiki/Getting-Started#nvidia
+#
+#  2. Keyboard intermittent:
+#     If the xkb block in config.kdl is empty, niri queries
+#     org.freedesktop.locale1 (systemd-localed) over D-Bus for the layout.
+#     That service does not exist on Void/runit. The query fails silently and
+#     niri may start with no keymap, causing intermittent keyboard behaviour.
+#     Fix: explicitly set layout "us" (or your layout) in the xkb block.
+#
+#  3. fuzzel not launching:
+#     fuzzel launched via spawn-at-startup races xdg-desktop-portal startup
+#     and exits silently if the portal isn't ready. Use a keybind instead.
+#     fuzzel should NOT be in spawn-at-startup.
+#
+# Writes a snippet file the user merges into ~/.config/niri/config.kdl.
+# config.kdl is user-owned (managed by dotfiles) so we don't edit it directly.
+# =============================================================================
+section "niri config snippets (NVIDIA render device + keyboard fix)"
+
+# Detect NVIDIA render device PCI path at install time (best-effort)
+NVIDIA_RENDER_PATH=""
+if [[ -d /dev/dri/by-path ]]; then
+    while IFS= read -r -d '' link; do
+        pci_addr=$(basename "$link" | sed 's/-render$//')
+        if lspci -s "$pci_addr" 2>/dev/null | grep -qi nvidia; then
+            NVIDIA_RENDER_PATH="$link"
+            break
+        fi
+    done < <(find /dev/dri/by-path -name '*-render' -print0 2>/dev/null)
+fi
+
+SNIPPET_FILE="/home/${USERNAME}/.config/niri/void-nvidia-snippet.kdl"
+mkdir -p "/home/${USERNAME}/.config/niri"
+
+cat > "$SNIPPET_FILE" << KDLEOF
+// ============================================================
+// VOID LINUX — niri config snippets
+// Merge these into your ~/.config/niri/config.kdl
+// ============================================================
+
+// [1] NVIDIA render device — forces niri compositor to render via NVIDIA GBM.
+// If the path below is wrong, run: ls -l /dev/dri/by-path/
+// then cross-reference with: lspci | grep -i nvidia
+render-device "${NVIDIA_RENDER_PATH:-/dev/dri/by-path/pci-REPLACE_ME-render}"
+
+// [2] Keyboard fix — explicit layout prevents niri querying systemd-localed
+// (which doesn't exist on Void/runit), fixing intermittent keyboard issues.
+input {
+    keyboard {
+        xkb {
+            layout "us"
+            // Change "us" to your actual layout e.g. "gb", "de", "fr"
+            // Uncomment to add a compose key:
+            // options "compose:ralt"
+        }
+    }
+}
+
+// [3] dunst — must be spawned at startup (notification daemon)
+// Add at the top level of config.kdl (not inside any block):
+spawn-at-startup "dunst"
+
+// [4] fuzzel — use a keybind ONLY, do NOT use spawn-at-startup.
+// fuzzel races xdg-desktop-portal on startup and exits silently if the
+// portal isn't ready yet. A keybind fires on demand and always works.
+// Add inside your binds { } block:
+// binds {
+//     Mod+D { spawn "fuzzel"; }
+// }
+KDLEOF
+
+chown "${USERNAME}:${USERNAME}" "$SNIPPET_FILE"
+
+if [[ -n "$NVIDIA_RENDER_PATH" ]]; then
+    log "NVIDIA render device detected: ${NVIDIA_RENDER_PATH}"
+else
+    warn "Could not auto-detect NVIDIA render device (lspci may not be ready yet)."
+    warn "  After boot: ls -l /dev/dri/by-path/ and: lspci | grep -i nvidia"
+    warn "  Then update render-device in: ${SNIPPET_FILE}"
+fi
+log "niri config snippet → ${SNIPPET_FILE}"
+log "  Merge into ~/.config/niri/config.kdl before first login."
 
 # =============================================================================
 # ── SWAYLOCK PAM CONFIG ───────────────────────────────────────────────────────
