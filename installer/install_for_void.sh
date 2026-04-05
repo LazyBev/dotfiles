@@ -366,7 +366,7 @@ if [[ -d "$DOTFILES_SRC" ]]; then
     cp -r "$DOTFILES_SRC"/. "$DOTFILES_DST"/
     if [[ -d "${DOTFILES_DST}/Pictures" ]]; then
         mkdir -p "/home/${USERNAME}/Pictures"
-        mv "${DOTFILES_DST}/Pictures/." "/home/${USERNAME}/Pictures/"
+        cp -r "${DOTFILES_DST}/Pictures/." "/home/${USERNAME}/Pictures/"
         rm -rf "${DOTFILES_DST}/Pictures"
     fi
     chown -R "${USERNAME}:${USERNAME}" "$DOTFILES_DST"
