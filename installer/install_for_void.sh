@@ -19,11 +19,6 @@ set -eo pipefail
 IFS=$'\n\t'
 
 # =============================================================================
-# ── EDIT THESE ────────────────────────────────────────────────────────────────
-# =============================================================================
-USERNAME="yari"
-
-# =============================================================================
 # ── COLOURS & LOGGING ─────────────────────────────────────────────────────────
 # =============================================================================
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -47,6 +42,10 @@ section() {
 section "Pre-flight checks"
 
 [[ $EUID -ne 0 ]] && error "Must run as root."
+
+read -rp "Target username: " USERNAME
+[[ -z "$USERNAME" ]] && error "No username provided."
+id "$USERNAME" &>/dev/null || error "User '${USERNAME}' does not exist."
 
 for t in xbps-install xbps-reconfigure ln sed; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
@@ -206,8 +205,8 @@ log "niri and companion tools installed."
 
 # =============================================================================
 # SDDM
-# Using x11 display server mode — SDDM's x11 greeter can still launch
-# Wayland sessions (niri) fine. Wayland greeter mode caused keyboard issues.
+# DisplayServer=wayland — SDDM Wayland greeter launches niri sessions fine.
+# seat0 / input access requires the user to be in the 'input' group.
 # =============================================================================
 section "SDDM display manager"
 
@@ -304,9 +303,7 @@ _sv_enable() {
 }
 
 _sv_enable dbus
-
 _sv_enable elogind
-
 _sv_enable NetworkManager
 _sv_enable sshd
 _sv_enable cronie
@@ -395,6 +392,30 @@ else
 fi
 
 # =============================================================================
+# User group membership
+# - input   : required for keyboard/pointer access in niri (elogind seat mgmt)
+# - audio   : PipeWire / ALSA direct access
+# - video   : GPU / V4L2 access
+# - plugdev : removable device access (optional but handy)
+# - network : NetworkManager without sudo
+# - wheel   : sudo
+# These are additive — existing groups are preserved.
+# =============================================================================
+section "User group membership"
+
+for grp in input audio video plugdev network wheel; do
+    if getent group "$grp" &>/dev/null; then
+        usermod -aG "$grp" "$USERNAME" \
+            && log "  ${USERNAME} → ${grp}" \
+            || warn "  Failed to add ${USERNAME} to ${grp}"
+    else
+        warn "  Group '${grp}' does not exist — skipping."
+    fi
+done
+
+log "Group membership done. Changes take effect on next login."
+
+# =============================================================================
 # Dotfiles
 # =============================================================================
 section "Dotfiles"
@@ -415,7 +436,6 @@ if [[ -d "$DOTFILES_SRC" ]]; then
 else
     warn "No dotfiles found at ${DOTFILES_SRC} — skipping."
 fi
-
 
 # =============================================================================
 # GTK theme
