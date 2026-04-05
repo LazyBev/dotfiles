@@ -450,17 +450,6 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-th
 log "SDDM astronaut theme installed."
 
 # =============================================================================
-# advcpmv (advanced cp/mv with progress bars)
-# =============================================================================
-section "advcpmv"
-
-curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh \
-    --create-dirs -o /tmp/advcpmv/install.sh \
-    && (cd /tmp/advcpmv && sh install.sh) \
-    || warn "advcpmv install failed — non-fatal."
-log "advcpmv installed."
-
-# =============================================================================
 # Kvantum theme (catppuccin-frappe-mauve)
 # =============================================================================
 section "Kvantum config"
