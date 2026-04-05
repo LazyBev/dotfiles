@@ -21,7 +21,7 @@ IFS=$'\n\t'
 # =============================================================================
 # ── EDIT THESE ────────────────────────────────────────────────────────────────
 # =============================================================================
-USERNAME="25yari"
+USERNAME="yari"
 REPO_NONFREE="https://repo-default.voidlinux.org/current/nonfree"
 
 # =============================================================================
@@ -264,7 +264,9 @@ section "runit services"
 
 _sv_enable() {
     local svc="$1"
-    if [[ -d /etc/sv/"$svc" ]]; then
+    if [[ -L /var/service/"$svc" ]]; then
+        log "  Already enabled: $svc"
+    elif [[ -d /etc/sv/"$svc" ]]; then
         ln -sf /etc/sv/"$svc" /var/service/"$svc" \
             && log "  Enabled: $svc" \
             || warn "  Failed to enable: $svc"
