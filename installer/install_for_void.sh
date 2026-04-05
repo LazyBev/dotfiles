@@ -124,10 +124,13 @@ xbps-install -y \
     mesa-dri \
     mesa-vulkan-radeon \
     mesa-vaapi \
-    mesa-vdpau \
     vulkan-loader \
     libva-utils \
     || error "AMD/Mesa install failed."
+
+# mesa-vdpau is a separate subpackage — split out so a failure doesn't
+# abort the whole AMD stack (may not be available on all repo states).
+xbps-install -y mesa-vdpau || warn "mesa-vdpau failed — non-fatal, VDPAU decode unavailable."
 log "AMD/Mesa stack installed."
 
 # =============================================================================
