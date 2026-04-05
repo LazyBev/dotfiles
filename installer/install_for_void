@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Void Linux — Base runit + Wayland + niri WM + SDDM + Ghostty
+# Void Linux — Post-install setup
+# Run this after void-installer and first boot into your new system.
 #
-# Assumptions:
-#   • x86_64 glibc, UEFI system
-#   • Target disk:  /dev/nvme0n1  (edit DISK below)
-#   • Hybrid AMD (primary/iGPU) + NVIDIA (discrete) proprietary drivers
-#   • Run from a Void Linux live ISO as root
-#   • runit init (Void default)
+# What this does:
+#   • Updates xbps + system
+#   • Installs GPU drivers (AMD mesa + NVIDIA proprietary)
+#   • Installs Wayland, niri, SDDM, PipeWire, Ghostty, fonts
+#   • Configures services, environment, niri session wrapper
+#   • Copies dotfiles if present at ~/dotfiles/configs
 #
-# Usage (as root on Void live ISO):
-#   bash void-install.sh
+# Usage (as root or sudo):
+#   bash void-post-install.sh
 #
-# Log:  /tmp/void-install.log
+# Log: /tmp/void-post-install.log
 # =============================================================================
 set -eo pipefail
 IFS=$'\n\t'
@@ -20,29 +21,8 @@ IFS=$'\n\t'
 # =============================================================================
 # ── EDIT THESE ────────────────────────────────────────────────────────────────
 # =============================================================================
-DISK="/dev/nvme0n1"
-HOSTNAME="gentuwu"
 USERNAME="25yari"
-TIMEZONE="Europe/London"
-LOCALE="en_US.UTF-8"
-KEYMAP="us"
-
-# =============================================================================
-# ── DERIVED / FIXED ───────────────────────────────────────────────────────────
-# =============================================================================
-NCPU=$(nproc)
-LOG_FILE="/tmp/void-install.log"
-REPO="https://repo-default.voidlinux.org/current"
 REPO_NONFREE="https://repo-default.voidlinux.org/current/nonfree"
-ARCH="x86_64"
-
-_part() {
-    [[ "$DISK" == *nvme* || "$DISK" == *mmcblk* ]] \
-        && echo "${DISK}p${1}" || echo "${DISK}${1}"
-}
-PART_EFI="$(_part 1)"
-PART_SWAP="$(_part 2)"
-PART_ROOT="$(_part 3)"
 
 # =============================================================================
 # ── COLOURS & LOGGING ─────────────────────────────────────────────────────────
@@ -50,6 +30,7 @@ PART_ROOT="$(_part 3)"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
+LOG_FILE="/tmp/void-post-install.log"
 exec > >(tee >(sed 's/\x1b\[[0-9;]*m//g' >> "$LOG_FILE")) 2>&1
 
 log()     { echo -e "${GREEN}[+]${NC} $*"; }
@@ -62,258 +43,63 @@ section() {
 }
 
 # =============================================================================
-# STEP 1 — Pre-flight
+# Pre-flight
 # =============================================================================
 section "Pre-flight checks"
 
-[[ $EUID -ne 0 ]]  && error "Must run as root."
-[[ ! -b "$DISK" ]] && error "Disk $DISK not found."
-[[ -d /sys/firmware/efi/efivars ]] \
-    || error "Not booted in UEFI mode — cannot install EFI GRUB. Aborting."
+[[ $EUID -ne 0 ]] && error "Must run as root (or with sudo)."
 
-for t in wipefs sgdisk mkfs.fat mkswap mkfs.ext4 xbps-install chroot; do
+for t in xbps-install xbps-reconfigure ln sed; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
 done
 
-# ── Network check ─────────────────────────────────────────────────────────────
-PING_HOSTS=(
-    8.8.8.8 1.1.1.1 9.9.9.9
-    repo-default.voidlinux.org
-    github.com kernel.org
-)
+# Network check
 NET_OK=0
-for host in "${PING_HOSTS[@]}"; do
-    if ping -c2 -W2 "$host" &>/dev/null 2>&1; then
-        log "Network OK (reachable: $host)"
-        NET_OK=1
-        break
+for host in 8.8.8.8 1.1.1.1 repo-default.voidlinux.org; do
+    if ping -c2 -W2 "$host" &>/dev/null; then
+        log "Network OK (reachable: $host)"; NET_OK=1; break
     fi
 done
-[[ "$NET_OK" -eq 1 ]] || error "No internet connection — all ping targets failed."
+[[ "$NET_OK" -eq 1 ]] || error "No internet connection."
 
-# ── Passwords ─────────────────────────────────────────────────────────────────
-echo
-while true; do
-    read -rsp "  Root password: "         rp1 </dev/tty; echo
-    read -rsp "  Confirm root password: " rp2 </dev/tty; echo
-    [[ "$rp1" == "$rp2" ]] && break
-    warn "Root passwords do not match — try again."
-done
-while true; do
-    read -rsp "  Password for ${USERNAME}: "        up1 </dev/tty; echo
-    read -rsp "  Confirm password for ${USERNAME}: " up2 </dev/tty; echo
-    [[ "$up1" == "$up2" ]] && break
-    warn "User passwords do not match — try again."
-done
-ROOT_PASS="$rp1"
-USER_PASS="$up1"
-
-log "Pre-flight OK (CPUs: ${NCPU}, disk: ${DISK}, hostname: ${HOSTNAME}, user: ${USERNAME}, tz: ${TIMEZONE})"
+log "Pre-flight OK (user: ${USERNAME})"
 
 # =============================================================================
-# STEP 2 — Partition
+# Nonfree repo
 # =============================================================================
-section "Partitioning ${DISK}"
+section "Nonfree repo"
 
-warn "ALL DATA ON ${DISK} WILL BE DESTROYED"
-read -rp "  Type 'yes' to confirm: " _confirm </dev/tty
-[[ "$_confirm" != "yes" ]] && error "Aborted."
-
-wipefs -a "$DISK"
-sgdisk --zap-all "$DISK"
-log "Wiped ${DISK}."
-
-# EFI System Partition: type EF00 (required for UEFI GRUB), FAT32, /boot/efi
-# Swap: type 8200
-# Root: type 8300, ext4
-sgdisk -n 1:0:+1G  -t 1:ef00 -c 1:"EFI"  "$DISK"
-sgdisk -n 2:0:+8G  -t 2:8200 -c 2:"swap" "$DISK"
-sgdisk -n 3:0:0    -t 3:8300 -c 3:"root" "$DISK"
-
-partprobe "$DISK"; udevadm settle
-
-mkfs.vfat -F32 -n "EFI"     "$PART_EFI"
-mkswap    -L   "swap"        "$PART_SWAP"; swapon "$PART_SWAP"
-mkfs.ext4 -L   "voidlinux"  "$PART_ROOT"
-
-log "Formatted: ${PART_EFI} (FAT32/EFI), ${PART_SWAP} (swap), ${PART_ROOT} (ext4)."
-
-# =============================================================================
-# STEP 3 — Mount filesystems
-# =============================================================================
-section "Mounting filesystems"
-
-mount "$PART_ROOT" /mnt
-mkdir -p /mnt/boot/efi
-mount "$PART_EFI" /mnt/boot/efi
-
-log "Mounted: ${PART_ROOT} → /mnt, ${PART_EFI} → /mnt/boot/efi"
-
-# =============================================================================
-# STEP 4 — Bootstrap base system (XBPS method)
-# =============================================================================
-section "Bootstrapping base system (XBPS method)"
-
-# Per the Void handbook XBPS method:
-#   1. Copy RSA keys from the live medium to the target root.
-#   2. Set XBPS_ARCH and use xbps-install -S -r to install base-system.
-mkdir -p /mnt/var/db/xbps/keys
-cp /var/db/xbps/keys/* /mnt/var/db/xbps/keys/
-
-XBPS_ARCH=$ARCH xbps-install -S -r /mnt -R "$REPO" base-system \
-    || error "Base system bootstrap failed."
-
-log "base-system installed to /mnt."
-
-# Add nonfree repo config before entering chroot so the first
-# xbps-install -Su inside sees the NVIDIA packages immediately.
-mkdir -p /mnt/etc/xbps.d
-cp /etc/xbps.d/*.conf /mnt/etc/xbps.d/ 2>/dev/null || true
-cat > /mnt/etc/xbps.d/10-nonfree.conf << EOF
-repository=${REPO_NONFREE}
-EOF
-log "Nonfree repo configured (${REPO_NONFREE})."
-
-# =============================================================================
-# STEP 5 — fstab
-# =============================================================================
-section "Generating /etc/fstab"
-
-# xgenfstab (from xtools) is the recommended Void tool.
-# Fall back to manual UUID generation if xtools is absent.
-if command -v xgenfstab &>/dev/null; then
-    xgenfstab -U /mnt > /mnt/etc/fstab
-    log "fstab generated with xgenfstab."
+mkdir -p /etc/xbps.d
+if ! grep -q "nonfree" /etc/xbps.d/*.conf 2>/dev/null; then
+    echo "repository=${REPO_NONFREE}" > /etc/xbps.d/10-nonfree.conf
+    log "Nonfree repo configured."
 else
-    EFI_UUID=$(blkid  -s UUID -o value "$PART_EFI")
-    ROOT_UUID=$(blkid -s UUID -o value "$PART_ROOT")
-    SWAP_UUID=$(blkid -s UUID -o value "$PART_SWAP")
-    cat > /mnt/etc/fstab << EOF
-# <fs>                   <mp>       <type>  <opts>                        <dump> <pass>
-UUID=${ROOT_UUID}  /          ext4    defaults,noatime              0 1
-UUID=${EFI_UUID}   /boot/efi  vfat    umask=0077                    0 2
-UUID=${SWAP_UUID}  none       swap    sw                            0 0
-tmpfs              /tmp       tmpfs   defaults,nosuid,nodev,size=4G 0 0
-EOF
-    log "fstab written manually (xgenfstab not available)."
+    log "Nonfree repo already present."
 fi
 
 # =============================================================================
-# STEP 6 — Prepare chroot environment
+# Update xbps + system
 # =============================================================================
-section "Preparing chroot"
-
-cp --dereference /etc/resolv.conf /mnt/etc/
-
-# Mount virtual filesystems. xchroot (from xtools) does this automatically;
-# we do it manually here so plain chroot works from any live environment.
-mount --types proc  /proc /mnt/proc
-mount --rbind       /sys  /mnt/sys;  mount --make-rslave /mnt/sys
-mount --rbind       /dev  /mnt/dev;  mount --make-rslave /mnt/dev
-mount --bind        /run  /mnt/run;  mount --make-slave  /mnt/run
-
-# efivarfs is required by grub-install. The Void handbook notes that on
-# UEFI systems it may need to be mounted if EFI variables are unavailable.
-mount --bind /sys/firmware/efi/efivars /mnt/sys/firmware/efi/efivars
-
-log "Virtual filesystems and efivarfs mounted."
-
-# =============================================================================
-# STEP 7 — Write chroot script
-# =============================================================================
-section "Writing chroot script"
-
-install -m 700 /dev/null /mnt/root/chroot-install.sh
-
-# Unquoted heredoc delimiter: outer $VARs expand when writing the file.
-# Runtime chroot variables use \$VAR.
-cat > /mnt/root/chroot-install.sh << CHROOT_EOF
-#!/usr/bin/env bash
-set -eo pipefail
-
-ROOT_PASS='${ROOT_PASS}'
-USER_PASS='${USER_PASS}'
-
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
-log()     { echo -e "\${GREEN}[+]\${NC} \$*"; }
-warn()    { echo -e "\${YELLOW}[!]\${NC} \$*"; }
-error()   { echo -e "\${RED}[✗]\${NC} \$*" >&2; exit 1; }
-section() {
-    echo -e "\n\${BOLD}\${BLUE}══════════════════════════════════════════════\${NC}"
-    echo -e "\${BOLD}\${CYAN}  \$*\${NC}"
-    echo -e "\${BOLD}\${BLUE}══════════════════════════════════════════════\${NC}\n"
-}
-
-source /etc/profile
-export PS1="(chroot) \${PS1:-}"
-
-# ── Update xbps and base system ───────────────────────────────────────────────
-# Per the Void handbook: update xbps itself first, then do a full system
-# update before installing anything else.
 section "Updating xbps and base system"
-xbps-install -Syu xbps || error "xbps self-update failed."
-xbps-install -Syu       || warn "System update had non-fatal issues."
-log "xbps and base system up to date."
 
-# ── Hostname ──────────────────────────────────────────────────────────────────
-section "Hostname"
-echo "${HOSTNAME}" > /etc/hostname
-cat > /etc/hosts << 'HOSTSEOF'
-127.0.0.1   localhost
-::1         localhost
-HOSTSEOF
-echo "127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}" >> /etc/hosts
-log "Hostname: ${HOSTNAME}"
+xbps-install -Syu xbps  || error "xbps self-update failed."
+xbps-install -Syu        || warn "System update had non-fatal issues."
+log "System up to date."
 
-# ── rc.conf ───────────────────────────────────────────────────────────────────
-# /etc/rc.conf is where Void/runit reads timezone, keymap, and hwclock.
-# The Void handbook says to go through the options in /etc/rc.conf.
-section "rc.conf"
-sed -i "s|^#\?TIMEZONE=.*|TIMEZONE=\"${TIMEZONE}\"|"   /etc/rc.conf
-sed -i "s|^#\?KEYMAP=.*|KEYMAP=\"${KEYMAP}\"|"         /etc/rc.conf
-sed -i "s|^#\?HARDWARECLOCK=.*|HARDWARECLOCK=\"UTC\"|" /etc/rc.conf
-log "rc.conf: TIMEZONE=${TIMEZONE}, KEYMAP=${KEYMAP}, HARDWARECLOCK=UTC"
-
-# ── Locale (glibc) ────────────────────────────────────────────────────────────
-# Per the Void handbook: edit /etc/default/libc-locales to uncomment the
-# desired locale, then run xbps-reconfigure -f glibc-locales.
-section "Locale"
-sed -i "s|^#\(${LOCALE} UTF-8\)|\1|" /etc/default/libc-locales
-grep -q "^${LOCALE} UTF-8" /etc/default/libc-locales \
-    || echo "${LOCALE} UTF-8" >> /etc/default/libc-locales
-xbps-reconfigure -f glibc-locales
-cat > /etc/locale.conf << LCEOF
-LANG=${LOCALE}
-LC_COLLATE=C
-LCEOF
-log "Locale: ${LOCALE}"
-
-# ── Firmware ──────────────────────────────────────────────────────────────────
-# linux-firmware-amd contains microcode for both AMD CPUs and GPUs.
-# Per the Void AMD docs: AMD will automatically load the microcode —
-# no further configuration required.
+# =============================================================================
+# Firmware
+# =============================================================================
 section "Firmware"
+
 xbps-install -y linux-firmware linux-firmware-amd sof-firmware \
     || warn "Some firmware packages failed — non-fatal."
-log "Firmware installed (linux-firmware-amd covers AMD CPU + GPU microcode)."
+log "Firmware installed."
 
-# ── Kernel ────────────────────────────────────────────────────────────────────
-# 'linux' is the Void meta-package pointing to the latest stable kernel.
-# dracut builds the initramfs automatically when the kernel is configured
-# via xbps-reconfigure -fa at the end of this script.
-section "Kernel"
-xbps-install -y linux linux-headers dracut \
-    || error "Kernel install failed."
-KVER=\$(ls /boot/vmlinuz-* 2>/dev/null | sort -V | tail -1 | sed 's|/boot/vmlinuz-||')
-log "Kernel installed: \${KVER:-unknown}"
+# =============================================================================
+# GPU — hybrid AMD (primary) + NVIDIA (discrete, proprietary)
+# =============================================================================
+section "GPU — AMD/Mesa + NVIDIA proprietary"
 
-# ── GPU — AMD + NVIDIA ────────────────────────────────────────────────────────
-section "GPU — hybrid AMD (primary) + NVIDIA (discrete, proprietary)"
-
-# AMD: mesa-dri provides the GBM interface that Wayland compositors require.
-# The Void Wayland docs note: most compositors need GBM (from mesa-dri);
-# only GNOME/KDE support the EGLStreams backend used by the NVIDIA blob.
 log "Installing AMD/Mesa stack..."
 xbps-install -y \
     mesa-dri \
@@ -325,42 +111,31 @@ xbps-install -y \
     || error "AMD/Mesa install failed."
 log "AMD/Mesa installed."
 
-# NVIDIA: proprietary driver from the nonfree repo.
-# 'nvidia-libs' adds 32-bit compat libs (useful for Steam/Wine).
 log "Installing NVIDIA proprietary drivers..."
-xbps-install -y nvidia nvidia-libs \
-    || error "NVIDIA install failed."
+xbps-install -y nvidia nvidia-libs || error "NVIDIA install failed."
 
-# DRM kernel modesetting — required for Wayland with proprietary NVIDIA.
 mkdir -p /etc/modprobe.d
-cat > /etc/modprobe.d/nvidia.conf << 'NVIDIAEOF'
+cat > /etc/modprobe.d/nvidia.conf << 'EOF'
 options nvidia_drm modeset=1 fbdev=1
-NVIDIAEOF
+EOF
 
-# Load NVIDIA modules at boot.
 mkdir -p /etc/modules-load.d
-cat > /etc/modules-load.d/nvidia.conf << 'MODEOF'
+cat > /etc/modules-load.d/nvidia.conf << 'EOF'
 nvidia
 nvidia_modeset
 nvidia_uvm
 nvidia_drm
-MODEOF
+EOF
 
 log "NVIDIA installed."
-log "  KMS:     nvidia_drm modeset=1 fbdev=1 → /etc/modprobe.d/nvidia.conf"
-log "  Modules: nvidia nvidia_modeset nvidia_uvm nvidia_drm"
+log "  KMS: nvidia_drm modeset=1 fbdev=1"
 log "  PRIME offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>"
 
-# ── Core system packages ──────────────────────────────────────────────────────
-section "Core system packages"
+# =============================================================================
+# Core packages
+# =============================================================================
+section "Core packages"
 
-# Per the Void NetworkManager docs:
-#   - dbus must be enabled and running before NetworkManager starts.
-#   - Users of NetworkManager must be in the 'network' group.
-#   - Disable any other network services (dhcpcd etc.) before enabling NM.
-# Per the Void Wayland docs:
-#   - A seat manager (elogind or seatd) is required by Wayland compositors.
-#   - elogind is used here for compatibility with polkit and SDDM.
 xbps-install -y \
     sudo \
     bash-completion \
@@ -380,44 +155,11 @@ xbps-install -y \
     neovim \
     cronie \
     || error "Core package install failed."
-
 log "Core packages installed."
 
-# ── GRUB ──────────────────────────────────────────────────────────────────────
-# Per the Void handbook UEFI section:
-#   install grub-x86_64-efi, then run grub-install with
-#   --target=x86_64-efi and --efi-directory=/boot/efi.
-# If EFI variables are unavailable, mount efivarfs first (done in the
-# outer script before chroot entry). As a fallback, --no-nvram can be
-# added if the install still fails on non-compliant firmware.
-section "GRUB bootloader"
-
-xbps-install -y grub-x86_64-efi || error "grub-x86_64-efi install failed."
-
-# Belt-and-suspenders KMS: set modeset on the kernel cmdline too,
-# alongside /etc/modprobe.d/nvidia.conf.
-sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet nvidia-drm.modeset=1"/' \
-    /etc/default/grub 2>/dev/null || true
-
-grub-install \
-    --target=x86_64-efi \
-    --efi-directory=/boot/efi \
-    --bootloader-id="Void" \
-    --recheck \
-    || error "grub-install failed."
-
-# grub-mkconfig is also called by xbps-reconfigure -fa below, but running
-# it here ensures a working config exists even if reconfigure is interrupted.
-grub-mkconfig -o /boot/grub/grub.cfg || error "grub-mkconfig failed."
-log "GRUB installed (EFI, bootloader-id: Void)."
-
-# ── Wayland base ──────────────────────────────────────────────────────────────
-# Per the Void Wayland docs:
-#   - Qt5/Qt6 apps need qt5-wayland / qt6-wayland + QT_QPA_PLATFORM=wayland.
-#   - SDL apps need SDL_VIDEODRIVER=wayland.
-#   - XWayland package is xorg-server-xwayland.
-#   - XDG_RUNTIME_DIR is required by the Wayland library; elogind sets it.
-#   - XDG_SESSION_TYPE=wayland may be required by some apps.
+# =============================================================================
+# Wayland base
+# =============================================================================
 section "Wayland base"
 
 xbps-install -y \
@@ -431,15 +173,11 @@ xbps-install -y \
     qt5-wayland \
     qt6-wayland \
     || error "Wayland base install failed."
+log "Wayland base installed."
 
-log "Wayland base installed (xorg-server-xwayland, qt5/qt6-wayland)."
-
-# ── niri WM and Wayland tools ─────────────────────────────────────────────────
-# The Void Wayland docs list niri as a packaged standalone compositor.
-# xdg-desktop-portal provides the portal bus (file pickers, screenshare).
-# xdg-desktop-portal-wlr is the wlroots-based backend compatible with niri.
-# The Void Wayland docs warn: compositors that don't depend on fonts can
-# cause many apps to fail — fonts are installed in the Fonts section below.
+# =============================================================================
+# niri WM + tools
+# =============================================================================
 section "niri window manager + tools"
 
 xbps-install -y \
@@ -457,16 +195,17 @@ xbps-install -y \
     xdg-desktop-portal-wlr \
     xcb-util-cursor \
     || error "niri/tools install failed."
-
 log "niri and companion tools installed."
 
-# ── SDDM ──────────────────────────────────────────────────────────────────────
+# =============================================================================
+# SDDM
+# =============================================================================
 section "SDDM display manager"
 
 xbps-install -y sddm || error "SDDM install failed."
 
 mkdir -p /etc/sddm.conf.d
-cat > /etc/sddm.conf.d/general.conf << 'SDDMEOF'
+cat > /etc/sddm.conf.d/general.conf << 'EOF'
 [General]
 DisplayServer=x11
 
@@ -476,55 +215,41 @@ Current=
 [Users]
 # AutoUser=YOUR_USERNAME
 # Relogin=true
-SDDMEOF
-
+EOF
 log "SDDM installed."
 
-# ── PipeWire audio ────────────────────────────────────────────────────────────
-# Per the Void PipeWire docs:
-#   - PipeWire requires an active D-Bus user session bus (provided by
-#     elogind / dbus-run-session) and XDG_RUNTIME_DIR (set by elogind).
-#   - Install pipewire — this also installs wireplumber.
-#   - Configure wireplumber as session manager via the provided symlink.
-#   - Configure pipewire-pulse for PulseAudio compat (highly recommended;
-#     most apps speak PulseAudio rather than PipeWire natively).
-#   - Configure ALSA integration via alsa-pipewire symlinks.
-#   - Launch pipewire from the compositor startup script — it is per-user
-#     and must NOT run as a system-wide runit service.
+# =============================================================================
+# PipeWire + WirePlumber
+# =============================================================================
 section "PipeWire + WirePlumber"
 
 xbps-install -y pipewire alsa-pipewire pavucontrol \
     || error "PipeWire install failed."
 
-# WirePlumber session manager — system-wide config.
 mkdir -p /etc/pipewire/pipewire.conf.d
 ln -sf /usr/share/examples/wireplumber/10-wireplumber.conf \
        /etc/pipewire/pipewire.conf.d/10-wireplumber.conf
-
-# PulseAudio compat interface.
 ln -sf /usr/share/examples/pipewire/20-pipewire-pulse.conf \
        /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf
 
-# ALSA: make PipeWire the default ALSA device.
 mkdir -p /etc/alsa/conf.d
 ln -sf /usr/share/alsa/alsa.conf.d/50-pipewire.conf \
        /etc/alsa/conf.d/50-pipewire.conf
 ln -sf /usr/share/alsa/alsa.conf.d/99-pipewire-default.conf \
        /etc/alsa/conf.d/99-pipewire-default.conf
 
-log "PipeWire installed."
-log "  Session manager: wireplumber (10-wireplumber.conf)"
-log "  PulseAudio compat: enabled (20-pipewire-pulse.conf)"
-log "  ALSA: PipeWire set as default device."
+log "PipeWire installed and configured."
 
-# ── Ghostty terminal ──────────────────────────────────────────────────────────
+# =============================================================================
+# Ghostty terminal
+# =============================================================================
 section "Ghostty terminal"
 xbps-install -y ghostty || error "ghostty install failed."
 log "Ghostty installed."
 
-# ── Fonts ─────────────────────────────────────────────────────────────────────
-# The Void Wayland docs explicitly warn that some compositors do not depend
-# on fonts, which can cause many applications to fail. Install fonts now.
+# =============================================================================
+# Fonts
+# =============================================================================
 section "Fonts"
 xbps-install -y \
     noto-fonts-ttf \
@@ -533,25 +258,24 @@ xbps-install -y \
     || warn "Some fonts failed — non-fatal."
 log "Fonts installed."
 
-# ── runit services ────────────────────────────────────────────────────────────
-# Enable a service: symlink /etc/sv/<name> → /var/service/<name>.
-# Per the Void NetworkManager docs: enable dbus before NetworkManager.
-# Per the Void Wayland docs: a seat manager (elogind) must be running.
+# =============================================================================
+# runit services
+# =============================================================================
 section "runit services"
 
 _sv_enable() {
-    local svc="\$1"
-    if [[ -d /etc/sv/"\$svc" ]]; then
-        ln -sf /etc/sv/"\$svc" /var/service/"\$svc" \
-            && log "  Enabled: \$svc" \
-            || warn "  Failed to enable: \$svc"
+    local svc="$1"
+    if [[ -d /etc/sv/"$svc" ]]; then
+        ln -sf /etc/sv/"$svc" /var/service/"$svc" \
+            && log "  Enabled: $svc" \
+            || warn "  Failed to enable: $svc"
     else
-        warn "  /etc/sv/\$svc not found — skipping."
+        warn "  /etc/sv/$svc not found — skipping."
     fi
 }
 
-_sv_enable dbus           # must come before NetworkManager
-_sv_enable elogind        # seat/session manager for Wayland + SDDM
+_sv_enable dbus
+_sv_enable elogind
 _sv_enable NetworkManager
 _sv_enable sshd
 _sv_enable cronie
@@ -561,48 +285,12 @@ _sv_enable sddm
 
 log "runit services enabled."
 
-# ── User accounts ─────────────────────────────────────────────────────────────
-# Groups assigned per the Void default groups table:
-#   wheel   — sudo / elevated privileges
-#   audio   — access to audio devices
-#   video   — access to video devices
-#   input   — access to /dev/mouse*, /dev/event*
-#   storage — removable storage
-#   optical — DVD/CD-RW
-#   network — required for NetworkManager users (per NM docs)
-#   plugdev — pluggable devices
-#   kvm     — KVM virtual machines
-section "User accounts"
+# =============================================================================
+# System-wide environment (Wayland + hybrid GPU)
+# =============================================================================
+section "System-wide environment"
 
-echo "root:\${ROOT_PASS}" | chpasswd
-
-for grp in wheel audio video input storage optical network plugdev kvm; do
-    getent group "\$grp" &>/dev/null || groupadd "\$grp"
-done
-
-useradd -m \
-    -G "wheel,audio,video,input,storage,optical,network,plugdev,kvm" \
-    -s /bin/bash \
-    "${USERNAME}"
-echo "${USERNAME}:\${USER_PASS}" | chpasswd
-
-mkdir -p /etc/sudoers.d
-echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
-chmod 440 /etc/sudoers.d/wheel
-
-log "User '${USERNAME}' created."
-log "  Groups: wheel audio video input storage optical network plugdev kvm"
-
-# ── System-wide environment ───────────────────────────────────────────────────
-# Void uses /etc/profile.d/ for system-wide environment.
-# Variables required per the Void Wayland docs:
-#   XDG_RUNTIME_DIR  — managed automatically by elogind at login.
-#   XDG_SESSION_TYPE — set to 'wayland' for apps that check it.
-#   QT_QPA_PLATFORM  — requires qt5-wayland / qt6-wayland packages.
-#   SDL_VIDEODRIVER  — SDL apps need this set to 'wayland'.
-section "System-wide environment (Wayland + hybrid GPU)"
-
-cat > /etc/profile.d/90-wayland.sh << 'ENVEOF'
+cat > /etc/profile.d/90-wayland.sh << 'EOF'
 export XDG_SESSION_TYPE=wayland
 export QT_QPA_PLATFORM=wayland;xcb
 export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
@@ -610,152 +298,106 @@ export GDK_BACKEND=wayland,x11
 export SDL_VIDEODRIVER=wayland
 export MOZ_ENABLE_WAYLAND=1
 export ELECTRON_OZONE_PLATFORM_HINT=wayland
-ENVEOF
+EOF
 
-cat > /etc/profile.d/91-hybrid-gpu.sh << 'GPUEOF'
-# AMD as default renderer. VA-API uses radeonsi.
+cat > /etc/profile.d/91-hybrid-gpu.sh << 'EOF'
 export LIBVA_DRIVER_NAME=radeonsi
-# Vulkan ICD discovery is left to the loader (/usr/share/vulkan/icd.d/).
-# To run an app on the NVIDIA GPU (PRIME offload):
-#   __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
-GPUEOF
+# PRIME offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
+EOF
 
 chmod +x /etc/profile.d/90-wayland.sh /etc/profile.d/91-hybrid-gpu.sh
 log "Environment scripts written to /etc/profile.d/."
 
-# ── niri session wrapper ──────────────────────────────────────────────────────
-# Per the Void PipeWire docs (Launching Automatically section):
-#   use the window manager's startup script to launch pipewire.
-# PipeWire is launched per-user from this wrapper, not as a system service.
-# wireplumber is started automatically by PipeWire via 10-wireplumber.conf,
-# so we only need to launch pipewire itself.
-# PipeWire requires a D-Bus user session bus and XDG_RUNTIME_DIR — both
-# are provided by elogind when the user logs in via SDDM.
-cat > /usr/local/bin/niri-session << 'SESSIONEOF'
+# =============================================================================
+# niri session wrapper
+# =============================================================================
+section "niri session wrapper"
+
+cat > /usr/local/bin/niri-session << 'EOF'
 #!/usr/bin/env bash
 set -a
 source /etc/profile
 set +a
 
 pipewire &
-PIPEWIRE_PID=\$!
-
-trap "kill \$PIPEWIRE_PID 2>/dev/null; wait \$PIPEWIRE_PID 2>/dev/null" EXIT
+PIPEWIRE_PID=$!
+trap "kill $PIPEWIRE_PID 2>/dev/null; wait $PIPEWIRE_PID 2>/dev/null" EXIT
 
 exec niri
-SESSIONEOF
+EOF
 chmod +x /usr/local/bin/niri-session
 
-# ── SDDM Wayland session entry ────────────────────────────────────────────────
 mkdir -p /usr/share/wayland-sessions
-cat > /usr/share/wayland-sessions/niri.desktop << 'DESKTOPEOF'
+cat > /usr/share/wayland-sessions/niri.desktop << 'EOF'
 [Desktop Entry]
 Name=niri
 Comment=A scrollable-tiling Wayland compositor
 Exec=niri-session
 Type=Application
 DesktopNames=niri
-DESKTOPEOF
+EOF
 
-# ── swaylock PAM config ───────────────────────────────────────────────────────
-# Without /etc/pam.d/swaylock, swaylock cannot authenticate users and the
-# screen can never be unlocked. Ensure this file always exists.
+log "niri-session wrapper and .desktop entry written."
+
+# =============================================================================
+# swaylock PAM config
+# =============================================================================
 if [[ ! -f /etc/pam.d/swaylock ]]; then
-    cat > /etc/pam.d/swaylock << 'PAMEOF'
+    cat > /etc/pam.d/swaylock << 'EOF'
 auth      include   system-local-login
 account   include   system-local-login
-PAMEOF
+EOF
     log "swaylock PAM config written."
 else
     log "swaylock PAM config already present."
 fi
 
-# ── Fix ownership ─────────────────────────────────────────────────────────────
-chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
-
-# ── xbps-reconfigure -fa ──────────────────────────────────────────────────────
-# Per the Void handbook finalisation step:
-#   run xbps-reconfigure -fa to ensure all packages are configured properly.
-#   This triggers dracut to generate the initramfs and GRUB to regenerate
-#   its configuration — both are required for a bootable system.
-section "Finalising (xbps-reconfigure -fa)"
-xbps-reconfigure -fa || warn "xbps-reconfigure had non-fatal issues."
-log "All packages reconfigured — initramfs and GRUB config regenerated."
-
-section "Chroot phase complete"
-echo ""
-echo "  All done inside chroot. Type 'exit' to return to the live environment."
-CHROOT_EOF
-
-log "Chroot script written → /mnt/root/chroot-install.sh"
-
 # =============================================================================
-# STEP 8 — Enter chroot
+# Dotfiles
 # =============================================================================
-section "Entering chroot"
-chroot /mnt /bin/bash /root/chroot-install.sh
+section "Dotfiles"
 
-# =============================================================================
-# STEP 9 — Dotfiles
-# =============================================================================
-section "Copying dotfiles"
-
-DOTFILES_SRC="${HOME}/dotfiles/configs"
-DOTFILES_DST="/mnt/home/${USERNAME}/.config"
+DOTFILES_SRC="/home/${USERNAME}/dotfiles/configs"
+DOTFILES_DST="/home/${USERNAME}/.config"
 
 if [[ -d "$DOTFILES_SRC" ]]; then
     mkdir -p "$DOTFILES_DST"
     cp -r "$DOTFILES_SRC"/. "$DOTFILES_DST"/
-    chown -R 1000:1000 "$DOTFILES_DST"
-    log "Dotfiles copied: ${DOTFILES_SRC} → ${DOTFILES_DST}"
-    ls "$DOTFILES_DST" | while read -r d; do log "  .config/${d}"; done
     if [[ -d "${DOTFILES_DST}/Pictures" ]]; then
-        mkdir -p "/mnt/home/${USERNAME}/Pictures"
-        mv "${DOTFILES_DST}/Pictures/." "/mnt/home/${USERNAME}/Pictures/"
+        mkdir -p "/home/${USERNAME}/Pictures"
+        mv "${DOTFILES_DST}/Pictures/." "/home/${USERNAME}/Pictures/"
         rm -rf "${DOTFILES_DST}/Pictures"
     fi
+    chown -R "${USERNAME}:${USERNAME}" "$DOTFILES_DST"
+    log "Dotfiles copied to ${DOTFILES_DST}"
 else
     warn "No dotfiles found at ${DOTFILES_SRC} — skipping."
 fi
 
 # =============================================================================
-# STEP 10 — Unmount
+# Fix ownership
 # =============================================================================
-section "Unmounting"
+chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
 
-rm -f /mnt/root/chroot-install.sh
+# =============================================================================
+# Reconfigure all packages
+# =============================================================================
+section "Finalising (xbps-reconfigure -fa)"
+xbps-reconfigure -fa || warn "xbps-reconfigure had non-fatal issues."
+log "All packages reconfigured."
 
-# Unmount in reverse order of mounting.
-for mp in \
-    /mnt/sys/firmware/efi/efivars \
-    /mnt/proc \
-    /mnt/sys \
-    /mnt/dev \
-    /mnt/run \
-    /mnt/boot/efi \
-    /mnt
-do
-    mountpoint -q "$mp" 2>/dev/null \
-        && umount -R "$mp" 2>/dev/null \
-        || true
-done
-
-swapoff "$PART_SWAP" 2>/dev/null || true
-log "Unmount complete."
-
+# =============================================================================
+# Done
+# =============================================================================
 echo ""
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${GREEN}  Void Linux installation complete!${NC}"
+echo -e "${BOLD}${GREEN}  Post-install complete!${NC}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  Log: ${BOLD}${LOG_FILE}${NC}"
 echo ""
 echo -e "  Next steps:"
-echo -e "   1. ${BOLD}shutdown -r now${NC}"
+echo -e "   1. ${BOLD}reboot${NC}"
 echo -e "   2. SDDM will start — select the ${BOLD}niri${NC} session"
-echo -e "   3. Open ${BOLD}Ghostty${NC} from niri"
-echo -e "   4. To run an app on the NVIDIA GPU:"
-echo -e "      ${BOLD}__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>${NC}"
-echo -e "   5. After first boot, update the system:"
-echo -e "      ${BOLD}sudo xbps-install -Syu${NC}"
+echo -e "   3. PRIME offload: ${BOLD}__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>${NC}"
 echo ""
