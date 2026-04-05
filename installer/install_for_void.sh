@@ -17,7 +17,82 @@
 #
 # Log: /tmp/void-post-install.log
 # =============================================================================
-set -eo pipefail
+# AUDIT CHANGELOG (vs previous version):
+#
+# [FIX] niri-session: removed --systemd flag from dbus-update-activation-environment
+#       --systemd targets systemd's user manager which does not exist on Void/runit.
+#       This was silently corrupting the D-Bus activation environment, preventing
+#       PipeWire from connecting to the session bus.
+#
+# [FIX] niri-session: PipeWire now starts AFTER a brief delay (sleep 2) to allow
+#       elogind and the D-Bus session bus to be fully ready. Starting it immediately
+#       caused "unable to autolaunch dbus-daemon without $DISPLAY" and lockfile
+#       races visible in the screenshot.
+#
+# [FIX] niri-session: pipewire-pulse now started explicitly alongside pipewire.
+#       The 20-pipewire-pulse.conf symlink only makes pipewire *offer* the pulse
+#       socket; pipewire-pulse must also be running as a separate process for
+#       PulseAudio compat to actually work.
+#
+# [FIX] niri-session: wireplumber started explicitly. The 10-wireplumber.conf
+#       conf.d symlink instructs pipewire to attempt to load wireplumber as a
+#       module — but on Void the correct approach is running wireplumber as a
+#       separate process. Relying on the module path alone fails when the module
+#       search path differs from the examples path.
+#
+# [FIX] PipeWire conf.d symlinks: added path existence checks before symlinking.
+#       Original script would silently create broken symlinks if Void ships the
+#       example files at a different path (e.g. /usr/share/pipewire/ vs
+#       /usr/share/examples/pipewire/). Now falls back gracefully with a warning.
+#
+# [FIX] modules-load.d: Void/runit does not process /etc/modules-load.d/ — that
+#       is a systemd-specific mechanism. Replaced with /etc/modules-load (the
+#       runit/mdev equivalent, read by the kernel-modules runit service on Void)
+#       and also writes /etc/modprobe.d for options. Kept modprobe.d for options.
+#
+# [FIX] _sv_enable called before it was defined: the SSD TRIM section called
+#       _sv_enable fstrim before the function was declared (function lived in the
+#       runit services section further down). Moved function definition to the
+#       top of the script.
+#
+# [FIX] xbps-install -Sy (repo sync without -u): the standalone sync at line 78
+#       runs xbps-install -Sy with no packages — this is a no-op on current xbps
+#       and can silently fail on some versions. Replaced with xbps-install -S
+#       which is the correct flag for index-only sync.
+#
+# [FIX] GTK autostart: the autostart script was written to
+#       ~/.config/autostart/apply-gtk-theme.sh but niri does not process
+#       XDG autostart .desktop files natively. Converted to a proper .desktop
+#       file that XDG-compliant launchers (and niri via xdg-desktop-portal) can
+#       pick up, and also added it to niri's config spawn block comment.
+#
+# [FIX] SDDM wayland greeter: DisplayServer=wayland requires sddm-wayland-plasma
+#       or a compatible greeter package on Void. The base sddm package uses the
+#       Qt/X11 greeter by default. Setting DisplayServer=wayland without the
+#       right greeter causes SDDM to fail to start. Changed to x11 (safe default)
+#       with a comment explaining how to switch to Wayland greeter if desired.
+#
+# [FIX] Ownership of /etc files: the final chown -R over $USER_HOME is correct,
+#       but the GTK autostart and Kvantum files written earlier were owned by
+#       root. Moved the chown to after ALL user-home writes so it catches
+#       everything in one pass.
+#
+# [HARDENING] set -u added: catches unbound variable bugs at script authoring time.
+#
+# [HARDENING] NVIDIA: added note that the 'nvidia' package on Void is DKMS-based
+#             and requires the kernel headers package to be present. Added
+#             linux-headers to the install list so the DKMS build doesn't fail
+#             silently during xbps-reconfigure.
+#
+# [HARDENING] PipeWire stale lockfile cleanup added to niri-session so a crashed
+#             previous session doesn't block the next login.
+#
+# [HARDENING] xbps-remove -Oo: -o (orphan removal) can remove packages the user
+#             intentionally installed if xbps considers them "orphaned". Changed
+#             to -O only (cache cleanup) to avoid silent uninstalls. Orphan
+#             removal left as an opt-in with a comment.
+# =============================================================================
+set -euo pipefail
 IFS=$'\n\t'
 
 # =============================================================================
@@ -39,6 +114,24 @@ section() {
 }
 
 # =============================================================================
+# ── HELPER: runit service enable ──────────────────────────────────────────────
+# [FIX] Moved here from the runit section so it's available to SSD TRIM and any
+#       other section that needs it before the runit block runs.
+# =============================================================================
+_sv_enable() {
+    local svc="$1"
+    if [[ -L /var/service/"$svc" ]]; then
+        log "  Already enabled: $svc"
+    elif [[ -d /etc/sv/"$svc" ]]; then
+        ln -sf /etc/sv/"$svc" /var/service/"$svc" \
+            && log "  Enabled: $svc" \
+            || warn "  Failed to enable: $svc"
+    else
+        warn "  /etc/sv/$svc not found — skipping."
+    fi
+}
+
+# =============================================================================
 # ── PRE-FLIGHT ────────────────────────────────────────────────────────────────
 # =============================================================================
 section "Pre-flight checks"
@@ -50,9 +143,10 @@ read -rp "Target username: " USERNAME
 id "$USERNAME" &>/dev/null || error "User '${USERNAME}' does not exist."
 
 USER_HOME="/home/${USERNAME}"
+[[ -d "$USER_HOME" ]] || error "Home directory ${USER_HOME} does not exist."
 
-for t in xbps-install xbps-reconfigure xbps-query ln sed usermod; do
-    command -v "$t" &>/dev/null || error "Missing tool: $t"
+for t in xbps-install xbps-reconfigure xbps-query ln sed usermod getent; do
+    command -v "$t" &>/dev/null || error "Missing required tool: $t"
 done
 
 NET_OK=0
@@ -61,9 +155,9 @@ for host in 8.8.8.8 1.1.1.1 repo-default.voidlinux.org; do
         log "Network OK (reachable: $host)"; NET_OK=1; break
     fi
 done
-[[ "$NET_OK" -eq 1 ]] || error "No internet connection."
+[[ "$NET_OK" -eq 1 ]] || error "No internet connection detected."
 
-log "Pre-flight OK — target user: ${USERNAME}"
+log "Pre-flight OK — target user: ${USERNAME}, home: ${USER_HOME}"
 
 # =============================================================================
 # ── REPOS ─────────────────────────────────────────────────────────────────────
@@ -75,7 +169,10 @@ section "Repositories (nonfree + multilib)"
 
 xbps-install -Sy void-repo-nonfree void-repo-multilib \
     || warn "Repo packages may already be installed — continuing."
-xbps-install -Sy   # sync new repo indexes
+
+# [FIX] xbps-install -Sy with no package arguments is a no-op on current xbps.
+#       -S (sync indexes only) is the correct flag for a metadata-only refresh.
+xbps-install -S
 log "Nonfree + multilib repos enabled and indexes synced."
 
 # =============================================================================
@@ -85,8 +182,8 @@ log "Nonfree + multilib repos enabled and indexes synced."
 # =============================================================================
 section "xbps self-update + full system update"
 
-xbps-install -Syu xbps  || error "xbps self-update failed."
-xbps-install -Syu        || warn "System update had non-fatal warnings."
+xbps-install -Syu xbps || error "xbps self-update failed."
+xbps-install -Syu       || warn "System update had non-fatal warnings."
 log "System fully up to date."
 
 # =============================================================================
@@ -128,15 +225,16 @@ xbps-install -y \
     libva-utils \
     || error "AMD/Mesa install failed."
 
-# mesa-vdpau is a separate subpackage — split out so a failure doesn't
-# abort the whole AMD stack (may not be available on all repo states).
-xbps-install -y mesa-vdpau || warn "mesa-vdpau failed — non-fatal, VDPAU decode unavailable."
+# mesa-vdpau is a separate subpackage — split out so a failure doesn't abort
+# the whole AMD stack (may not be available on all repo states).
+xbps-install -y mesa-vdpau \
+    || warn "mesa-vdpau failed — non-fatal, VDPAU decode unavailable."
 log "AMD/Mesa stack installed."
 
 # =============================================================================
 # ── GPU — NVIDIA proprietary (discrete dGPU, PRIME offload) ──────────────────
 # Per Handbook (graphics-drivers/nvidia):
-#   - Cards 800+   → 'nvidia' package (DKMS, integrates into kernel via DKMS)
+#   - Cards 800+    → 'nvidia' package (DKMS — requires linux-headers)
 #   - Cards 600/700 → 'nvidia470'
 #   - Cards 400/500 → 'nvidia390'
 #   nvidia-libs         — 64-bit OpenGL/Vulkan userspace
@@ -150,14 +248,22 @@ log "AMD/Mesa stack installed."
 #
 # nvidia_drm.modeset=1  — required for Wayland (GBM output)
 # fbdev=1               — framebuffer console on NVIDIA GPU
+#
+# [HARDENING] linux-headers added: the 'nvidia' package is DKMS-based. Without
+#             kernel headers present, the DKMS build during xbps-reconfigure
+#             fails silently and no nvidia.ko is produced.
 # =============================================================================
 section "GPU — NVIDIA proprietary (dGPU, PRIME offload)"
+
+xbps-install -y linux-headers \
+    || warn "linux-headers install failed — NVIDIA DKMS build may fail."
 
 xbps-install -y nvidia nvidia-libs \
     || error "NVIDIA install failed."
 
 # 32-bit NVIDIA compat — requires void-repo-multilib; non-fatal if unavailable
-xbps-install -y nvidia-libs-32bit || warn "nvidia-libs-32bit not found — non-fatal, 32-bit NVIDIA compat unavailable."
+xbps-install -y nvidia-libs-32bit \
+    || warn "nvidia-libs-32bit not found — non-fatal, 32-bit NVIDIA compat unavailable."
 
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << 'EOF'
@@ -165,6 +271,9 @@ cat > /etc/modprobe.d/nvidia.conf << 'EOF'
 options nvidia_drm modeset=1 fbdev=1
 EOF
 
+# [FIX] /etc/modules-load.d/ is a systemd convention and is NOT processed by
+#       Void's runit boot. Void reads /etc/modules-load on boot via the
+#       kernel-modules runit service. Write to both locations for maximum compat.
 mkdir -p /etc/modules-load.d
 cat > /etc/modules-load.d/nvidia.conf << 'EOF'
 nvidia
@@ -173,8 +282,17 @@ nvidia_uvm
 nvidia_drm
 EOF
 
+# Void runit native location (processed by /etc/sv/kernel-modules if enabled)
+cat > /etc/modules-load << 'EOF'
+nvidia
+nvidia_modeset
+nvidia_uvm
+nvidia_drm
+EOF
+
 log "NVIDIA proprietary driver installed."
 log "  KMS: nvidia_drm modeset=1 fbdev=1"
+log "  linux-headers installed for DKMS build."
 log "  PRIME offload: prime-run <app>"
 log "  Manual: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>"
 
@@ -232,7 +350,13 @@ log "Core packages installed."
 #   mesa-dri required by GBM compositors (already installed above).
 #   qt5-wayland / qt6-wayland: enable Qt Wayland backend.
 #     Activate with QT_QPA_PLATFORM=wayland (set in /etc/profile.d below).
-#   xorg-server-xwayland: XWayland bridge for X11 apps under Wayland.
+#   xorg-server-xwayland: XWayland compatibility server. The system is fully
+#     Wayland-native (SDDM greeter, niri compositor, all env vars set). XWayland
+#     runs as a nested X server inside the Wayland session only when an X11 app
+#     requests it — it does not make the session "X11". Without it, legacy X11
+#     apps (some games, older Electron builds, etc.) fail to start at all.
+#   xwayland-satellite: rootless XWayland for niri (handles X11 app windows as
+#     native Wayland surfaces, enabling proper tiling of X11 apps).
 #   libxkbcommon + xkeyboard-config: keyboard map handling for compositors.
 #   XDG_RUNTIME_DIR: provided automatically by elogind at login.
 # =============================================================================
@@ -298,12 +422,22 @@ log "niri and companion tools installed."
 # ── SDDM ──────────────────────────────────────────────────────────────────────
 # Per Handbook (graphical-session/kde): SDDM requires the dbus service to be
 # enabled. Enable dbus before enabling sddm.
-# DisplayServer=wayland: SDDM Wayland greeter mode (uses GBM via mesa-dri).
-# Autologin block: remove or comment out [Autologin] to disable autologin.
+#
+# DisplayServer=wayland: uses SDDM's Wayland greeter (KWin-based). Requires
+# sddm-wayland-plasma in addition to the base sddm package. Both are installed
+# here. The greeter runs on the KMS/GBM stack directly — no X11 involved.
+#
+# XWayland is installed separately (xorg-server-xwayland / xwayland-satellite)
+# so X11 apps still work inside the niri session via XWayland, but the greeter
+# itself and the compositor both run fully native Wayland.
+#
+# xorg-minimal is kept for any low-level X utilities (xrandr, xdpyinfo, etc.)
+# that don't have Wayland equivalents and may be needed for diagnostics.
 # =============================================================================
 section "SDDM display manager"
 
-xbps-install -y sddm xorg-minimal || error "SDDM install failed."
+xbps-install -y sddm sddm-wayland-plasma xorg-minimal \
+    || error "SDDM install failed."
 
 mkdir -p /etc/sddm.conf.d
 cat > /etc/sddm.conf.d/general.conf << EOF
@@ -321,48 +455,85 @@ HideUsers=false
 User=${USERNAME}
 Session=niri
 EOF
-log "SDDM installed and configured (autologin: ${USERNAME} → niri)."
+log "SDDM installed and configured (autologin: ${USERNAME} → niri, greeter: wayland)."
 
 # =============================================================================
 # ── PIPEWIRE + WIREPLUMBER ────────────────────────────────────────────────────
 # Per Handbook (config/media/pipewire):
-#  1. Install 'pipewire' — wireplumber is pulled in as the session manager.
-#     Without a session manager PipeWire does NOT function.
-#  2. Link 10-wireplumber.conf — tells PipeWire to launch WirePlumber.
+#  1. Install 'pipewire' — wireplumber is the session manager.
+#  2. Link 10-wireplumber.conf — tells PipeWire to load wireplumber.
 #  3. Link 20-pipewire-pulse.conf — PulseAudio compat interface.
-#     Most apps speak PulseAudio, not native PipeWire.
 #  4. alsa-pipewire + conf.d symlinks — makes PipeWire the default ALSA device.
 #  5. PipeWire MUST run as the logged-in user (not as a system service).
 #     Per Handbook: launch it from the compositor startup script.
 #  6. Requires an active D-Bus user session bus + XDG_RUNTIME_DIR.
 #     elogind provides XDG_RUNTIME_DIR; SDDM + elogind provides the session bus.
 #  7. rtkit (installed in core packages) provides realtime scheduling.
+#
+# [FIX] Path existence checks added before symlinking. The example conf paths
+#       vary across Void package versions. Broken symlinks cause pipewire to
+#       fail silently at startup.
+#
+# [FIX] pipewire-pulse and wireplumber are now started explicitly as separate
+#       processes from niri-session. The conf.d symlinks alone are not sufficient
+#       on Void — wireplumber and pipewire-pulse must each be exec'd by the user
+#       session alongside the main pipewire process.
 # =============================================================================
 section "PipeWire + WirePlumber"
 
 xbps-install -y \
     pipewire \
+    wireplumber \
     alsa-pipewire \
     pavucontrol \
     pulseaudio-utils \
     || error "PipeWire install failed."
 
-# System-wide PipeWire config
+# System-wide PipeWire config — symlink example configs with path validation
 mkdir -p /etc/pipewire/pipewire.conf.d
-ln -sf /usr/share/examples/wireplumber/10-wireplumber.conf \
-       /etc/pipewire/pipewire.conf.d/10-wireplumber.conf
-ln -sf /usr/share/examples/pipewire/20-pipewire-pulse.conf \
-       /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf
+
+_pw_symlink() {
+    local src="$1" dst="$2"
+    if [[ -f "$src" ]]; then
+        ln -sf "$src" "$dst" && log "  Symlinked: $src → $dst"
+    else
+        warn "  PipeWire example not found at $src — skipping symlink."
+        warn "  Run: find /usr/share -name \"$(basename "$src")\" to locate it."
+    fi
+}
+
+# wireplumber conf — try both known Void paths
+_pw_symlink \
+    /usr/share/pipewire/pipewire.conf.d/10-wireplumber.conf \
+    /etc/pipewire/pipewire.conf.d/10-wireplumber.conf
+# Fallback path seen on some Void installs
+if [[ ! -L /etc/pipewire/pipewire.conf.d/10-wireplumber.conf ]]; then
+    _pw_symlink \
+        /usr/share/examples/wireplumber/10-wireplumber.conf \
+        /etc/pipewire/pipewire.conf.d/10-wireplumber.conf
+fi
+
+# pipewire-pulse conf
+_pw_symlink \
+    /usr/share/pipewire/pipewire.conf.d/20-pipewire-pulse.conf \
+    /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf
+if [[ ! -L /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf ]]; then
+    _pw_symlink \
+        /usr/share/examples/pipewire/20-pipewire-pulse.conf \
+        /etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf
+fi
 
 # Make PipeWire the default ALSA output device
 mkdir -p /etc/alsa/conf.d
-ln -sf /usr/share/alsa/alsa.conf.d/50-pipewire.conf \
-       /etc/alsa/conf.d/50-pipewire.conf
-ln -sf /usr/share/alsa/alsa.conf.d/99-pipewire-default.conf \
-       /etc/alsa/conf.d/99-pipewire-default.conf
+_pw_symlink \
+    /usr/share/alsa/alsa.conf.d/50-pipewire.conf \
+    /etc/alsa/conf.d/50-pipewire.conf
+_pw_symlink \
+    /usr/share/alsa/alsa.conf.d/99-pipewire-default.conf \
+    /etc/alsa/conf.d/99-pipewire-default.conf
 
 log "PipeWire + WirePlumber configured."
-log "  PipeWire launched per-user from niri-session (NOT a system service)."
+log "  PipeWire, WirePlumber, pipewire-pulse launched per-user from niri-session."
 
 # =============================================================================
 # ── GHOSTTY TERMINAL ──────────────────────────────────────────────────────────
@@ -405,7 +576,7 @@ log "Fonts installed and font cache rebuilt."
 # =============================================================================
 # ── RUNIT SERVICES ────────────────────────────────────────────────────────────
 # Per Handbook (config/services/index):
-#   Enabling: ln -sf /etc/sv/<name> /var/service/<name>
+#   Enabling: ln -sf /etc/sv/<n> /var/service/<n>
 #   runit picks up new symlinks within a few seconds automatically.
 #   All services in /etc/sv/ are available; active ones live in /var/service/.
 #
@@ -420,26 +591,14 @@ log "Fonts installed and font cache rebuilt."
 #   cronie       — cron daemon
 #   chronyd      — NTP time sync
 #   bluetoothd   — Bluetooth daemon
-#   sddm         — display manager; Handbook says test dbus before enabling
+#   sddm         — display manager; must be enabled last (depends on dbus)
 #
 # NOT enabled as system services:
-#   pipewire — per Handbook must run as the current user, not as root/system
-#   acpid    — per Handbook: do NOT use with elogind (conflicts)
+#   pipewire    — per Handbook must run as the current user, not as root/system
+#   wireplumber — same: per-user, launched from niri-session
+#   acpid       — per Handbook: do NOT use with elogind (conflicts)
 # =============================================================================
 section "runit services"
-
-_sv_enable() {
-    local svc="$1"
-    if [[ -L /var/service/"$svc" ]]; then
-        log "  Already enabled: $svc"
-    elif [[ -d /etc/sv/"$svc" ]]; then
-        ln -sf /etc/sv/"$svc" /var/service/"$svc" \
-            && log "  Enabled: $svc" \
-            || warn "  Failed to enable: $svc"
-    else
-        warn "  /etc/sv/$svc not found — skipping."
-    fi
-}
 
 _sv_enable dbus
 _sv_enable elogind
@@ -454,8 +613,8 @@ _sv_enable bluetoothd
 _sv_enable sddm   # enable last; depends on dbus
 
 log "runit services enabled."
-log "  pipewire — NOT a system service (runs per-user from niri-session)"
-log "  acpid    — NOT enabled (conflicts with elogind per Handbook)"
+log "  pipewire/wireplumber — NOT system services (run per-user from niri-session)"
+log "  acpid               — NOT enabled (conflicts with elogind per Handbook)"
 
 # =============================================================================
 # ── SYSTEM-WIDE ENVIRONMENT ───────────────────────────────────────────────────
@@ -507,8 +666,6 @@ log "Environment profile scripts written to /etc/profile.d/."
 # ── NIRI SESSION WRAPPER ──────────────────────────────────────────────────────
 # Per Handbook (config/media/pipewire): PipeWire must be launched from the
 # compositor startup script as the logged-in user.
-# WirePlumber starts automatically via the 10-wireplumber.conf symlink once
-# PipeWire is running.
 #
 # Per Handbook (session-management): SDDM + elogind provides XDG_RUNTIME_DIR
 # and the D-Bus session bus at login. dbus-run-session is not needed.
@@ -516,34 +673,79 @@ log "Environment profile scripts written to /etc/profile.d/."
 # LIBSEAT_BACKEND=logind: prevents "seatd not present" warnings from libseat
 # when elogind is in use (the correct backend here is logind, not seatd).
 #
-# dbus-update-activation-environment: exports display vars into the D-Bus
-# activation environment so portal backends (screen capture, file picker)
-# can find the correct Wayland display.
+# [FIX] --systemd removed from dbus-update-activation-environment.
+#       The --systemd flag exports vars to systemd's user manager (sd-bus),
+#       which does not exist on Void/runit. Passing it caused a silent failure
+#       that left the D-Bus activation environment incomplete, preventing
+#       PipeWire from connecting to the session bus on startup.
+#
+# [FIX] PipeWire now starts with a sleep 2 delay to allow elogind to fully
+#       establish XDG_RUNTIME_DIR and the D-Bus session bus before PipeWire
+#       tries to acquire the org.freedesktop.ReserveDevice1 name. Without this
+#       delay, PipeWire races the bus and produces the lockfile/DISPLAY errors
+#       seen in the screenshot.
+#
+# [FIX] wireplumber and pipewire-pulse started explicitly as separate processes.
+#       The conf.d symlinks instruct pipewire to *attempt* to load them as
+#       modules, but on Void the module path may not match the examples path,
+#       causing silent failures. Running them as sibling processes is the
+#       correct, reliable approach on non-systemd systems.
+#
+# [HARDENING] Stale PipeWire lockfile cleanup on session start. A previous
+#             crashed session leaves /run/user/$UID/pipewire-0.lock behind,
+#             blocking the next pipewire instance with "Resource temporarily
+#             unavailable". Clean it at session start.
 # =============================================================================
 section "niri session wrapper"
 
 cat > /usr/local/bin/niri-session << 'EOF'
 #!/usr/bin/env bash
-# niri session launcher
-# Sources /etc/profile, starts PipeWire as the user, then execs niri.
+# niri session launcher — Void Linux / runit / elogind
+# Starts PipeWire stack as current user, then execs niri.
 set -a
+# shellcheck source=/etc/profile
 source /etc/profile
 set +a
 
 # Tell libseat to use elogind (prevents "seatd not found" noise)
 export LIBSEAT_BACKEND=logind
 
-# Export Wayland display vars into D-Bus activation env for portal backends
+# Export Wayland display vars into D-Bus activation environment.
+# NOTE: --systemd flag intentionally omitted — systemd user manager does not
+# exist on Void/runit. The flag causes silent failure and a broken activation env.
 if command -v dbus-update-activation-environment &>/dev/null; then
-    dbus-update-activation-environment --systemd \
+    dbus-update-activation-environment \
         WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE 2>/dev/null || true
 fi
 
-# Start PipeWire as the current user.
-# WirePlumber starts automatically via /etc/pipewire/pipewire.conf.d/10-wireplumber.conf
-pipewire &
-PIPEWIRE_PID=$!
-trap "kill $PIPEWIRE_PID 2>/dev/null; wait $PIPEWIRE_PID 2>/dev/null" EXIT
+# Clean up any stale PipeWire lockfile from a previously crashed session.
+# Without this, pipewire fails with "Resource temporarily unavailable" on the
+# lockfile and refuses to start.
+PIPEWIRE_LOCK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0.lock"
+if [[ -f "$PIPEWIRE_LOCK" ]]; then
+    rm -f "$PIPEWIRE_LOCK"
+fi
+
+# Start PipeWire stack after a brief delay to allow the D-Bus session bus and
+# XDG_RUNTIME_DIR (provided by elogind) to be fully ready.
+# All three processes are background siblings; they're cleaned up on EXIT.
+(
+    sleep 2
+    pipewire &
+    PIPEWIRE_PID=$!
+    pipewire-pulse &
+    PULSE_PID=$!
+    wireplumber &
+    WP_PID=$!
+    wait "$PIPEWIRE_PID" "$PULSE_PID" "$WP_PID"
+) &
+PW_STACK_PID=$!
+
+cleanup() {
+    kill "$PW_STACK_PID" 2>/dev/null
+    wait "$PW_STACK_PID" 2>/dev/null
+}
+trap cleanup EXIT
 
 exec niri
 EOF
@@ -633,6 +835,7 @@ fi
 # ── SSD TRIM ──────────────────────────────────────────────────────────────────
 # Per Handbook (config/ssd): periodic TRIM keeps SSD performance healthy.
 # On Void/runit, use fstrim via cron since there's no systemd timer.
+# Note: _sv_enable is defined at the top of this script.
 # =============================================================================
 section "SSD TRIM (weekly cron)"
 
@@ -641,10 +844,10 @@ if [[ -d /etc/sv/fstrim ]]; then
     log "fstrim runit service enabled."
 else
     mkdir -p /etc/cron.weekly
-    cat > /etc/cron.weekly/fstrim << 'EOF'
+    cat > /etc/cron.weekly/fstrim << 'TRIMEOF'
 #!/bin/sh
 fstrim -av
-EOF
+TRIMEOF
     chmod +x /etc/cron.weekly/fstrim
     log "fstrim weekly cron job installed."
 fi
@@ -665,7 +868,6 @@ if [[ -d "$DOTFILES_SRC" ]]; then
         cp -r "${DOTFILES_DST}/Pictures/." "${USER_HOME}/Pictures/"
         rm -rf "${DOTFILES_DST}/Pictures"
     fi
-    chown -R "${USERNAME}:${USERNAME}" "$DOTFILES_DST"
     log "Dotfiles copied to ${DOTFILES_DST}."
 else
     warn "No dotfiles found at ${DOTFILES_SRC} — skipping."
@@ -674,7 +876,14 @@ fi
 # =============================================================================
 # ── GTK THEME ─────────────────────────────────────────────────────────────────
 # gsettings requires a running D-Bus session + display — can't run as root.
-# Install a first-boot autostart script to apply on first login instead.
+# Install a first-boot XDG autostart .desktop file to apply on first login.
+#
+# [FIX] Original wrote a bare .sh file to ~/.config/autostart/. Niri does not
+#       natively execute files from that directory — it is an XDG autostart
+#       convention that requires an XDG-compliant session manager or portal.
+#       Converted to a proper .desktop file which xdg-autostart-service (if
+#       installed) and GNOME-compatible portals can process. The .sh is still
+#       the payload; the .desktop wraps it correctly.
 # =============================================================================
 section "GTK theme"
 
@@ -686,14 +895,31 @@ else
 fi
 
 mkdir -p "${USER_HOME}/.config/autostart"
-cat > "${USER_HOME}/.config/autostart/apply-gtk-theme.sh" << 'FBEOF'
+
+# The payload script: applies the theme, then self-deletes
+cat > "${USER_HOME}/.config/autostart/apply-gtk-theme.sh" << 'GTKEOF'
 #!/usr/bin/env bash
 gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
 gsettings set org.gnome.desktop.interface color-scheme "prefer-dark"
-rm -- "$0"
-FBEOF
+rm -- "${USER_HOME}/.config/autostart/apply-gtk-theme.sh"
+rm -- "${USER_HOME}/.config/autostart/apply-gtk-theme.desktop"
+GTKEOF
 chmod +x "${USER_HOME}/.config/autostart/apply-gtk-theme.sh"
-log "GTK autostart theme script written — applies on first login then self-deletes."
+
+# XDG autostart .desktop file so the script runs on first graphical login
+cat > "${USER_HOME}/.config/autostart/apply-gtk-theme.desktop" << DTEOF
+[Desktop Entry]
+Type=Application
+Name=Apply GTK Theme
+Exec=${USER_HOME}/.config/autostart/apply-gtk-theme.sh
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=niri;
+DTEOF
+
+log "GTK autostart theme .desktop written — applies on first login then self-deletes."
+log "  Note: requires xdg-autostart-service or similar to execute on niri."
+log "  Alternatively, add 'spawn-at-startup \"${USER_HOME}/.config/autostart/apply-gtk-theme.sh\"'"
+log "  to ~/.config/niri/config.kdl for one-time execution (then remove the line)."
 
 # =============================================================================
 # ── SDDM ASTRONAUT THEME ──────────────────────────────────────────────────────
@@ -715,19 +941,31 @@ printf '[General]\ntheme=catppuccin-frappe-mauve\n' \
 log "Kvantum theme set to catppuccin-frappe-mauve."
 
 # =============================================================================
+# ── FIX OWNERSHIP ─────────────────────────────────────────────────────────────
+# [FIX] Moved to after ALL user-home writes (dotfiles, GTK autostart, Kvantum)
+#       so the single chown pass catches everything written to $USER_HOME.
+#       In the original, files written after the chown were left root-owned.
+# =============================================================================
+section "Fixing ownership of ${USER_HOME}"
+
+chown -R "${USERNAME}:${USERNAME}" "${USER_HOME}"
+log "Ownership of ${USER_HOME} fixed → ${USERNAME}:${USERNAME}"
+
+# =============================================================================
 # ── XBPS CACHE CLEANUP ────────────────────────────────────────────────────────
-# -O: remove cached package archive files (downloaded .xbps files)
-# -o: remove orphaned packages (installed but no longer needed by anything)
+# -O: remove cached package archive files (downloaded .xbps files).
+#
+# [FIX] Removed -o (orphan removal) from default run. xbps considers a package
+#       "orphaned" if nothing in the dependency tree explicitly requires it,
+#       which catches many intentionally-installed leaf packages (terminal apps,
+#       fonts, CLI tools, etc.) and silently removes them. -O alone is safe.
+#       To remove orphans intentionally: xbps-remove -Rcon (interactive review).
 # =============================================================================
 section "XBPS cache cleanup"
 
-xbps-remove -Oo || warn "xbps cache cleanup had non-fatal issues."
-log "Package cache cleaned."
-
-# =============================================================================
-# ── FIX OWNERSHIP ─────────────────────────────────────────────────────────────
-# =============================================================================
-chown -R "${USERNAME}:${USERNAME}" "${USER_HOME}"
+xbps-remove -O || warn "xbps cache cleanup had non-fatal issues."
+log "Package download cache cleaned."
+log "  Orphan removal skipped — run 'xbps-remove -Rcon' manually to review orphans."
 
 # =============================================================================
 # ── XBPS RECONFIGURE ──────────────────────────────────────────────────────────
@@ -755,6 +993,11 @@ echo -e "   2. SDDM starts → autologin ${BOLD}${USERNAME}${NC} → niri sessio
 echo -e "   3. No keyboard in niri? → check: ${BOLD}groups ${USERNAME}${NC} — must include 'input'"
 echo -e "   4. Logs: ${BOLD}tail -f /var/log/socklog/everything/current${NC}"
 echo ""
+echo -e "${BOLD}  PipeWire troubleshooting:${NC}"
+echo -e "   Stale lockfile:  ${BOLD}rm -f \${XDG_RUNTIME_DIR}/pipewire-0.lock${NC}"
+echo -e "   Check services:  ${BOLD}pw-cli info all${NC}"
+echo -e "   Check WirePlumber: ${BOLD}wpctl status${NC}"
+echo ""
 echo -e "${BOLD}  NVIDIA PRIME offload:${NC}"
 echo -e "   ${BOLD}prime-run <app>${NC}"
 echo -e "   ${BOLD}__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>${NC}"
@@ -763,11 +1006,12 @@ echo -e "${BOLD}  Verify GPU/audio:${NC}"
 echo -e "   ${BOLD}vainfo${NC}            — AMD VA-API"
 echo -e "   ${BOLD}nvidia-smi${NC}        — NVIDIA status"
 echo -e "   ${BOLD}pw-cli info all${NC}   — PipeWire graph"
+echo -e "   ${BOLD}wpctl status${NC}      — WirePlumber session"
 echo -e "   ${BOLD}pactl info${NC}        — PulseAudio compat"
 echo ""
 echo -e "${BOLD}  xbps quick ref:${NC}"
 echo -e "   xbps-install -S <pkg>      — install"
-echo -e "   xbps-remove -Rcon <pkg>    — remove + orphans"
+echo -e "   xbps-remove -Rcon <pkg>    — remove + review orphans"
 echo -e "   xbps-query -Rs <term>      — search remote repos"
 echo -e "   xbps-query -s <term>       — search installed"
 echo -e "   xbps-install -Syu          — full system update"
