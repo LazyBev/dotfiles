@@ -401,6 +401,7 @@ EOF
 # intermittent ~amd64 keywording issues, and for ghostty/niri which
 # come from the guru overlay and may need explicit acceptance.
 cat > /mnt/gentoo/etc/portage/package.accept_keywords/desktop << 'EOF'
+gui-apps/xwayland-satellite  ~amd64
 gui-wm/niri                  ~amd64
 dev-libs/wayland-protocols   ~amd64
 x11-drivers/nvidia-drivers   ~amd64
