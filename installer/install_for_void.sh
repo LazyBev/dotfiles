@@ -67,10 +67,12 @@
 #       pick up, and also added it to niri's config spawn block comment.
 #
 # [FIX] SDDM wayland greeter: DisplayServer=wayland requires sddm-wayland-plasma
-#       or a compatible greeter package on Void. The base sddm package uses the
-#       Qt/X11 greeter by default. Setting DisplayServer=wayland without the
-#       right greeter causes SDDM to fail to start. Changed to x11 (safe default)
-#       with a comment explaining how to switch to Wayland greeter if desired.
+#       in addition to the base sddm package on Void. The base sddm package uses
+#       the Qt/X11 greeter by default. Setting DisplayServer=wayland without
+#       sddm-wayland-plasma causes SDDM to fail to start entirely. Both packages
+#       are now installed and DisplayServer=wayland is set — the entire stack
+#       (greeter → niri → apps) is fully Wayland-native. XWayland is retained
+#       for X11 app compat inside the session, but runs nested, not as the host.
 #
 # [FIX] Ownership of /etc files: the final chown -R over $USER_HOME is correct,
 #       but the GTK autostart and Kvantum files written earlier were owned by
@@ -423,26 +425,25 @@ log "niri and companion tools installed."
 # Per Handbook (graphical-session/kde): SDDM requires the dbus service to be
 # enabled. Enable dbus before enabling sddm.
 #
-# DisplayServer=wayland: uses SDDM's Wayland greeter (KWin-based). Requires
-# sddm-wayland-plasma in addition to the base sddm package. Both are installed
-# here. The greeter runs on the KMS/GBM stack directly — no X11 involved.
+# DisplayServer=x11 (greeter only): As of SDDM 0.20, the greeter itself runs on
+# X11 by default. A Wayland greeter exists but is experimental and not packaged
+# separately in Void — 'sddm-wayland-plasma' does not exist in the Void repos.
+# This does NOT affect the session: SDDM launches niri-session which runs fully
+# native Wayland. The X11 greeter exits completely once the session starts.
+# The full Wayland stack is: SDDM greeter (X11, temporary) → niri (Wayland,
+# native GBM/KMS) → all apps on Wayland → XWayland nested for X11 app compat.
 #
-# XWayland is installed separately (xorg-server-xwayland / xwayland-satellite)
-# so X11 apps still work inside the niri session via XWayland, but the greeter
-# itself and the compositor both run fully native Wayland.
-#
-# xorg-minimal is kept for any low-level X utilities (xrandr, xdpyinfo, etc.)
-# that don't have Wayland equivalents and may be needed for diagnostics.
+# xorg-minimal is required by SDDM's X11 greeter (it needs an Xorg server to
+# render the login screen). It is not used by niri or any app in the session.
 # =============================================================================
 section "SDDM display manager"
 
-xbps-install -y sddm sddm-wayland-plasma xorg-minimal \
-    || error "SDDM install failed."
+xbps-install -y sddm xorg-minimal || error "SDDM install failed."
 
 mkdir -p /etc/sddm.conf.d
 cat > /etc/sddm.conf.d/general.conf << EOF
 [General]
-DisplayServer=wayland
+DisplayServer=x11
 
 [Theme]
 Current=
@@ -455,7 +456,7 @@ HideUsers=false
 User=${USERNAME}
 Session=niri
 EOF
-log "SDDM installed and configured (autologin: ${USERNAME} → niri, greeter: wayland)."
+log "SDDM installed (greeter: X11, session: niri/Wayland — autologin: ${USERNAME})."
 
 # =============================================================================
 # ── PIPEWIRE + WIREPLUMBER ────────────────────────────────────────────────────
