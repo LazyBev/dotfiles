@@ -779,7 +779,7 @@ log "PipeWire installed."
 # NOTE: Ghostty is in the guru overlay (enabled earlier in this script).
 # If the emerge fails, confirm guru is synced: eselect repository list
 section "Ghostty terminal"
-emerge ghostty
+emerge app-terminals/ghostty
 log "Ghostty installed."
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
@@ -816,8 +816,9 @@ useradd -m -G "wheel,audio,video,input,seat,plugdev,usb,portage" \
         -s /bin/bash "${USERNAME}"
 echo "${USERNAME}:\${USER_HASH}" | chpasswd -e
 
-install -m 440 /dev/null /etc/sudoers.d/wheel
+mkdir -p /etc/sudoers.d
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
+chmod 440 /etc/sudoers.d/wheel
 log "Users created."
 
 # ── Environment — /etc/env.d/ is Gentoo/OpenRC native ────────────────────────
