@@ -821,6 +821,7 @@ section "niri window manager"
 # portal bus interface won't be registered and portal features will silently
 # fail for apps (file pickers, screen share, etc.).
 emerge \
+    gui-apps/xwayland-satellite
     gui-wm/niri \
     gui-apps/swayidle \
     gui-apps/swaylock \
@@ -1023,6 +1024,24 @@ chroot /mnt/gentoo /bin/bash /root/chroot-install.sh
 # =============================================================================
 # STEP 9 — Cleanup & unmount
 # =============================================================================
+
+section "Copying dotfiles"
+DOTFILES_SRC="${HOME}/dotfiles/configs"
+DOTFILES_DST="/mnt/gentoo/home/${USERNAME}/.config"
+if [[ -d "$DOTFILES_SRC" ]]; then
+    mkdir -p "$DOTFILES_DST"
+    cp -r "$DOTFILES_SRC"/. "$DOTFILES_DST"/
+    # Fix ownership so the user owns their own config
+    chown -R 1000:1000 "$DOTFILES_DST"
+    log "Dotfiles copied: ${DOTFILES_SRC} → ${DOTFILES_DST}"
+    log "Contents:"
+    ls "$DOTFILES_DST" | while read -r d; do log "  .config/${d}"; done
+else
+    warn "No dotfiles found at ${DOTFILES_SRC} — skipping."
+fi
+
+mv /mnt/gentoo/home/${USERNAME}/.config/Pictures/. /mnt/gentoo/home/${USERNAME}/Pictures/ && rm -rf /mnt/gentoo/home/${USERNAME}/.config/Pictures
+
 
 section "Unmounting"
 rm -f /mnt/gentoo/root/chroot-install.sh
