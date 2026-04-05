@@ -165,7 +165,7 @@ ROOT_HASH=$(openssl passwd -6 "$rp1")
 USER_HASH=$(openssl passwd -6 "$up1")
 unset rp1 rp2 up1 up2
 
-log "Pre-flight OK  (CPUs: ${NCPU})"
+log "Pre-flight OK  (CPUs: ${NCPU}, disk: ${DISK}, hostname: ${HOSTNAME}, user: ${USERNAME}, tz: ${TIMEZONE})"
 
 # =============================================================================
 # STEP 2 — Partition
@@ -179,23 +179,34 @@ read -rp "  Type 'yes' to confirm: " _confirm </dev/tty
 
 wipefs -a "$DISK"
 sgdisk --zap-all "$DISK"
+log "Wiped existing partition table on ${DISK}."
 
 sgdisk -n 1:0:+1G  -t 1:ef00 -c 1:"EFI"  "$DISK"
 sgdisk -n 2:0:+8G  -t 2:8200 -c 2:"swap" "$DISK"
 sgdisk -n 3:0:0    -t 3:8300 -c 3:"root" "$DISK"
+log "Partition table written: EFI=${PART_EFI} (1G), swap=${PART_SWAP} (8G), root=${PART_ROOT} (remainder)."
 
 partprobe "$DISK"; udevadm settle
+log "Kernel re-read partition table on ${DISK}."
 
 mkfs.fat -F32 -n "EFI"  "$PART_EFI"
+log "Formatted ${PART_EFI} as FAT32 (EFI)."
 mkswap   -L   "swap"    "$PART_SWAP"; swapon "$PART_SWAP"
+log "Formatted ${PART_SWAP} as swap and activated."
 mkfs.ext4 -L  "gentoo" -O dir_index,extent,sparse_super2 "$PART_ROOT"
+log "Formatted ${PART_ROOT} as ext4 (label: gentoo)."
 
 mkdir -p /mnt/gentoo
 mount -o noatime "$PART_ROOT" /mnt/gentoo
+log "Mounted ${PART_ROOT} → /mnt/gentoo (noatime)."
 mkdir -p /mnt/gentoo/boot/efi
 mount "$PART_EFI" /mnt/gentoo/boot/efi
+log "Mounted ${PART_EFI} → /mnt/gentoo/boot/efi."
 
-log "Partitions mounted."
+log "All partitions mounted. Layout:"
+log "  ${PART_EFI}  →  /boot/efi  (FAT32, EFI system)"
+log "  ${PART_SWAP} →  [swap]     (8G)"
+log "  ${PART_ROOT} →  /          (ext4)"
 
 # =============================================================================
 # STEP 3 — Stage3 tarball
@@ -213,6 +224,9 @@ TARBALL_PATH=$(echo "$MANIFEST" \
 [[ -z "$TARBALL_PATH" ]] && error "Could not parse stage3 path."
 
 TARBALL_URL="${BASE_URL}/${TARBALL_PATH}"
+TARBALL_DATE=$(echo "$TARBALL_PATH" | cut -d/ -f1)
+log "Stage3 build date: ${TARBALL_DATE}"
+log "Stage3 URL: ${TARBALL_URL}"
 
 # FIX: Retry the download up to 3 times on checksum mismatch.
 # --continue is intentionally absent: resuming a corrupt partial produces
@@ -227,12 +241,12 @@ wget --tries=10 \
      "$TARBALL_URL" -O /mnt/gentoo/stage3.tar.xz \
     || error "stage3 download failed."
 
-log "Extracting stage3..."
+log "Extracting stage3 to /mnt/gentoo ..."
 tar xpf /mnt/gentoo/stage3.tar.xz \
     --xattrs-include='*.*' --numeric-owner -C /mnt/gentoo
+ROOTSIZE=$(du -sh /mnt/gentoo --exclude=/mnt/gentoo/boot 2>/dev/null | awk '{print $1}')
 rm -f /mnt/gentoo/stage3.tar.xz /tmp/stage3.sha256
-
-log "Stage3 installed."
+log "Stage3 extracted. Root size: ${ROOTSIZE}."
 
 # =============================================================================
 # STEP 4 — Portage configuration
@@ -392,7 +406,7 @@ gui-apps/slurp               ~amd64
 gui-apps/fuzzel              ~amd64
 gui-apps/mako                ~amd64
 gui-apps/waybar              ~amd64
-app-terminals/ghostty        ~amd64
+ghostty                      ~amd64
 EOF
 
 # ── package.license ───────────────────────────────────────────────────────────
@@ -400,7 +414,12 @@ cat > /mnt/gentoo/etc/portage/package.license/nvidia << 'EOF'
 x11-drivers/nvidia-drivers  NVIDIA-r2
 EOF
 
-log "Portage config written."
+log "Portage config written:"
+log "  make.conf       → USE=\"wayland X alsa udev opengl -systemd ...\", VIDEO_CARDS=\"${VIDEO_CARDS}\", MAKEOPTS=\"-j${NCPU}\""
+log "  repos.conf      → rsync://rsync.gentoo.org/gentoo-portage"
+log "  package.mask    → sys-apps/systemd, x11-drivers/xf86-video-ati"
+log "  package.use     → kernel, system, wayland, gpu, audio packages pinned"
+log "  accept_keywords → ~amd64 for niri, nvidia-drivers, ghostty, etc."
 
 # =============================================================================
 # STEP 5 — fstab
@@ -422,7 +441,11 @@ UUID=${SWAP_UUID}  none       swap    sw                            0 0
 tmpfs              /tmp       tmpfs   defaults,nosuid,nodev,size=4G 0 0
 EOF
 
-log "fstab written."
+log "fstab written:"
+log "  UUID=${ROOT_UUID}  →  /          (ext4, noatime)"
+log "  UUID=${EFI_UUID}   →  /boot/efi  (vfat, umask=0077)"
+log "  UUID=${SWAP_UUID}  →  swap"
+log "  tmpfs              →  /tmp       (4G)"
 
 # =============================================================================
 # STEP 6 — Chroot environment
@@ -431,17 +454,23 @@ log "fstab written."
 section "Preparing chroot"
 
 cp --dereference /etc/resolv.conf /mnt/gentoo/etc/
+log "Copied resolv.conf → /mnt/gentoo/etc/resolv.conf."
 
 mount --types proc  /proc /mnt/gentoo/proc
+log "Mounted proc → /mnt/gentoo/proc."
 mount --rbind       /sys  /mnt/gentoo/sys;  mount --make-rslave /mnt/gentoo/sys
+log "Bind-mounted /sys → /mnt/gentoo/sys (rslave)."
 mount --rbind       /dev  /mnt/gentoo/dev;  mount --make-rslave /mnt/gentoo/dev
+log "Bind-mounted /dev → /mnt/gentoo/dev (rslave)."
 mount --bind        /run  /mnt/gentoo/run;  mount --make-slave  /mnt/gentoo/run
+log "Bind-mounted /run → /mnt/gentoo/run (slave)."
 
 # efivarfs is required for grub-install. The pre-flight check above already
 # confirmed we are in UEFI mode, so this mount will always succeed.
 mount --bind /sys/firmware/efi/efivars /mnt/gentoo/sys/firmware/efi/efivars
+log "Bind-mounted efivarfs → /mnt/gentoo/sys/firmware/efi/efivars."
 
-log "Chroot ready."
+log "Chroot environment ready. All virtual filesystems mounted."
 
 # =============================================================================
 # STEP 7 — Write and run the chroot script
@@ -586,11 +615,13 @@ log "@world updated — systemd not present, as expected."
 # ── Timezone & Locale ─────────────────────────────────────────────────────────
 section "Timezone & Locale"
 echo "${TIMEZONE}" > /etc/timezone
+log "Timezone set to: ${TIMEZONE}"
 emerge --config sys-libs/timezone-data
 echo "${LOCALE} UTF-8" >> /etc/locale.gen
+log "Added ${LOCALE} UTF-8 to /etc/locale.gen."
 locale-gen
 LOC=\$(locale -a | grep -i "\$(echo "${LOCALE}" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/')" | head -1)
-[[ -n "\$LOC" ]] && eselect locale set "\$LOC" || warn "Set locale manually with: eselect locale set"
+[[ -n "\$LOC" ]] && eselect locale set "\$LOC" && log "Active locale set to: \$LOC" || warn "Set locale manually with: eselect locale set"
 set +u; env-update && source /etc/profile; set -u
 
 # ── Firmware ──────────────────────────────────────────────────────────────────
@@ -676,7 +707,10 @@ log "installkernel installed."
 
 emerge sys-kernel/gentoo-kernel-bin \
     || error "gentoo-kernel-bin install failed."
-log "Kernel installed."
+KVER=\$(ls /boot/vmlinuz-* 2>/dev/null | sort -V | tail -1 | sed 's|/boot/vmlinuz-||')
+log "Kernel installed: \${KVER:-unknown version}"
+log "  vmlinuz → \$(ls /boot/vmlinuz-* 2>/dev/null | sort -V | tail -1)"
+log "  initramfs → \$(ls /boot/initramfs-* 2>/dev/null | sort -V | tail -1)"
 
 # ── Base system ───────────────────────────────────────────────────────────────
 section "Base system packages"
@@ -700,42 +734,47 @@ emerge \
     net-misc/curl \
     dev-vcs/git \
     app-editors/neovim
-log "Base packages installed."
+log "Base packages installed: sudo, bash-completion, NetworkManager, openssh, dbus, pciutils, usbutils, elogind, polkit, grub, dosfstools, e2fsprogs, pam, pambase, cronie, chrony, curl, git, neovim."
 
 # ── Hostname & hosts ──────────────────────────────────────────────────────────
 section "Hostname"
 echo "${HOSTNAME}" > /etc/hostname
+log "Hostname set to: ${HOSTNAME}"
 cat > /etc/hosts << 'HOSTSEOF'
 127.0.0.1   localhost
 ::1         localhost
 HOSTSEOF
 echo "127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}" >> /etc/hosts
+log "Hosts file written (127.0.1.1 → ${HOSTNAME}.localdomain ${HOSTNAME})."
 
 sed -i "s/^keymap=.*/keymap=\"${KEYMAP}\"/" /etc/conf.d/keymaps 2>/dev/null || true
+log "Keymap set to: ${KEYMAP}"
 
 # ── OpenRC services ───────────────────────────────────────────────────────────
 section "OpenRC services"
 # Note: udev (via systemd-utils) is added to sysinit. If OpenRC's default
 # runlevel already includes it via the package install, this is a no-op.
 for svc in NetworkManager elogind dbus cronie sshd chronyd; do
-    rc-update add \$svc default 2>/dev/null || warn "rc-update add \$svc failed (non-fatal)"
+    rc-update add \$svc default 2>/dev/null \
+        && log "  Enabled \$svc → runlevel default." \
+        || warn "rc-update add \$svc failed (non-fatal)"
 done
-rc-update add udev    sysinit 2>/dev/null || true
-rc-update add modules boot    2>/dev/null || true
+rc-update add udev    sysinit 2>/dev/null && log "  Enabled udev → runlevel sysinit." || true
+rc-update add modules boot    2>/dev/null && log "  Enabled modules → runlevel boot." || true
 
 # ── GPU — hybrid AMD + NVIDIA ─────────────────────────────────────────────────
 section "GPU — hybrid AMD + NVIDIA (proprietary)"
 
-log "Installing AMD/Mesa stack..."
+log "Installing AMD/Mesa stack (mesa, libva, libva-utils, vulkan-loader, vulkan-tools)..."
 emerge \
     media-libs/mesa \
     media-libs/libva \
     media-video/libva-utils \
     media-libs/vulkan-loader \
     dev-util/vulkan-tools
-log "AMD/Mesa installed."
+log "AMD/Mesa stack installed. Vulkan + VA-API ready for radeonsi."
 
-log "Installing nvidia-drivers (proprietary)..."
+log "Installing nvidia-drivers (proprietary, Wayland+KMS enabled)..."
 emerge x11-drivers/nvidia-drivers
 
 # OpenRC module loading via /etc/conf.d/modules
@@ -756,7 +795,10 @@ cat > /etc/modprobe.d/nvidia.conf << 'NVIDIAEOF'
 options nvidia_drm modeset=1 fbdev=1
 NVIDIAEOF
 
-log "NVIDIA drivers installed and KMS enabled."
+log "NVIDIA drivers installed."
+log "  KMS enabled: nvidia_drm.modeset=1 fbdev=1 → /etc/modprobe.d/nvidia.conf"
+log "  Modules to load at boot: nvidia nvidia_modeset nvidia_uvm nvidia_drm → /etc/conf.d/modules"
+log "  PRIME offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>"
 
 # ── Wayland base ──────────────────────────────────────────────────────────────
 section "Wayland base libraries"
@@ -823,10 +865,11 @@ emerge media-video/pipewire media-video/wireplumber media-sound/pavucontrol
 log "PipeWire installed."
 
 # ── Ghostty terminal ──────────────────────────────────────────────────────────
-# NOTE: Ghostty is in the guru overlay (enabled earlier in this script).
-# If the emerge fails, confirm guru is synced: eselect repository list
+# Ghostty lives in the guru overlay. Atom is just 'ghostty'.
 section "Ghostty terminal"
-emerge app-terminals/ghostty
+log "Re-syncing guru overlay before ghostty install..."
+emerge --sync guru 2>/dev/null || warn "guru re-sync failed — trying with cached tree."
+emerge ghostty || error "ghostty install failed."
 log "Ghostty installed."
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
