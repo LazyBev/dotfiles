@@ -121,10 +121,7 @@ log "Firmware installed."
 section "GPU — AMD/Mesa (iGPU)"
 
 xbps-install -y \
-    mesa-dri \
-    mesa-vulkan-radeon \
-    mesa-vaapi \
-    mesa-vdpau \
+    mesa
     vulkan-loader \
     libva-utils \
     || error "AMD/Mesa install failed."
