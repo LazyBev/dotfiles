@@ -184,7 +184,7 @@ xbps-install -y \
     xwayland-satellite \
     swayidle \
     swaylock \
-    waybar \
+    Waybar \
     grim \
     slurp \
     wl-clipboard \
