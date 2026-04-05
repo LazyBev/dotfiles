@@ -412,6 +412,11 @@ cat > /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
 set -eo pipefail
 
+# Hashes passed in from outer installer (openssl passwd -6 output contains
+# literal \$6\$ which must be stored as a variable, not expanded inline).
+ROOT_HASH='${ROOT_HASH}'
+USER_HASH='${USER_HASH}'
+
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 log()     { echo -e "\${GREEN}[+]\${NC} \$*"; }
@@ -798,7 +803,7 @@ log "GRUB installed."
 
 # ── User accounts ─────────────────────────────────────────────────────────────
 section "User accounts"
-echo "root:${ROOT_HASH}" | chpasswd -e
+echo "root:\${ROOT_HASH}" | chpasswd -e
 
 # FIX: Create any missing supplementary groups before useradd.
 # Gentoo does not guarantee plugdev, usb, or seat exist after a base install.
@@ -809,7 +814,7 @@ done
 
 useradd -m -G "wheel,audio,video,input,seat,plugdev,usb,portage" \
         -s /bin/bash "${USERNAME}"
-echo "${USERNAME}:${USER_HASH}" | chpasswd -e
+echo "${USERNAME}:\${USER_HASH}" | chpasswd -e
 
 install -m 440 /dev/null /etc/sudoers.d/wheel
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
