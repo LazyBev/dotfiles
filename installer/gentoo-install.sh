@@ -95,8 +95,55 @@ for t in wipefs sgdisk mkfs.fat mkswap openssl chroot sha256sum; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
 done
 
-ping -c2 -W5 gentoo.org &>/dev/null || error "No internet connection."
-log "Network OK"
+PING_HOSTS=(
+    # DNS resolvers — most reliable, pure IP so no DNS needed
+    8.8.8.8          # Google DNS
+    8.8.4.4          # Google DNS 2
+    1.1.1.1          # Cloudflare DNS
+    1.0.0.1          # Cloudflare DNS 2
+    9.9.9.9          # Quad9 DNS
+    149.112.112.112  # Quad9 DNS 2
+    208.67.222.222   # OpenDNS
+    208.67.220.220   # OpenDNS 2
+    4.2.2.1          # Level3 DNS
+    4.2.2.2          # Level3 DNS 2
+    # Gentoo infrastructure
+    gentoo.org
+    distfiles.gentoo.org
+    rsync.gentoo.org
+    # Linux/FOSS infrastructure
+    kernel.org
+    archlinux.org
+    debian.org
+    ubuntu.com
+    fedoraproject.org
+    opensuse.org
+    # Major CDNs and tech
+    cloudflare.com
+    google.com
+    github.com
+    gitlab.com
+    fastly.com
+    akamai.com
+    # Public DNS by name
+    dns.google
+    one.one.one.one
+    # Universities / mirrors commonly used by Gentoo
+    ftp.halifax.rwth-aachen.de
+    mirror.bytemark.co.uk
+    mirrors.mit.edu
+    ftp.ussg.iu.edu
+)
+NET_OK=0
+for host in "${PING_HOSTS[@]}"; do
+    [[ "$host" == \#* ]] && continue  # skip comment-only entries
+    if ping -c2 -W2 "$host" &>/dev/null 2>&1; then
+        log "Network OK (reachable: $host)"
+        NET_OK=1
+        break
+    fi
+done
+[[ "$NET_OK" -eq 1 ]] || error "No internet connection — all ping targets failed."
 
 # wget is almost always present on archiso; install only if missing
 command -v wget &>/dev/null || pacman -Sy --noconfirm wget \
