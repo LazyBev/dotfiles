@@ -153,17 +153,22 @@ timedatectl set-ntp true && sleep 3 && log "Clock synced." \
     || warn "Clock sync failed — continuing"
 
 echo
-read -rsp "  Root password: "            rp1 </dev/tty; echo
-read -rsp "  Confirm root password: "    rp2 </dev/tty; echo
-[[ "$rp1" != "$rp2" ]] && error "Root passwords do not match."
+while true; do
+    read -rsp "  Root password: "            rp1 </dev/tty; echo
+    read -rsp "  Confirm root password: "    rp2 </dev/tty; echo
+    [[ "$rp1" == "$rp2" ]] && break
+    warn "Root passwords do not match — try again."
+done
 
-read -rsp "  Password for ${USERNAME}: "         up1 </dev/tty; echo
-read -rsp "  Confirm password for ${USERNAME}: "  up2 </dev/tty; echo
-[[ "$up1" != "$up2" ]] && error "User passwords do not match."
+while true; do
+    read -rsp "  Password for ${USERNAME}: "         up1 </dev/tty; echo
+    read -rsp "  Confirm password for ${USERNAME}: "  up2 </dev/tty; echo
+    [[ "$up1" == "$up2" ]] && break
+    warn "User passwords do not match — try again."
+done
 
-ROOT_HASH=$(openssl passwd -6 "$rp1")
-USER_HASH=$(openssl passwd -6 "$up1")
-unset rp1 rp2 up1 up2
+ROOT_PASS="$rp1"
+USER_PASS="$up1"
 
 log "Pre-flight OK  (CPUs: ${NCPU}, disk: ${DISK}, hostname: ${HOSTNAME}, user: ${USERNAME}, tz: ${TIMEZONE})"
 
@@ -488,10 +493,8 @@ cat > /mnt/gentoo/root/chroot-install.sh << CHROOT_EOF
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Hashes passed in from outer installer (openssl passwd -6 output contains
-# literal \$6\$ which must be stored as a variable, not expanded inline).
-ROOT_HASH='${ROOT_HASH}'
-USER_HASH='${USER_HASH}'
+ROOT_PASS='${ROOT_PASS}'
+USER_PASS='${USER_PASS}'
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -893,7 +896,7 @@ log "GRUB installed."
 
 # ── User accounts ─────────────────────────────────────────────────────────────
 section "User accounts"
-echo "root:\${ROOT_HASH}" | chpasswd -e
+echo "root:\${ROOT_PASS}" | chpasswd
 
 # FIX: Create any missing supplementary groups before useradd.
 # Gentoo does not guarantee plugdev, usb, or seat exist after a base install.
@@ -904,7 +907,7 @@ done
 
 useradd -m -G "wheel,audio,video,input,seat,plugdev,usb,portage" \
         -s /bin/bash "${USERNAME}"
-echo "${USERNAME}:\${USER_HASH}" | chpasswd -e
+echo "${USERNAME}:\${USER_PASS}" | chpasswd
 
 mkdir -p /etc/sudoers.d
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
