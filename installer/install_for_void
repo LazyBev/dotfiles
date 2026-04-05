@@ -105,7 +105,6 @@ xbps-install -y \
     mesa-dri \
     mesa-vulkan-radeon \
     mesa-vaapi \
-    mesa-vdpau \
     vulkan-loader \
     libva-utils \
     || error "AMD/Mesa install failed."
