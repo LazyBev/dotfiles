@@ -4,13 +4,13 @@
 # Run this after void-installer and first boot into your new system.
 #
 # What this does:
-#   • Updates xbps + system
+#   • Adds nonfree repo, updates xbps + system
 #   • Installs GPU drivers (AMD mesa + NVIDIA proprietary)
 #   • Installs Wayland, niri, SDDM, PipeWire, Ghostty, fonts
 #   • Configures services, environment, niri session wrapper
 #   • Copies dotfiles if present at ~/dotfiles/configs
 #
-# Usage (as root or sudo):
+# Usage (as root):
 #   bash void-post-install.sh
 #
 # Log: /tmp/void-post-install.log
@@ -22,7 +22,6 @@ IFS=$'\n\t'
 # ── EDIT THESE ────────────────────────────────────────────────────────────────
 # =============================================================================
 USERNAME="yari"
-REPO_NONFREE="https://repo-default.voidlinux.org/current/nonfree"
 
 # =============================================================================
 # ── COLOURS & LOGGING ─────────────────────────────────────────────────────────
@@ -47,13 +46,12 @@ section() {
 # =============================================================================
 section "Pre-flight checks"
 
-[[ $EUID -ne 0 ]] && error "Must run as root (or with sudo)."
+[[ $EUID -ne 0 ]] && error "Must run as root."
 
 for t in xbps-install xbps-reconfigure ln sed; do
     command -v "$t" &>/dev/null || error "Missing tool: $t"
 done
 
-# Network check
 NET_OK=0
 for host in 8.8.8.8 1.1.1.1 repo-default.voidlinux.org; do
     if ping -c2 -W2 "$host" &>/dev/null; then
@@ -66,24 +64,20 @@ log "Pre-flight OK (user: ${USERNAME})"
 
 # =============================================================================
 # Nonfree repo
+# Per Void docs: install void-repo-nonfree package to add the nonfree repo.
 # =============================================================================
 section "Nonfree repo"
 
-mkdir -p /etc/xbps.d
-if ! grep -q "nonfree" /etc/xbps.d/*.conf 2>/dev/null; then
-    echo "repository=${REPO_NONFREE}" > /etc/xbps.d/10-nonfree.conf
-    log "Nonfree repo configured."
-else
-    log "Nonfree repo already present."
-fi
+xbps-install -Sy void-repo-nonfree || warn "void-repo-nonfree may already be installed."
+log "Nonfree repo enabled."
 
 # =============================================================================
 # Update xbps + system
 # =============================================================================
 section "Updating xbps and base system"
 
-xbps-install -Syu xbps  || error "xbps self-update failed."
-xbps-install -Syu        || warn "System update had non-fatal issues."
+xbps-install -Syu xbps || error "xbps self-update failed."
+xbps-install -Syu       || warn "System update had non-fatal issues."
 log "System up to date."
 
 # =============================================================================
@@ -97,6 +91,10 @@ log "Firmware installed."
 
 # =============================================================================
 # GPU — hybrid AMD (primary) + NVIDIA (discrete, proprietary)
+# Per Void docs:
+#   - mesa-dri provides GBM interface required by Wayland compositors
+#   - nvidia package is for 800+ series GPUs (DKMS handles kernel integration)
+#   - nvidia-libs adds 32-bit compat (Steam/Wine)
 # =============================================================================
 section "GPU — AMD/Mesa + NVIDIA proprietary"
 
@@ -132,6 +130,10 @@ log "  PRIME offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvid
 
 # =============================================================================
 # Core packages
+# Per Void docs:
+#   - dbus must be enabled before NetworkManager and elogind
+#   - elogind provides XDG_RUNTIME_DIR and seat management for Wayland
+#   - polkit needed for NM non-root access and desktop privilege escalation
 # =============================================================================
 section "Core packages"
 
@@ -158,6 +160,10 @@ log "Core packages installed."
 
 # =============================================================================
 # Wayland base
+# Per Void docs:
+#   - qt5-wayland / qt6-wayland needed for Qt apps on Wayland
+#   - xorg-server-xwayland for XWayland (X11 app compat)
+#   - XDG_RUNTIME_DIR is set automatically by elogind at login
 # =============================================================================
 section "Wayland base"
 
@@ -176,6 +182,8 @@ log "Wayland base installed."
 
 # =============================================================================
 # niri WM + tools
+# Per Void docs: niri is a packaged standalone Wayland compositor.
+# xdg-desktop-portal-wlr is the wlroots-compatible portal backend for niri.
 # =============================================================================
 section "niri window manager + tools"
 
@@ -198,13 +206,15 @@ log "niri and companion tools installed."
 
 # =============================================================================
 # SDDM
+# Using x11 display server mode — SDDM's x11 greeter can still launch
+# Wayland sessions (niri) fine. Wayland greeter mode caused keyboard issues.
 # =============================================================================
 section "SDDM display manager"
 
-xbps-install -y sddm || error "SDDM install failed."
+xbps-install -y sddm xorg-minimal || error "SDDM install failed."
 
 mkdir -p /etc/sddm.conf.d
-cat > /etc/sddm.conf.d/general.conf << 'EOF'
+cat > /etc/sddm.conf.d/general.conf << EOF
 [General]
 DisplayServer=wayland
 
@@ -212,17 +222,29 @@ DisplayServer=wayland
 Current=
 
 [Users]
-# AutoUser=YOUR_USERNAME
-# Relogin=true
+DefaultUser=${USERNAME}
+HideUsers=false
+
+[Autologin]
+User=${USERNAME}
+Session=niri
 EOF
-log "SDDM installed."
+log "SDDM installed (default user: ${USERNAME})."
 
 # =============================================================================
 # PipeWire + WirePlumber
+# Per Void docs:
+#   - pipewire package also installs wireplumber session manager
+#   - symlink 10-wireplumber.conf to configure wireplumber as session manager
+#   - symlink 20-pipewire-pulse.conf for PulseAudio compat (recommended)
+#   - alsa-pipewire + symlinks to make PipeWire the default ALSA device
+#   - pipewire is launched per-user from niri-session wrapper, NOT as a
+#     system runit service
+#   - pulseaudio-utils provides pactl for testing
 # =============================================================================
 section "PipeWire + WirePlumber"
 
-xbps-install -y pipewire alsa-pipewire pavucontrol \
+xbps-install -y pipewire alsa-pipewire pavucontrol pulseaudio-utils \
     || error "PipeWire install failed."
 
 mkdir -p /etc/pipewire/pipewire.conf.d
@@ -248,6 +270,8 @@ log "Ghostty installed."
 
 # =============================================================================
 # Fonts
+# Per Void docs: some compositors don't depend on fonts which causes many
+# apps to fail — always install at least one font package.
 # =============================================================================
 section "Fonts"
 xbps-install -y \
@@ -259,6 +283,10 @@ log "Fonts installed."
 
 # =============================================================================
 # runit services
+# Per Void docs:
+#   - enable dbus BEFORE NetworkManager and elogind
+#   - elogind needs dbus running to work properly
+#   - symlink /etc/sv/<n> -> /var/service/<n> to enable
 # =============================================================================
 section "runit services"
 
@@ -277,9 +305,6 @@ _sv_enable() {
 
 _sv_enable dbus
 
-# Remove any stale elogind symlink first — void-installer may have left one
-# pointing at the wrong target, causing the "already running" spam loop.
-rm -f /var/service/elogind
 _sv_enable elogind
 
 _sv_enable NetworkManager
@@ -293,6 +318,12 @@ log "runit services enabled."
 
 # =============================================================================
 # System-wide environment (Wayland + hybrid GPU)
+# Per Void docs:
+#   - XDG_SESSION_TYPE=wayland required by some apps
+#   - QT_QPA_PLATFORM="wayland;xcb" — quoted to prevent shell treating
+#     semicolon as a command separator; xcb is the X11 fallback for Qt
+#   - SDL_VIDEODRIVER=wayland for SDL-based apps
+#   - XDG_RUNTIME_DIR managed automatically by elogind at login
 # =============================================================================
 section "System-wide environment"
 
@@ -307,8 +338,9 @@ export ELECTRON_OZONE_PLATFORM_HINT=wayland
 EOF
 
 cat > /etc/profile.d/91-hybrid-gpu.sh << 'EOF'
+# AMD iGPU as default renderer. VA-API uses radeonsi.
 export LIBVA_DRIVER_NAME=radeonsi
-# PRIME offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
+# NVIDIA PRIME offload: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <app>
 EOF
 
 chmod +x /etc/profile.d/90-wayland.sh /etc/profile.d/91-hybrid-gpu.sh
@@ -316,6 +348,9 @@ log "Environment scripts written to /etc/profile.d/."
 
 # =============================================================================
 # niri session wrapper
+# Per Void docs: launch pipewire from the compositor startup script.
+# wireplumber starts automatically via 10-wireplumber.conf symlink.
+# elogind provides XDG_RUNTIME_DIR and dbus session bus at login via SDDM.
 # =============================================================================
 section "niri session wrapper"
 
@@ -347,6 +382,7 @@ log "niri-session wrapper and .desktop entry written."
 
 # =============================================================================
 # swaylock PAM config
+# Without this swaylock cannot authenticate and the screen can never unlock.
 # =============================================================================
 if [[ ! -f /etc/pam.d/swaylock ]]; then
     cat > /etc/pam.d/swaylock << 'EOF'
@@ -379,6 +415,60 @@ if [[ -d "$DOTFILES_SRC" ]]; then
 else
     warn "No dotfiles found at ${DOTFILES_SRC} — skipping."
 fi
+
+
+# =============================================================================
+# GTK theme
+# =============================================================================
+section "GTK theme"
+
+if [[ -d "/home/${USERNAME}/dotfiles/configs/diinki-retro-dark" ]]; then
+    mv "/home/${USERNAME}/dotfiles/configs/diinki-retro-dark" /usr/share/themes/
+    log "GTK theme diinki-retro-dark installed to /usr/share/themes/."
+else
+    warn "diinki-retro-dark not found in dotfiles — skipping GTK theme install."
+fi
+
+# gsettings requires a running dbus/display session so cannot run as root here.
+# A first-boot autostart script will apply it for the user.
+mkdir -p "/home/${USERNAME}/.config/autostart"
+cat > "/home/${USERNAME}/.config/autostart/apply-gtk-theme.sh" << 'FBEOF'
+#!/usr/bin/env bash
+gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
+rm -- "$0"
+FBEOF
+chmod +x "/home/${USERNAME}/.config/autostart/apply-gtk-theme.sh"
+log "GTK theme will be applied on first login via autostart."
+
+# =============================================================================
+# SDDM astronaut theme
+# =============================================================================
+section "SDDM astronaut theme"
+
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)" \
+    || warn "SDDM astronaut theme install failed — non-fatal."
+log "SDDM astronaut theme installed."
+
+# =============================================================================
+# advcpmv (advanced cp/mv with progress bars)
+# =============================================================================
+section "advcpmv"
+
+curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh \
+    --create-dirs -o /tmp/advcpmv/install.sh \
+    && (cd /tmp/advcpmv && sh install.sh) \
+    || warn "advcpmv install failed — non-fatal."
+log "advcpmv installed."
+
+# =============================================================================
+# Kvantum theme (catppuccin-frappe-mauve)
+# =============================================================================
+section "Kvantum config"
+
+mkdir -p "/home/${USERNAME}/.config/Kvantum"
+printf '[General]\ntheme=catppuccin-frappe-mauve\n' \
+    > "/home/${USERNAME}/.config/Kvantum/kvantum.kvconfig"
+log "Kvantum theme set to catppuccin-frappe-mauve."
 
 # =============================================================================
 # Fix ownership
