@@ -153,8 +153,11 @@ log "AMD/Mesa stack installed."
 # =============================================================================
 section "GPU — NVIDIA proprietary (dGPU, PRIME offload)"
 
-xbps-install -y nvidia nvidia-libs nvidia-libs-32bit \
+xbps-install -y nvidia nvidia-libs \
     || error "NVIDIA install failed."
+
+# 32-bit NVIDIA compat — requires void-repo-multilib; non-fatal if unavailable
+xbps-install -y nvidia-libs-32bit || warn "nvidia-libs-32bit not found — non-fatal, 32-bit NVIDIA compat unavailable."
 
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << 'EOF'
