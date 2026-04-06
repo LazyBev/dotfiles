@@ -562,7 +562,7 @@ gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark" 2>/dev/n
 info "Installing gaming and multimedia utilities..."
 
 yay -Syu --needed --noconfirm \
-    ardour \
+    kdenlive
     flatpak \
     lutris \
     millennium \
