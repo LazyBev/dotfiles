@@ -65,12 +65,15 @@ declare -a pacman_conf_patches=(
 info "Updating Arch mirrorlist..."
 if sudo reflector --country GB --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
     ok "reflector updated mirrorlist"
+elif [[ -f /etc/pacman.d/mirrorlist ]] && grep -q '^Server' /etc/pacman.d/mirrorlist; then
+    skip "reflector failed but existing mirrorlist looks usable — continuing"
 else
-    warn "reflector failed — falling back to curl mirrorlist"
+    warn "reflector failed and no usable mirrorlist found — attempting curl fallback..."
     sudo curl -fsSo /tmp/arch-mirrorlist --max-time 30 \
         "https://archlinux.org/mirrorlist/?country=GB&protocol=https&use_mirror_status=on" \
+        || sudo curl -fsSo /tmp/arch-mirrorlist --max-time 30 \
+        "https://geo.mirror.pkgbuild.com/mirrorlist" \
         || die "Could not fetch Arch mirrorlist — check your connection"
-    # Extract only Server lines (strip the leading #) and write a clean file
     grep '^#Server' /tmp/arch-mirrorlist | sed 's/^#//' \
         | sudo tee /etc/pacman.d/mirrorlist > /dev/null \
         || die "Failed to write /etc/pacman.d/mirrorlist"
