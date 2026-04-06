@@ -23,7 +23,6 @@ die()   {
     exit 1
 }
 
-# Trap unexpected exits
 trap 'echo; die "Unexpected error on line ${LINENO} — command: ${BASH_COMMAND}"' ERR
 trap 'echo; warn "Script interrupted by user."; exit 130' INT TERM
 
@@ -62,22 +61,25 @@ declare -a pacman_conf_patches=(
     "/# Misc options/a ILoveCandy"
 )
 
-info "Updating Arch mirrorlist..."
-if sudo reflector --country GB --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
-    ok "reflector updated mirrorlist"
-elif [[ -f /etc/pacman.d/mirrorlist ]] && grep -q '^Server' /etc/pacman.d/mirrorlist; then
-    skip "reflector failed but existing mirrorlist looks usable — continuing"
+# Fix the Arch mirrorlist — handles both '#Server' and '## ... \n## Server'
+# style comment formats produced by the Arch mirrorlist generator.
+info "Ensuring Arch mirrorlist has active Server lines..."
+if ! grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
+    info "  No active Server lines found — uncommenting..."
+    # Handle '## Server = ...' (double-hash with space)
+    sudo sed -i 's/^## \(Server = \)/\1/' /etc/pacman.d/mirrorlist
+    # Handle '#Server = ...' (single-hash no space, older format)
+    sudo sed -i 's/^#\(Server = \)/\1/' /etc/pacman.d/mirrorlist
+    if grep -q '^Server' /etc/pacman.d/mirrorlist; then
+        ok "  Mirrorlist Server lines uncommented"
+    else
+        warn "  Still no Server lines — trying reflector as last resort..."
+        sudo reflector --country GB --latest 10 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null \
+            && ok "  reflector wrote a fresh mirrorlist" \
+            || die "Could not produce a usable /etc/pacman.d/mirrorlist — fix it manually and re-run"
+    fi
 else
-    warn "reflector failed and no usable mirrorlist found — attempting curl fallback..."
-    sudo curl -fsSo /tmp/arch-mirrorlist --max-time 30 \
-        "https://archlinux.org/mirrorlist/?country=GB&protocol=https&use_mirror_status=on" \
-        || sudo curl -fsSo /tmp/arch-mirrorlist --max-time 30 \
-        "https://geo.mirror.pkgbuild.com/mirrorlist" \
-        || die "Could not fetch Arch mirrorlist — check your connection"
-    grep '^#Server' /tmp/arch-mirrorlist | sed 's/^#//' \
-        | sudo tee /etc/pacman.d/mirrorlist > /dev/null \
-        || die "Failed to write /etc/pacman.d/mirrorlist"
-    ok "curl mirrorlist fetched and written"
+    skip "Arch mirrorlist already has active Server lines"
 fi
 
 if [[ ! -f /etc/pacman.conf.bak ]]; then
@@ -97,7 +99,7 @@ done
 ok "pacman.conf patched"
 
 # ---------------------------------------------------------------------------
-# Artix repos — injected above Arch repos so systemd-free builds win
+# Artix repos
 # ---------------------------------------------------------------------------
 
 step "Adding Artix repositories"
@@ -122,54 +124,46 @@ else
     skip "Artix repo blocks already present in pacman.conf"
 fi
 
-# Bootstrap: write a working stub mirrorlist so the Include= lines resolve
-# cleanly on the first pacman -Sy. $repo expands to the repo name (system,
-# world, galaxy, lib32) automatically — same format as the real file.
-if [[ ! -f /etc/pacman.d/artix-mirrorlist ]]; then
-    info "artix-mirrorlist not present — writing bootstrap stub..."
+# Bootstrap stub — uses correct Artix mirror path: /$repo/os/x86_64
+# $repo expands per-repo-block (system, world, galaxy, lib32)
+if [[ ! -f /etc/pacman.d/artix-mirrorlist ]] \
+    || grep -q 'packages/\$repo' /etc/pacman.d/artix-mirrorlist; then
+    info "Writing correct bootstrap artix-mirrorlist stub..."
     sudo mkdir -p /etc/pacman.d
     sudo tee /etc/pacman.d/artix-mirrorlist > /dev/null <<'STUB'
-# Bootstrap stub — will be replaced by artix-mirrorlist package
-Server = https://mirror.pascalpuffke.de/artix-linux/packages/$repo/x86_64
-Server = https://mirrors.xtom.de/artix-linux/packages/$repo/x86_64
-Server = https://artix.harting.dev/packages/$repo/x86_64
+# Bootstrap stub — replaced by artix-mirrorlist package after first sync
+Server = https://mirror.pascalpuffke.de/artix-linux/$repo/os/x86_64
+Server = https://mirrors.xtom.de/artix-linux/$repo/os/x86_64
+Server = https://ftp.halifax.rwth-aachen.de/artix-linux/$repo/os/x86_64
+Server = https://mirror.reisenbauer.ee/artix-linux/$repo/os/x86_64
 STUB
     ok "Bootstrap artix-mirrorlist stub written"
-
-    info "Trusting Artix signing key..."
-    sudo pacman-key --recv-keys 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
-        && ok "  Key received" \
-        || warn "  Key recv failed (may already be trusted)"
-    sudo pacman-key --lsign-key 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
-        && ok "  Key locally signed" \
-        || warn "  Key lsign failed (may already be signed)"
-
-    info "Syncing package databases..."
-    sudo pacman -Sy --noconfirm || die "pacman -Sy failed — check your network and mirror"
-
-    info "Installing artix-mirrorlist and artix-keyring..."
-    sudo pacman -S --noconfirm --needed artix-mirrorlist artix-keyring \
-        || die "Failed to install artix-mirrorlist/artix-keyring — is the mirror reachable?"
-
-    info "Populating Artix keyring..."
-    sudo pacman-key --populate artix || warn "pacman-key --populate artix had errors (usually harmless)"
-    ok "artix-mirrorlist and artix-keyring installed"
 else
-    skip "artix-mirrorlist already present at /etc/pacman.d/artix-mirrorlist"
+    skip "artix-mirrorlist already present and looks correct"
 fi
+
+info "Trusting Artix signing key..."
+sudo pacman-key --recv-keys 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
+    && ok "  Key received" \
+    || warn "  Key recv failed (may already be trusted)"
+sudo pacman-key --lsign-key 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
+    && ok "  Key locally signed" \
+    || warn "  Key lsign failed (may already be signed)"
+
+info "Syncing package databases..."
+sudo pacman -Sy --noconfirm || die "pacman -Sy failed — check your network and mirror"
+
+info "Installing artix-mirrorlist and artix-keyring..."
+sudo pacman -S --noconfirm --needed artix-mirrorlist artix-keyring \
+    || die "Failed to install artix-mirrorlist/artix-keyring — is the mirror reachable?"
+
+info "Populating Artix keyring..."
+sudo pacman-key --populate artix || warn "pacman-key --populate artix had errors (usually harmless)"
+ok "artix-mirrorlist and artix-keyring installed"
 
 info "Final package database sync..."
 sudo pacman -Sy --noconfirm || die "pacman -Sy failed"
 ok "Databases synced"
-
-if ! pacman -Q artix-keyring &>/dev/null; then
-    info "Installing artix-keyring..."
-    sudo pacman -S --noconfirm --needed artix-keyring || die "Failed to install artix-keyring"
-    sudo pacman-key --populate artix || warn "pacman-key --populate artix had errors"
-    ok "artix-keyring installed"
-else
-    skip "artix-keyring already installed"
-fi
 
 # ---------------------------------------------------------------------------
 # Migrate: systemd → OpenRC + elogind
@@ -410,7 +404,6 @@ yay -Syu --needed --noconfirm \
     && ok "Main packages installed" \
     || warn "Some packages failed — check output above (non-fatal, continuing)"
 
-# iwd: only if iwctl isn't present
 if ! command -v iwctl &>/dev/null; then
     info "iwctl not found — installing iwd..."
     yay -Syu --needed --noconfirm iwd iwd-openrc \
@@ -477,7 +470,7 @@ rc_enable() {
             skip "  $svc already in $lvl runlevel"
         fi
     else
-        warn "  Service file not found for '$svc' — skipping (install may have used a different name)"
+        warn "  Service file not found for '$svc' — skipping"
     fi
 }
 
@@ -493,7 +486,6 @@ rc_enable tlp          default
 rc_enable cronie       default
 rc_enable sddm         default
 
-# getty on tty1
 AGETTY_SRC="/etc/openrc/init.d/agetty"
 AGETTY_TTY1="/etc/openrc/init.d/agetty.tty1"
 if [[ -f "$AGETTY_SRC" ]]; then
@@ -642,7 +634,6 @@ fi
 
 step "Installing dotfiles and config"
 
-# Fontconfig
 mkdir -p "$HOME/.config/fontconfig"
 if [[ ! -f "$HOME/.config/fontconfig/fonts.conf" ]]; then
     info "Writing fonts.conf..."
@@ -683,7 +674,6 @@ else
     skip "fonts.conf already exists"
 fi
 
-# niri-edit helper script
 if [[ ! -x /usr/bin/niri-edit ]]; then
     info "Installing niri-edit helper..."
     sudo tee /usr/bin/niri-edit > /dev/null <<'EOF'
@@ -696,17 +686,15 @@ else
     skip "niri-edit already installed"
 fi
 
-# .bashrc
 if [[ -f "$HOME/dotfiles/.bashrc" ]]; then
     info "Copying .bashrc from dotfiles..."
     cp -f "$HOME/dotfiles/.bashrc" "$HOME/" \
         && ok ".bashrc installed" \
         || { rm -f "$HOME/.bashrc"; cp -f "$HOME/dotfiles/.bashrc" "$HOME/" && ok ".bashrc installed (retry)"; }
 else
-    warn "dotfiles/.bashrc not found — skipping (your current .bashrc is untouched)"
+    warn "dotfiles/.bashrc not found — skipping"
 fi
 
-# Config directories
 info "Syncing config directories..."
 for dir in waybar dunst wlogout niri fuzzel fcitx5 qutebrowser; do
     SRC="$HOME/dotfiles/configs/$dir"
@@ -720,7 +708,6 @@ for dir in waybar dunst wlogout niri fuzzel fcitx5 qutebrowser; do
     fi
 done
 
-# Pictures
 if [[ -d "$HOME/dotfiles/configs/Pictures" ]]; then
     cp -r "$HOME/dotfiles/configs/Pictures" "$HOME/"
     ok "Pictures copied to $HOME/"
@@ -731,7 +718,6 @@ fi
 info "Fixing ownership of $HOME..."
 sudo chown -R "$USER:$USER" "$HOME" && ok "Ownership corrected"
 
-# SDDM theme
 if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
     info "Installing sddm-astronaut-theme..."
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)" \
@@ -741,7 +727,6 @@ else
     skip "sddm-astronaut-theme already installed"
 fi
 
-# GTK theme
 GTK_THEME_SRC="$HOME/dotfiles/configs/diinki-retro-dark"
 GTK_THEME_DST="/usr/share/themes/diinki-retro-dark"
 if [[ -d "$GTK_THEME_SRC" && ! -d "$GTK_THEME_DST" ]]; then
@@ -755,10 +740,9 @@ else
     warn "GTK theme source not found at $GTK_THEME_SRC — skipping"
 fi
 
-info "Setting GTK theme via gsettings..."
 gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark" 2>/dev/null \
     && ok "GTK theme set" \
-    || warn "gsettings failed — GTK theme may need to be set manually after first login"
+    || warn "gsettings failed — set GTK theme manually after first login"
 
 # ---------------------------------------------------------------------------
 # Optional utilities
@@ -783,16 +767,14 @@ utils() {
         && ok "Utility packages installed" \
         || warn "Some utility packages failed"
 
-    info "Running winetricks components..."
     winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv 2>/dev/null \
         && ok "winetricks components installed" \
-        || warn "winetricks had errors — some Windows compatibility may be missing"
+        || warn "winetricks had errors"
 
-    info "Running wineboot..."
     wineboot -u 2>/dev/null && ok "wineboot done" || warn "wineboot failed (non-fatal)"
 
     if [[ ! -f ./advcpmv/install.sh ]]; then
-        info "Installing advcpmv (advanced cp/mv with progress)..."
+        info "Installing advcpmv..."
         curl -fsSL https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh \
             --create-dirs -o ./advcpmv/install.sh \
             && (cd advcpmv && sh install.sh) \
@@ -878,7 +860,6 @@ ARTI
         skip "arti.toml already exists"
     fi
 
-    info "Installing oh-my-bash..."
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" \
         && ok "oh-my-bash installed" \
         || warn "oh-my-bash install failed — bash will still work normally"
