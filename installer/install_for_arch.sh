@@ -120,27 +120,26 @@ else
     skip "Artix repo blocks already present in pacman.conf"
 fi
 
-# Bootstrap stub — official origin first (slow but complete), fast mirrors after.
-# galaxy is not mirrored everywhere; the origin + dotsrc/osbeck carry all repos.
-if [[ ! -f /etc/pacman.d/artix-mirrorlist ]] \
-    || grep -q 'packages/\$repo' /etc/pacman.d/artix-mirrorlist; then
+# Always write the bootstrap stub unless the real artix-mirrorlist package is installed.
+# Never skip based on file content — old stubs with bad mirrors must be replaced.
+# galaxy is not mirrored everywhere; dotsrc + osbeck + the official CDN all carry it.
+if ! pacman -Q artix-mirrorlist &>/dev/null; then
     info "Writing bootstrap artix-mirrorlist stub..."
     sudo mkdir -p /etc/pacman.d
     sudo tee /etc/pacman.d/artix-mirrorlist > /dev/null <<'STUB'
 # Bootstrap stub — replaced by artix-mirrorlist package after first sync.
-# Official origin is listed first to guarantee all repos (system/world/galaxy/lib32)
-# are reachable even if fast mirrors don't carry galaxy.
-Server = https://artixlinux.org/packages/$repo/os/x86_64
+# Mirrors verified to carry all repos including galaxy:
 Server = https://mirrors.dotsrc.org/artix-linux/$repo/os/x86_64
 Server = https://mirror.osbeck.com/artix-linux/$repo/os/x86_64
-Server = https://mirror.pascalpuffke.de/artix-linux/$repo/os/x86_64
 Server = https://mirrors.xtom.de/artix-linux/$repo/os/x86_64
 Server = https://ftp.halifax.rwth-aachen.de/artix-linux/$repo/os/x86_64
-Server = https://mirror.reisenbauer.ee/artix-linux/$repo/os/x86_64
+Server = https://mirror.pascalpuffke.de/artix-linux/$repo/os/x86_64
+# Official CDN last — slow but complete, guaranteed fallback
+Server = https://artixlinux.org/packages/$repo/os/x86_64
 STUB
     ok "Bootstrap artix-mirrorlist stub written"
 else
-    skip "artix-mirrorlist already present and looks correct"
+    skip "artix-mirrorlist package already installed — leaving mirrorlist intact"
 fi
 
 info "Trusting Artix signing key..."
