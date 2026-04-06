@@ -100,12 +100,34 @@ fi
 # Bootstrap artix-mirrorlist from CDN if not present
 if [[ ! -f /etc/pacman.d/artix-mirrorlist ]]; then
     info "Fetching artix-mirrorlist..."
-    MIRRORLIST_PKG=$(curl -s 'https://mirrors.artixlinux.org/packages/system/x86_64/' \
-        | grep -oP 'artix-mirrorlist-[^"]+\.pkg\.tar\.zst' | tail -1)
-    [[ -z "$MIRRORLIST_PKG" ]] && die "Could not find artix-mirrorlist package on CDN"
+
+    # Scrape the CDN directory listing for the latest package filename
+    CDN_INDEX=$(curl -fsSL 'https://mirrors.artixlinux.org/packages/system/x86_64/' 2>/dev/null) \
+        || { warn "CDN index fetch failed — trying fallback mirror"; CDN_INDEX=""; }
+
+    MIRRORLIST_PKG=$(echo "$CDN_INDEX" \
+        | grep -oP 'artix-mirrorlist-[0-9][^"]+\.pkg\.tar\.zst' | tail -1)
+
+    # Fallback: try the EU mirror if the primary CDN gave nothing
+    if [[ -z "$MIRRORLIST_PKG" ]]; then
+        warn "Primary CDN gave no result — trying eu.mirrorlist.artixlinux.org"
+        CDN_INDEX=$(curl -fsSL 'https://eu-mirror.artixlinux.org/packages/system/x86_64/' 2>/dev/null) || true
+        MIRRORLIST_PKG=$(echo "$CDN_INDEX" \
+            | grep -oP 'artix-mirrorlist-[0-9][^"]+\.pkg\.tar\.zst' | tail -1)
+        CDN_BASE="https://eu-mirror.artixlinux.org/packages/system/x86_64"
+    else
+        CDN_BASE="https://mirrors.artixlinux.org/packages/system/x86_64"
+    fi
+
+    if [[ -z "$MIRRORLIST_PKG" ]]; then
+        die "Could not find artix-mirrorlist package on any CDN. Check your internet connection."
+    fi
+
+    info "Downloading ${MIRRORLIST_PKG}..."
     sudo curl -fsSo /tmp/artix-mirrorlist.pkg.tar.zst \
-        "https://mirrors.artixlinux.org/packages/system/x86_64/${MIRRORLIST_PKG}" \
-        || die "Failed to download artix-mirrorlist"
+        "${CDN_BASE}/${MIRRORLIST_PKG}" \
+        || die "Failed to download artix-mirrorlist from ${CDN_BASE}"
+
     sudo pacman -U --noconfirm /tmp/artix-mirrorlist.pkg.tar.zst \
         || die "Failed to install artix-mirrorlist"
 else
