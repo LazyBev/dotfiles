@@ -82,29 +82,18 @@ else
     skip "Arch mirrorlist already has active Server lines"
 fi
 
-if [[ ! -f /etc/pacman.conf.bak ]]; then
-    info "Backing up /etc/pacman.conf → /etc/pacman.conf.bak"
-    sudo cp /etc/pacman.conf /etc/pacman.conf.bak || die "Failed to back up pacman.conf"
-    ok "Backup created"
+# Always start from a clean Arch pacman.conf fetched from upstream.
+# Any backup on disk may already be corrupt from a previous run.
+info "Fetching clean pacman.conf from Arch upstream..."
+if sudo curl -fsSL --max-time 15     "https://gitlab.archlinux.org/archlinux/packaging/packages/pacman/-/raw/main/pacman.conf"     -o /etc/pacman.conf 2>/dev/null && grep -q '^\[options\]' /etc/pacman.conf; then
+    ok "Clean pacman.conf fetched from upstream"
+    sudo cp /etc/pacman.conf /etc/pacman.conf.bak
+    ok "Backup created from clean upstream copy"
 else
-    skip "pacman.conf backup already exists at /etc/pacman.conf.bak"
-fi
-
-# Fix stray Include line in [options] section — left by previous runs of the old
-# global s/#Include/Include/ sed. This causes "directive 'Server' in section 'options'"
-# spam on every pacman invocation.
-if awk '/^\[options\]/,/^\[/' /etc/pacman.conf | grep -q '^Include'; then
-    info "Removing stray Include line from [options] section in pacman.conf..."
-    # Delete Include lines that appear before any [repo] section header
-    sudo python3 -c "
-import re, sys
-txt = open('/etc/pacman.conf').read()
-# Remove Include lines that fall inside the [options] block
-fixed = re.sub(r'(\[options\][^\[]*?)^Include[^\n]*\n', r'\1', txt, flags=re.MULTILINE|re.DOTALL)
-open('/etc/pacman.conf', 'w').write(fixed)
-" && ok "Stray Include removed from [options]" || warn "Could not auto-fix [options] — continuing"
-else
-    skip "No stray Include in [options] section"
+    warn "Could not fetch upstream pacman.conf — using existing file"
+    if [[ ! -f /etc/pacman.conf.bak ]]; then
+        sudo cp /etc/pacman.conf /etc/pacman.conf.bak
+    fi
 fi
 
 info "Applying pacman.conf patches..."
@@ -173,44 +162,49 @@ else
     skip "artix-mirrorlist package already installed — leaving mirrorlist intact"
 fi
 
-info "Trusting Artix signing key..."
-sudo pacman-key --recv-keys 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
-    && ok "  Key received" \
-    || warn "  Key recv failed (may already be trusted)"
-sudo pacman-key --lsign-key 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
-    && ok "  Key locally signed" \
-    || warn "  Key lsign failed (may already be signed)"
-
-info "Syncing package databases..."
-sudo pacman -Sy --noconfirm || die "pacman -Sy failed — check your network and mirror"
-
 info "Removing pacman-mirrorlist (conflicts with artix-mirrorlist)..."
 if pacman -Q pacman-mirrorlist &>/dev/null; then
-    # Back up our artix mirrorlist stub before pacman clobbers /etc/pacman.d/mirrorlist
     sudo cp /etc/pacman.d/artix-mirrorlist /tmp/artix-mirrorlist.stub 2>/dev/null || true
     sudo pacman -Rdd --noconfirm pacman-mirrorlist         && ok "pacman-mirrorlist removed"         || warn "pacman-mirrorlist removal failed — will try installing anyway"
-    # pacman saves /etc/pacman.d/mirrorlist as .pacsave on removal — restore the Arch
-    # mirrorlist so pacman can still read it for the next transaction
     if [[ -f /etc/pacman.d/mirrorlist.pacsave && ! -f /etc/pacman.d/mirrorlist ]]; then
         sudo cp /etc/pacman.d/mirrorlist.pacsave /etc/pacman.d/mirrorlist
         ok "Arch mirrorlist restored from .pacsave"
     fi
-    # Restore our artix mirrorlist stub
-    if [[ -f /tmp/artix-mirrorlist.stub ]]; then
-        sudo cp /tmp/artix-mirrorlist.stub /etc/pacman.d/artix-mirrorlist
-    fi
+    [[ -f /tmp/artix-mirrorlist.stub ]] && sudo cp /tmp/artix-mirrorlist.stub /etc/pacman.d/artix-mirrorlist
 else
     skip "pacman-mirrorlist not installed"
 fi
 
-info "Installing artix-mirrorlist and artix-keyring..."
-sudo pacman -S --noconfirm --needed artix-mirrorlist artix-keyring     || die "Failed to install artix-mirrorlist/artix-keyring — is the mirror reachable?"
+# Bootstrap artix-keyring — chicken-and-egg:
+# Artix buildbot key unknown until artix-keyring installed; installing requires the key.
+# Write pacman.conf with ALL SigLevel lines stripped + global Never, use that for bootstrap.
+info "Bootstrapping artix-keyring (SigLevel=Never)..."
 
-info "Populating Artix keyring..."
-sudo pacman-key --populate artix || warn "pacman-key --populate artix had errors (usually harmless)"
-ok "artix-mirrorlist and artix-keyring installed"
+sudo tee /tmp/make_nosig_conf.py > /dev/null << 'PYEOF'
+import re
+txt = open('/etc/pacman.conf').read()
+txt = re.sub(r'^SigLevel[^\n]*\n', '', txt, flags=re.MULTILINE)
+txt = txt.replace('[options]', '[options]\nSigLevel = Never', 1)
+open('/tmp/pacman-nosig.conf', 'w').write(txt)
+PYEOF
 
-info "Final package database sync..."
+sudo python3 /tmp/make_nosig_conf.py || die "Failed to generate no-sig pacman.conf"
+sudo rm -f /tmp/make_nosig_conf.py
+
+sudo pacman -Sy --noconfirm --config /tmp/pacman-nosig.conf \
+    || die "pacman -Sy with SigLevel=Never failed"
+sudo pacman -S --noconfirm --needed --config /tmp/pacman-nosig.conf \
+    artix-mirrorlist artix-keyring \
+    || die "Failed to bootstrap artix-mirrorlist/artix-keyring"
+sudo rm -f /tmp/pacman-nosig.conf
+ok "artix-mirrorlist and artix-keyring installed (bootstrap)"
+
+info "Initialising and populating Artix keyring..."
+sudo pacman-key --init 2>/dev/null || true
+sudo pacman-key --populate archlinux 2>/dev/null || true
+sudo pacman-key --populate artix     && ok "Artix keyring populated"     || die "pacman-key --populate artix failed — cannot continue safely"
+
+info "Final package database sync (now with proper signatures)..."
 sudo pacman -Sy --noconfirm || die "pacman -Sy failed"
 ok "Databases synced"
 
@@ -238,17 +232,18 @@ else
 fi
 
 info "Installing OpenRC + elogind (systemd replacement stack)..."
-sudo pacman -S --needed --noconfirm \
-    "$OPENRC_PKG" \
-    "${BASE_ARTIX_ARGS[@]}" \
-    elogind \
-    elogind-openrc \
-    libelogind \
-    udev-openrc \
-    dbus-openrc \
-    sysvinit \
-    openrc-arch-services-git \
-    || die "Failed to install OpenRC base stack — see output above"
+# Core packages — must succeed
+sudo pacman -S --needed --noconfirm     "$OPENRC_PKG"     "${BASE_ARTIX_ARGS[@]}"     elogind     elogind-openrc     libelogind     dbus-openrc     || die "Failed to install OpenRC base stack — see output above"
+
+# Optional Artix-specific packages — best-effort (may not exist until galaxy is fully synced)
+for pkg in udev-openrc sysvinit; do
+    if pacman -Ss "^${pkg}$" 2>/dev/null | grep -q "^[a-z]"; then
+        sudo pacman -S --needed --noconfirm "$pkg"             && ok "  Installed: $pkg"             || warn "  $pkg install failed (non-fatal)"
+    else
+        warn "  $pkg not found in repos yet — skipping (will retry in main package step)"
+    fi
+done
+# openrc-arch-services-git is AUR — installed later via yay in main package step
 ok "OpenRC stack installed"
 
 info "Force-removing systemd (elogind satisfies virtual deps)..."
