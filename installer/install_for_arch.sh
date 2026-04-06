@@ -1,953 +1,401 @@
 #!/bin/bash
 
-set -eo pipefail
+set -e
 
+# Get the directory of the current script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Source helper file
 source "$SCRIPT_DIR/helper.sh"
 
-# ---------------------------------------------------------------------------
-# Logging helpers
-# ---------------------------------------------------------------------------
+# Trap for unexpected exits
+trap 'trap_message' INT TERM 
 
-_log() { printf "[%-5s] %s\n" "$1" "$2"; }
-info()  { _log "INFO"  "$*"; }
-warn()  { _log "WARN"  "$*"; }
-skip()  { _log "SKIP"  "$*"; }
-ok()    { _log "OK"    "$*"; }
-step()  { echo; echo "==> $*"; echo "------------------------------------------------------------"; }
-die()   {
-    _log "FATAL" "$*"
-    echo
-    echo "  The script failed at the step above."
-    echo "  Your pacman.conf backup is at /etc/pacman.conf.bak if you need to roll back."
-    exit 1
-}
-
-trap 'echo; die "Unexpected error on line ${LINENO} — command: ${BASH_COMMAND}"' ERR
-trap 'echo; warn "Script interrupted by user."; exit 130' INT TERM
-
-# ---------------------------------------------------------------------------
-# Preflight checks
-# ---------------------------------------------------------------------------
-
-step "Preflight checks"
-
-[[ $EUID -ne 0 ]] || die "Do not run this script as root. It will sudo what it needs."
-command -v pacman &>/dev/null || die "pacman not found — are you on Arch?"
-command -v curl   &>/dev/null || die "curl not found — install it first: sudo pacman -S curl"
-command -v git    &>/dev/null || { warn "git not found — installing..."; sudo pacman -S --noconfirm git; }
-
-info "Checking internet connectivity..."
-if ! curl -fsSL --max-time 10 https://archlinux.org &>/dev/null; then
-    die "No internet connection detected. Check your network and try again."
-fi
-ok "Internet connectivity confirmed"
-
-if [[ ! -d /sys/firmware/efi && ! -d /run/openrc ]]; then
-    warn "EFI not detected and OpenRC not running — make sure you're on the target machine, not a chroot."
-fi
-
-# ---------------------------------------------------------------------------
-# Pacman config
-# ---------------------------------------------------------------------------
-
-step "Configuring pacman"
-
-declare -a pacman_conf_patches=(
+# Refactor pacman.conf update
+declare -a pacman_conf=(
     "s/#Color/Color/"
     "s/#ParallelDownloads/ParallelDownloads/"
     "s/#\\[multilib\\]/\\[multilib\\]/"
+    "s/#Include = \\/etc\\/pacman\\.d\\/mirrorlist/Include = \\/etc\\/pacman\\.d\\/mirrorlist/"
     "/# Misc options/a ILoveCandy"
 )
-# Uncomment the Include = mirrorlist line that immediately follows [multilib] only.
-# A global s/#Include/Include/ also hits the commented example in [options] and
-# causes pacman to parse the Arch mirrorlist as pacman.conf — producing hundreds of
-# "directive 'Server' in section 'options' not recognised" warnings.
-MULTILIB_INCLUDE_FIX='/^\[multilib\]/{n;s/^#Include/Include/}' 
 
-info "Ensuring Arch mirrorlist has active Server lines..."
-if ! grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
-    info "  No active Server lines found — uncommenting..."
-    sudo sed -i 's/^## \(Server = \)/\1/' /etc/pacman.d/mirrorlist
-    sudo sed -i 's/^#\(Server = \)/\1/' /etc/pacman.d/mirrorlist
-    if grep -q '^Server' /etc/pacman.d/mirrorlist; then
-        ok "  Mirrorlist Server lines uncommented"
-    else
-        warn "  Still no Server lines — trying reflector as last resort..."
-        sudo reflector --country GB --latest 10 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null \
-            && ok "  reflector wrote a fresh mirrorlist" \
-            || die "Could not produce a usable /etc/pacman.d/mirrorlist — fix it manually and re-run"
-    fi
-else
-    skip "Arch mirrorlist already has active Server lines"
+if ! sudo reflector --country US --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
+    sudo curl -o /etc/pacman.d/mirrorlist "https://archlinux.org/mirrorlist/?country=US&protocol=https&use_mirror_status=on" \
+        && sudo sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
 fi
 
-# Always start from a clean Arch pacman.conf fetched from upstream.
-# Any backup on disk may already be corrupt from a previous run.
-info "Fetching clean pacman.conf from Arch upstream..."
-if sudo curl -fsSL --max-time 15     "https://gitlab.archlinux.org/archlinux/packaging/packages/pacman/-/raw/main/pacman.conf"     -o /etc/pacman.conf 2>/dev/null && grep -q '^\[options\]' /etc/pacman.conf; then
-    ok "Clean pacman.conf fetched from upstream"
-    sudo cp /etc/pacman.conf /etc/pacman.conf.bak
-    ok "Backup created from clean upstream copy"
-else
-    warn "Could not fetch upstream pacman.conf — using existing file"
-    if [[ ! -f /etc/pacman.conf.bak ]]; then
-        sudo cp /etc/pacman.conf /etc/pacman.conf.bak
-    fi
-fi
+# Backup the pacman.conf before modifying
+echo "Backing up /etc/pacman.conf"
+sudo cp /etc/pacman.conf /etc/pacman.conf.bak || { echo "Failed to back up pacman.conf"; exit 1;}
 
-info "Applying pacman.conf patches..."
-for change in "${pacman_conf_patches[@]}"; do
-    sudo sed -i "$change" /etc/pacman.conf         && info "  Applied: $change"         || warn "  May already be applied (non-fatal): $change"
+echo "Modifying /etc/pacman.conf"
+for change in "${pacman_conf[@]}"; do
+    sudo sed -i "$change" /etc/pacman.conf || { echo "Failed to update pacman.conf"; exit 1; }
 done
-# Apply the multilib Include fix separately (scoped to avoid hitting [options] example line)
-if grep -q '^\[multilib\]' /etc/pacman.conf && ! grep -A1 '^\[multilib\]' /etc/pacman.conf | grep -q '^Include'; then
-    sudo sed -i "$MULTILIB_INCLUDE_FIX" /etc/pacman.conf         && info "  Applied: multilib Include uncomment"         || warn "  multilib Include may already be active"
-else
-    skip "multilib Include already active"
-fi
-ok "pacman.conf patched"
 
-# ---------------------------------------------------------------------------
-# Artix repos
-# ---------------------------------------------------------------------------
+# Get the directory of the current script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-step "Adding Artix repositories"
+# Source helper file
+source "$SCRIPT_DIR/helper.sh"
 
-if ! grep -q '^\[system\]' /etc/pacman.conf; then
-    info "Injecting Artix repo blocks above [core]..."
-    sudo sed -i '/^\[core\]/i \
-[system]\
-Include = /etc/pacman.d/artix-mirrorlist\
-\
-[world]\
-Include = /etc/pacman.d/artix-mirrorlist\
-\
-[galaxy]\
-Include = /etc/pacman.d/artix-mirrorlist\
-\
-[lib32]\
-Include = /etc/pacman.d/artix-mirrorlist\
-' /etc/pacman.conf
-    ok "Artix repo blocks added"
-else
-    skip "Artix repo blocks already present in pacman.conf"
+# Trap for unexpected exits
+trap 'trap_message' INT TERM
+
+# Script start
+print_bold_blue "\nBev's dotfiles"
+
+echo -e "\n------------------------------------------------------------------------\n"
+print_info "\nStarting prerequisites setup..."
+
+sudo pacman -Syu --noconfirm
+
+if ! command -v yay &> /dev/null; then
+    sudo git clone https://aur.archlinux.org/yay-bin.git
+    sudo chown "$USER:$USER" -R yay-bin
+    cd yay-bin && makepkg -si && cd .. && sudo rm -rf yay-bin
 fi
 
-# Always write the bootstrap stub unless the real artix-mirrorlist package is installed.
-# Never skip — old stubs with wrong URL paths must be replaced.
-# Correct URL format is /repos/$repo/os/$arch (SourceForge CDN) or /$repo/os/$arch (official mirrors).
-# The previous stubs used /$repo/os/x86_64 on third-party mirrors — wrong path, hence 404s.
-if ! pacman -Q artix-mirrorlist &>/dev/null; then
-    info "Fetching artix-mirrorlist from gitea (authoritative source)..."
-    sudo mkdir -p /etc/pacman.d
-    if sudo curl -fsSL --max-time 20 \
-        "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist" \
-        -o /etc/pacman.d/artix-mirrorlist 2>/dev/null \
-        && grep -q '^Server' /etc/pacman.d/artix-mirrorlist; then
-        ok "artix-mirrorlist fetched from gitea"
-    else
-        warn "gitea fetch failed — writing hardcoded stub with correct URL format"
-        sudo tee /etc/pacman.d/artix-mirrorlist > /dev/null <<'STUB'
-# Bootstrap stub — uses correct SourceForge CDN URL format: /repos/$repo/os/$arch
-Server = https://netcologne.dl.sourceforge.net/project/artix-linux/repos/$repo/os/$arch
-Server = https://freefr.dl.sourceforge.net/project/artix-linux/repos/$repo/os/$arch
-Server = https://netix.dl.sourceforge.net/project/artix-linux/repos/$repo/os/$arch
-Server = https://mirror1.artixlinux.org/$repo/os/$arch
-Server = https://mirror2.artixlinux.org/$repo/os/$arch
-STUB
-        ok "Bootstrap artix-mirrorlist stub written"
-    fi
-else
-    skip "artix-mirrorlist package already installed — leaving mirrorlist intact"
+yay -Syu --noconfirm \
+acpi alsa-utils arch-install-scripts blueman bluez bluez-utils \
+brightnessctl btop chafa cliphist cmake curl dbus dconf dconf-editor \
+dmenu dolphin dunst emacs eza fastfetch fcitx5-anthy fcitx5-gtk fcitx5-im \
+fcitx5-qt fuzzel fzf ghostty git gvfs hwinfo imagemagick \
+iw kvantum kvantum-theme-catppuccin-git kitty kwayland \
+lib32-alsa-plugins lib32-vulkan-mesa-layers libevdev libinput \
+libxkbcommon make man-db man-pages mesa meson mpv neovim networkmanager \
+network-manager-applet nm-connection-editor noto-fonts-emoji nwg-look obsidian \
+pam_rundir pamixer pavucontrol playerctl polkit polkit-kde-agent python python-pip \
+python-pipx qt5ct qt6ct qutebrowser ranger ripgrep sddm slurp stow sudo swayidle \
+swaylock swww tar tlp tmux ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-dejavu \
+ttf-liberation unzip vulkan-mesa-layers waybar wayland wayland-protocols wayland-utils \
+waypaper wev wf-recorder wget wl-clipboard wlr-randr wlroots xarchiver xbindkeys \
+xdg-desktop-portal xdg-desktop-portal-gtk xdotool xf86-input-libinput xorg-xev xwayland \
+xwayland-run xwayland-satellite yt-dlp ytfzf zip zram-generator
+
+if ! command -v iwctl &> /dev/null; then
+    yay -Syu --noconfirm iwd
 fi
-
-info "Removing pacman-mirrorlist (conflicts with artix-mirrorlist)..."
-if pacman -Q pacman-mirrorlist &>/dev/null; then
-    sudo cp /etc/pacman.d/artix-mirrorlist /tmp/artix-mirrorlist.stub 2>/dev/null || true
-    sudo pacman -Rdd --noconfirm pacman-mirrorlist         && ok "pacman-mirrorlist removed"         || warn "pacman-mirrorlist removal failed — will try installing anyway"
-    if [[ -f /etc/pacman.d/mirrorlist.pacsave && ! -f /etc/pacman.d/mirrorlist ]]; then
-        sudo cp /etc/pacman.d/mirrorlist.pacsave /etc/pacman.d/mirrorlist
-        ok "Arch mirrorlist restored from .pacsave"
-    fi
-    [[ -f /tmp/artix-mirrorlist.stub ]] && sudo cp /tmp/artix-mirrorlist.stub /etc/pacman.d/artix-mirrorlist
-else
-    skip "pacman-mirrorlist not installed"
-fi
-
-# Bootstrap artix-keyring — chicken-and-egg:
-# Artix buildbot key unknown until artix-keyring installed; installing requires the key.
-# Write pacman.conf with ALL SigLevel lines stripped + global Never, use that for bootstrap.
-info "Bootstrapping artix-keyring (SigLevel=Never)..."
-
-sudo tee /tmp/make_nosig_conf.py > /dev/null << 'PYEOF'
-import re
-txt = open('/etc/pacman.conf').read()
-txt = re.sub(r'^SigLevel[^\n]*\n', '', txt, flags=re.MULTILINE)
-txt = txt.replace('[options]', '[options]\nSigLevel = Never', 1)
-open('/tmp/pacman-nosig.conf', 'w').write(txt)
-PYEOF
-
-sudo python3 /tmp/make_nosig_conf.py || die "Failed to generate no-sig pacman.conf"
-sudo rm -f /tmp/make_nosig_conf.py
-
-sudo pacman -Sy --noconfirm --config /tmp/pacman-nosig.conf \
-    || die "pacman -Sy with SigLevel=Never failed"
-sudo pacman -S --noconfirm --needed --config /tmp/pacman-nosig.conf \
-    artix-mirrorlist artix-keyring \
-    || die "Failed to bootstrap artix-mirrorlist/artix-keyring"
-sudo rm -f /tmp/pacman-nosig.conf
-ok "artix-mirrorlist and artix-keyring installed (bootstrap)"
-
-info "Initialising and populating Artix keyring..."
-sudo pacman-key --init 2>/dev/null || true
-sudo pacman-key --populate archlinux 2>/dev/null || true
-sudo pacman-key --populate artix     && ok "Artix keyring populated"     || die "pacman-key --populate artix failed — cannot continue safely"
-
-info "Final package database sync (now with proper signatures)..."
-sudo pacman -Sy --noconfirm || die "pacman -Sy failed"
-ok "Databases synced"
-
-# ---------------------------------------------------------------------------
-# Migrate: systemd → OpenRC + elogind
-# ---------------------------------------------------------------------------
-
-step "Migrating from systemd to OpenRC"
-
-info "Probing for openrc-base and base-artix meta-packages..."
-OPENRC_PKG="openrc"
-if pacman -Ss '^openrc-base$' 2>/dev/null | grep -q 'openrc-base'; then
-    OPENRC_PKG="openrc-base"
-    info "  Found openrc-base — will use as OpenRC package"
-else
-    info "  openrc-base not found — using plain openrc"
-fi
-
-BASE_ARTIX_ARGS=()
-if pacman -Ss '^base-artix$' 2>/dev/null | grep -q 'base-artix'; then
-    BASE_ARTIX_ARGS=(base-artix)
-    info "  Found base-artix — will install"
-else
-    info "  base-artix not found — base from Artix repo will shadow Arch's automatically"
-fi
-
-info "Installing OpenRC + elogind (systemd replacement stack)..."
-# Core packages — must succeed
-sudo pacman -S --needed --noconfirm     "$OPENRC_PKG"     "${BASE_ARTIX_ARGS[@]}"     elogind     elogind-openrc     libelogind     dbus-openrc     || die "Failed to install OpenRC base stack — see output above"
-
-# Optional Artix-specific packages — best-effort (may not exist until galaxy is fully synced)
-for pkg in udev-openrc sysvinit; do
-    if pacman -Ss "^${pkg}$" 2>/dev/null | grep -q "^[a-z]"; then
-        sudo pacman -S --needed --noconfirm "$pkg"             && ok "  Installed: $pkg"             || warn "  $pkg install failed (non-fatal)"
-    else
-        warn "  $pkg not found in repos yet — skipping (will retry in main package step)"
-    fi
-done
-# openrc-arch-services-git is AUR — installed later via yay in main package step
-ok "OpenRC stack installed"
-
-info "Force-removing systemd (elogind satisfies virtual deps)..."
-if pacman -Q systemd &>/dev/null; then
-    sudo pacman -Rdd --noconfirm systemd systemd-libs systemd-sysvcompat 2>/dev/null \
-        && ok "systemd removed" \
-        || warn "systemd removal had non-fatal errors — continuing"
-else
-    skip "systemd already absent"
-fi
-
-info "Refreshing util-linux and procps-ng from Artix repo..."
-sudo pacman -S --needed --noconfirm util-linux procps-ng \
-    && ok "util-linux + procps-ng refreshed" \
-    || warn "util-linux/procps-ng refresh had errors — may be fine if already at Artix version"
-
-# ---------------------------------------------------------------------------
-# Full system upgrade + yay
-# ---------------------------------------------------------------------------
-
-step "System upgrade and AUR helper"
-
-info "Running full system upgrade..."
-sudo pacman -Syu --noconfirm \
-    && ok "System upgraded" \
-    || warn "Upgrade had warnings — check output above"
-
-if ! command -v yay &>/dev/null; then
-    info "Installing yay (AUR helper)..."
-    [[ -d yay-bin ]] && { warn "Stale yay-bin dir found — removing"; sudo rm -rf yay-bin; }
-    git clone https://aur.archlinux.org/yay-bin.git || die "Failed to clone yay-bin"
-    sudo chown -R "$USER:$USER" yay-bin
-    (cd yay-bin && makepkg -si --noconfirm) || die "makepkg failed for yay-bin"
-    sudo rm -rf yay-bin
-    ok "yay installed"
-else
-    skip "yay already installed ($(yay --version 2>/dev/null | head -1))"
-fi
-
-# ---------------------------------------------------------------------------
-# Main package install
-# ---------------------------------------------------------------------------
-
-step "Installing main packages"
-info "This may take a while depending on your connection speed..."
-
-yay -Syu --needed --noconfirm \
-    acpi \
-    acpid \
-    alsa-firmware \
-    alsa-plugins \
-    alsa-tools \
-    alsa-utils \
-    alsa-utils-openrc \
-    arch-install-scripts \
-    blueman \
-    bluez \
-    bluez-openrc \
-    bluez-utils \
-    brightnessctl \
-    btop \
-    chafa \
-    cliphist \
-    cmake \
-    cronie \
-    cronie-openrc \
-    curl \
-    dbus \
-    dbus-openrc \
-    dconf \
-    dconf-editor \
-    dmenu \
-    dolphin \
-    dunst \
-    easyeffects \
-    egl-wayland \
-    elogind \
-    elogind-openrc \
-    emacs \
-    eza \
-    fastfetch \
-    fcitx5-anthy \
-    fcitx5-gtk \
-    fcitx5-im \
-    fcitx5-qt \
-    ffmpeg \
-    fuzzel \
-    fzf \
-    ghostty \
-    git \
-    gst-libav \
-    gst-plugin-pipewire \
-    gst-plugins-bad \
-    gst-plugins-good \
-    gvfs \
-    helvum \
-    hwinfo \
-    imagemagick \
-    iw \
-    kdenlive \
-    kvantum \
-    kvantum-theme-catppuccin-git \
-    kwayland \
-    lib32-alsa-plugins \
-    lib32-elogind \
-    lib32-libpipewire \
-    lib32-nvidia-utils \
-    lib32-opencl-nvidia \
-    lib32-pipewire \
-    lib32-pipewire-jack \
-    lib32-pipewire-v4l2 \
-    lib32-vulkan-mesa-layers \
-    libevdev \
-    libinput \
-    libpipewire \
-    libva-nvidia-driver \
-    libwireplumber \
-    libxkbcommon \
-    make \
-    man-db \
-    man-pages \
-    mesa \
-    meson \
-    mpv \
-    neovim \
-    network-manager-applet \
-    networkmanager \
-    networkmanager-openrc \
-    nm-connection-editor \
-    noto-fonts-emoji \
-    nwg-look \
-    obsidian \
-    openrc \
-    openrc-arch-services-git \
-    pam_rundir \
-    pamixer \
-    pavucontrol \
-    pipewire \
-    pipewire-alsa \
-    pipewire-jack \
-    pipewire-pulse \
-    pipewire-v4l2 \
-    playerctl \
-    polkit \
-    polkit-kde-agent \
-    python \
-    python-pip \
-    python-pipx \
-    qemu-audio-pipewire \
-    qpwgraph \
-    qt5ct \
-    qt6ct \
-    qutebrowser \
-    ranger \
-    ripgrep \
-    sddm \
-    sddm-openrc \
-    slurp \
-    stow \
-    sudo \
-    swayidle \
-    swaylock \
-    swww \
-    tar \
-    tlp \
-    tlp-openrc \
-    tmux \
-    ttf-dejavu \
-    ttf-jetbrains-mono \
-    ttf-jetbrains-mono-nerd \
-    ttf-liberation \
-    udev-openrc \
-    unzip \
-    vulkan-mesa-layers \
-    waybar \
-    wayland \
-    wayland-protocols \
-    wayland-utils \
-    waypaper \
-    wev \
-    wf-recorder \
-    wget \
-    wireplumber \
-    wireplumber-docs \
-    wl-clipboard \
-    wlr-randr \
-    wlroots \
-    xarchiver \
-    xbindkeys \
-    xdg-desktop-portal \
-    xdg-desktop-portal-gtk \
-    xdotool \
-    xf86-input-libinput \
-    xorg-xev \
-    xwayland \
-    xwayland-run \
-    xwayland-satellite \
-    yt-dlp \
-    ytfzf \
-    zen-browser-bin \
-    zip \
-    && ok "Main packages installed" \
-    || warn "Some packages failed — check output above (non-fatal, continuing)"
-
-if ! command -v iwctl &>/dev/null; then
-    info "iwctl not found — installing iwd..."
-    yay -Syu --needed --noconfirm iwd iwd-openrc \
-        && ok "iwd installed" \
-        || warn "iwd install failed"
-else
-    skip "iwd already present ($(iwctl --version 2>/dev/null || echo 'version unknown'))"
-fi
-
-# ---------------------------------------------------------------------------
-# JACK conflict
-# ---------------------------------------------------------------------------
-
-step "Checking for JACK conflicts"
 
 if pacman -Q jack2 &>/dev/null; then
-    info "Conflicting jack2 found — removing..."
-    sudo pacman -Rdd --noconfirm jack2 \
-        && ok "jack2 removed" \
-        || warn "jack2 removal failed — PipeWire-JACK may have issues"
-else
-    skip "jack2 not installed — no conflict"
+    sudo pacman -Rdd --noconfirm jack2
 fi
 
-# ---------------------------------------------------------------------------
-# PulseAudio removal
-# ---------------------------------------------------------------------------
+sudo systemctl enable --now NetworkManager
 
-step "Checking for PulseAudio"
+echo "Installing PipeWire and dependencies..."
+yay -Syu --noconfirm alsa-utils alsa-plugins alsa-firmware alsa-tools ffmpeg pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber gst-plugins-good gst-plugins-bad gst-plugin-pipewire 
+yay -Syu --noconfirm gst-libav helvum pavucontrol qpwgraph easyeffects libwireplumber lib32-libpipewire lib32-pipewire lib32-pipewire-jack lib32-pipewire-v4l2 libpipewire pipewire-v4l2 
+yay -Syu --noconfirm qemu-audio-pipewire wireplumber-docs
 
-if pacman -Q | grep -qE '^pulseaudio'; then
-    info "PulseAudio detected — stopping and removing..."
-    rc-service pulseaudio stop 2>/dev/null \
-        && info "  PulseAudio service stopped" \
-        || info "  PulseAudio service was not running (fine)"
-    mapfile -t pa_pkgs < <(pacman -Q | awk '{print $1}' | grep -E '^pulseaudio')
-    info "  Packages to remove: ${pa_pkgs[*]}"
-    sudo pacman -Rns --noconfirm "${pa_pkgs[@]}" \
-        && ok "PulseAudio removed" \
-        || warn "PulseAudio removal had errors — may need manual cleanup"
+# Check if PulseAudio is installed
+if pacman -Q | grep -E '^pulseaudio' &>/dev/null; then
+    echo "PulseAudio detected! Checking if it's active..."
+
+    if systemctl is-active --quiet pulseaudio.service || systemctl --user is-active --quiet pulseaudio.socket; then
+        echo "PulseAudio is running. Stopping and disabling it..."
+        systemctl disable --now pulseaudio.service pulseaudio.socket
+    fi
+
+    echo "Finding and removing all PulseAudio-related packages..."
+    packages=$(pacman -Q | awk '{print $1}' | grep -E '^pulseaudio')
+
+    if [[ -n "$packages" ]]; then
+        sudo pacman -Rns --noconfirm "$packages"
+    else
+        echo "No PulseAudio packages found to remove."
+    fi
 else
-    skip "PulseAudio not installed"
+    echo "PulseAudio is not installed. Skipping removal."
 fi
 
-if ! groups "$USER" | grep -q '\baudio\b'; then
-    info "Adding $USER to audio group..."
-    sudo usermod -aG audio "$USER" && ok "$USER added to audio group"
+# Check if user is in 'audio' group (optional for JACK)
+if ! groups | grep -q audio; then
+    echo "Adding user to 'audio' group..."
+    sudo usermod -aG audio "$USER"
+fi 
+
+# Detect CPU vendor
+VENDOR=$(lscpu | grep "Vendor ID" | awk '{print $3}')
+
+if [[ "$VENDOR" == "GenuineIntel" ]]; then
+    echo "Detected Intel CPU. Installing intel-ucode..."
+    sudo pacman -S --noconfirm intel-ucode
+elif [[ "$VENDOR" == "AuthenticAMD" ]]; then
+    echo "Detected AMD CPU. Installing amd-ucode..."
+    sudo pacman -S --noconfirm amd-ucode
 else
-    skip "$USER already in audio group"
+    echo "Unknown CPU vendor: $VENDOR"
+    exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# OpenRC services
-# ---------------------------------------------------------------------------
+if lspci | grep -i nvidia &> /dev/null; then
+    yay -Syu --needed --sudoloop --noconfirm nvidia-dkms nvidia-utils nvidia-settings nvidia-prime xf86-video-nouveau opencl-nvidia lib32-opencl-nvidia lib32-nvidia-utils libva-nvidia-driver
+    yay -Syu --needed --sudoloop --noconfirm nvidia-hook nvidia-inst libva-nvidia-driver egl-wayland vulkan-mesa-layers lib32-vulkan-mesa-layers
+        
+: <<'NOT_NEEDED'
+# Get NVIDIA vendor ID
+NVIDIA_VENDOR="0x$(lspci -nn | grep -i nvidia | sed -n 's/.*\[\([0-9A-Fa-f]\+\):[0-9A-Fa-f]\+\].*/\1/p' | head -n 1)"
+        
+# Create udev rules for NVIDIA power management
+echo "# Enable runtime PM for NVIDIA VGA/3D controller devices on driver bind
+ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+ACTION==\"bind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
 
-step "Enabling OpenRC services"
+# Disable runtime PM for NVIDIA VGA/3D controller devices on driver unbind
+ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"on\"
+ACTION==\"unbind\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"on\"
 
-rc_enable() {
-    local svc="$1" lvl="${2:-default}"
-    if [[ -f /etc/openrc/init.d/$svc || -f /etc/init.d/$svc ]]; then
-        if sudo rc-update add "$svc" "$lvl" 2>/dev/null; then
-            ok "  Enabled: $svc @ $lvl"
-        else
-            skip "  $svc already in $lvl runlevel"
+# Enable runtime PM for NVIDIA VGA/3D controller devices on adding device
+ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030000\", TEST==\"power/control\", ATTR{power/control}=\"auto\"
+ACTION==\"add\", SUBSYSTEM==\"pci\", ATTR{vendor}==\"$NVIDIA_VENDOR\", ATTR{class}==\"0x030200\", TEST==\"power/control\", ATTR{power/control}=\"auto\"" | envsubst | sudo tee /etc/udev/rules.d/80-nvidia-pm.rules > /dev/null
+
+# Set NVIDIA kernel module options
+echo "options nvidia NVreg_UsePageAttributeTable=1
+options nvidia_drm modeset=1 fbdev=1
+options nvidia NVreg_RegistryDwords="PerfLevelSrc=0x2222"
+options nvidia NVreg_EnablePCIeGen3=1 NVreg_EnableMSI=1" | sudo tee /etc/modprobe.d/nvidia.conf > /dev/null
+    
+# Desired modules
+MODULES=("nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm")
+
+MODPROBE_CONF="/etc/mkinitcpio.conf"
+    
+# Check if MODULES line exists
+if sudo grep -q "^MODULES=" "$MODPROBE_CONF"; then
+    # Extract current modules
+    CURRENT_MODULES=$(grep "^MODULES=" "$MODPROBE_CONF" | sed -E 's/MODULES=\((.*)\)/\1/')
+    
+    for mod in "${MODULES[@]}"; do
+        if ! echo "$CURRENT_MODULES" | grep -qw "$mod"; then
+            CURRENT_MODULES="$CURRENT_MODULES $mod"
         fi
-    else
-        warn "  Service file not found for '$svc' — skipping"
-    fi
-}
+    done
 
-rc_enable udev         sysinit
-rc_enable udev-trigger sysinit
-rc_enable udev-settle  sysinit
-rc_enable elogind      boot
-rc_enable acpid        boot
-rc_enable dbus         boot
-rc_enable NetworkManager default
-rc_enable bluetoothd   default
-rc_enable tlp          default
-rc_enable cronie       default
-rc_enable sddm         default
-
-AGETTY_SRC="/etc/openrc/init.d/agetty"
-AGETTY_TTY1="/etc/openrc/init.d/agetty.tty1"
-if [[ -f "$AGETTY_SRC" ]]; then
-    if [[ ! -e "$AGETTY_TTY1" ]]; then
-        info "Creating agetty.tty1 symlink..."
-        sudo ln -sf "$AGETTY_SRC" "$AGETTY_TTY1" && ok "agetty.tty1 symlink created"
-    else
-        skip "agetty.tty1 symlink already exists"
-    fi
-    rc_enable agetty.tty1 default
+    # Update MODULES line
+    sudo sed -i "s|^MODULES=.*|MODULES=($CURRENT_MODULES)|" "$MODPROBE_CONF"
 else
-    warn "agetty service not found at $AGETTY_SRC — TTY1 getty not configured"
+    # Add MODULES line if not present
+    echo "MODULES=(${MODULES[*]})" | sudo tee -a "$MODPROBE_CONF" > /dev/null
+fi
+        
+# Enable and start NVIDIA persistence daemon
+sudo systemctl enable nvidia-persistenced.service
+        
+# Regenerate initramfs
+sudo mkinitcpio -P
+        
+# Apply udev rules immediately
+sudo udevadm control --reload-rules && sudo udevadm trigger
+NOT_NEEDED
+        
 fi
 
-# ---------------------------------------------------------------------------
-# CPU microcode
-# ---------------------------------------------------------------------------
+XDG_RUNTIME_DIR=/run/user/$(id -u)
 
-step "CPU microcode"
-
-VENDOR=$(lscpu | awk '/Vendor ID/{print $3}')
-info "Detected CPU vendor: $VENDOR"
-case "$VENDOR" in
-    GenuineIntel)
-        sudo pacman -S --needed --noconfirm intel-ucode \
-            && ok "intel-ucode installed" \
-            || warn "intel-ucode install failed"
-        ;;
-    AuthenticAMD)
-        sudo pacman -S --needed --noconfirm amd-ucode \
-            && ok "amd-ucode installed" \
-            || warn "amd-ucode install failed"
-        ;;
-    *)
-        warn "Unknown CPU vendor '$VENDOR' — skipping microcode"
-        ;;
-esac
-
-# ---------------------------------------------------------------------------
-# NVIDIA
-# ---------------------------------------------------------------------------
-
-step "GPU detection"
-
-if lspci | grep -qi nvidia; then
-    info "NVIDIA GPU detected — installing drivers..."
-    yay -Syu --needed --sudoloop --noconfirm \
-        egl-wayland \
-        lib32-nvidia-utils \
-        lib32-opencl-nvidia \
-        lib32-vulkan-mesa-layers \
-        libva-nvidia-driver \
-        nvidia-dkms \
-        nvidia-hook \
-        nvidia-inst \
-        nvidia-settings \
-        nvidia-utils \
-        opencl-nvidia \
-        vulkan-mesa-layers \
-        xf86-video-nouveau \
-        && ok "NVIDIA drivers installed" \
-        || warn "Some NVIDIA packages failed — GPU may not work correctly"
-else
-    skip "No NVIDIA GPU found (lspci)"
+# Ensure D-Bus is running
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax) || systemctl --user start dbus
 fi
 
-# ---------------------------------------------------------------------------
-# D-Bus session
-# ---------------------------------------------------------------------------
+sudo systemctl enable sddm.service || echo "Cant enable sddm.service"
 
-step "D-Bus session"
+echo -e "\n------------------------------------------------------------------------\n"
+print_info "\nStarting config setup..."
+print_info "\nEverything is recommended to change"
 
-if [[ -z "$DBUS_SESSION_BUS_ADDRESS" ]]; then
-    info "No D-Bus session found — launching one..."
-    eval "$(dbus-launch --sh-syntax)" 2>/dev/null \
-        && ok "D-Bus session started" \
-        || warn "dbus-launch failed — some config steps may not work until after first login"
-else
-    skip "D-Bus session already active ($DBUS_SESSION_BUS_ADDRESS)"
-fi
-
-# ---------------------------------------------------------------------------
-# Strip pam_systemd
-# ---------------------------------------------------------------------------
-
-step "PAM cleanup"
-
-PAM_FILE="/etc/pam.d/system-auth"
-if [[ -f "$PAM_FILE" ]]; then
-    if grep -q 'pam_systemd' "$PAM_FILE"; then
-        info "Removing pam_systemd entries from $PAM_FILE..."
-        sudo sed -i '/pam_systemd/d' "$PAM_FILE" && ok "pam_systemd removed"
-    else
-        skip "No pam_systemd entries in $PAM_FILE"
-    fi
-else
-    skip "$PAM_FILE not found (may be named differently on your system)"
-fi
-
-PAM_LOGIN="/etc/pam.d/login"
-if [[ -f "$PAM_LOGIN" ]] && grep -q 'pam_systemd' "$PAM_LOGIN"; then
-    info "Removing pam_systemd from $PAM_LOGIN..."
-    sudo sed -i '/pam_systemd/d' "$PAM_LOGIN" && ok "pam_systemd removed from login"
-fi
-
-# ---------------------------------------------------------------------------
-# GRUB
-# ---------------------------------------------------------------------------
-
-step "GRUB configuration"
-
-GRUB_FILE="/etc/default/grub"
-[[ -f "$GRUB_FILE" ]] || die "GRUB config not found at $GRUB_FILE — is GRUB installed?"
-
-info "Detecting CPU model for kernel params..."
-CPU_MODEL=$(lscpu | awk '/Model name/{print $3}')
-info "  CPU model string: $CPU_MODEL"
-
-case "$CPU_MODEL" in
-    AMD*)
-        EXTRA_PARAMS="init=/usr/bin/openrc-init amd_pstate=active mitigations=off"
-        info "  Using AMD params: $EXTRA_PARAMS"
-        ;;
-    Intel*)
-        EXTRA_PARAMS="init=/usr/bin/openrc-init intel_pstate=active mitigations=off"
-        info "  Using Intel params: $EXTRA_PARAMS"
-        ;;
-    *)
-        EXTRA_PARAMS="init=/usr/bin/openrc-init"
-        warn "  Unknown CPU model — only adding init param: $EXTRA_PARAMS"
-        ;;
-esac
-
-if ! grep -q 'openrc-init' "$GRUB_FILE"; then
-    info "Patching GRUB_CMDLINE_LINUX_DEFAULT..."
-    sudo sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"\([^\"]*\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${EXTRA_PARAMS}\"/" "$GRUB_FILE"
-    ok "GRUB cmdline updated"
-    info "  New cmdline: $(grep GRUB_CMDLINE_LINUX_DEFAULT "$GRUB_FILE")"
-else
-    skip "openrc-init already present in GRUB_CMDLINE_LINUX_DEFAULT"
-fi
-
-# ---------------------------------------------------------------------------
-# Dotfiles + config
-# ---------------------------------------------------------------------------
-
-step "Installing dotfiles and config"
-
-mkdir -p "$HOME/.config/fontconfig"
-if [[ ! -f "$HOME/.config/fontconfig/fonts.conf" ]]; then
-    info "Writing fonts.conf..."
-    cat > "$HOME/.config/fontconfig/fonts.conf" <<'FONTS'
+mkdir ~/.config/fontconfig 
+cat > "$HOME/.config/fontconfig/fonts.conf" <<FONTS
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
-  <alias>
-    <family>sans-serif</family>
-    <prefer>
-      <family>Noto Sans</family>
-      <family>Noto Color Emoji</family>
-      <family>Noto Emoji</family>
-      <family>DejaVu Sans</family>
-    </prefer>
-  </alias>
-  <alias>
-    <family>serif</family>
-    <prefer>
-      <family>Noto Serif</family>
-      <family>Noto Color Emoji</family>
-      <family>Noto Emoji</family>
-      <family>DejaVu Serif</family>
-    </prefer>
-  </alias>
-  <alias>
-    <family>monospace</family>
-    <prefer>
-      <family>Noto Mono</family>
-      <family>Noto Color Emoji</family>
-      <family>Noto Emoji</family>
-    </prefer>
-  </alias>
+ <alias>
+   <family>sans-serif</family>
+   <prefer>
+     <family>Noto Sans</family>
+     <family>Noto Color Emoji</family>
+     <family>Noto Emoji</family>
+     <family>DejaVu Sans</family>
+   </prefer> 
+ </alias>
+
+ <alias>
+   <family>serif</family>
+   <prefer>
+     <family>Noto Serif</family>
+     <family>Noto Color Emoji</family>
+     <family>Noto Emoji</family>
+     <family>DejaVu Serif</family>
+   </prefer>
+ </alias>
+
+ <alias>
+  <family>monospace</family>
+  <prefer>
+    <family>Noto Mono</family>
+    <family>Noto Color Emoji</family>
+    <family>Noto Emoji</family>
+   </prefer>
+ </alias>
 </fontconfig>
 FONTS
-    ok "fonts.conf written"
-else
-    skip "fonts.conf already exists"
-fi
 
-if [[ ! -x /usr/bin/niri-edit ]]; then
-    info "Installing niri-edit helper..."
-    sudo tee /usr/bin/niri-edit > /dev/null <<'EOF'
+sudo tee /usr/bin/niri-edit > /dev/null <<'EOF'
 #!/bin/sh
 ghostty -e nvim ~/.config/niri/config.kdl
 EOF
-    sudo chmod +x /usr/bin/niri-edit
-    ok "niri-edit installed at /usr/bin/niri-edit"
-else
-    skip "niri-edit already installed"
-fi
+sudo chmod +x /usr/bin/niri-edit
 
-if [[ -f "$HOME/dotfiles/.bashrc" ]]; then
-    info "Copying .bashrc from dotfiles..."
-    cp -f "$HOME/dotfiles/.bashrc" "$HOME/" \
-        && ok ".bashrc installed" \
-        || { rm -f "$HOME/.bashrc"; cp -f "$HOME/dotfiles/.bashrc" "$HOME/" && ok ".bashrc installed (retry)"; }
-else
-    warn "dotfiles/.bashrc not found — skipping"
-fi
-
-info "Syncing config directories..."
-for dir in waybar dunst wlogout niri fuzzel fcitx5 qutebrowser; do
-    SRC="$HOME/dotfiles/configs/$dir"
-    DST="$HOME/.config/$dir"
-    if [[ -d "$SRC" ]]; then
-        rm -rf "$DST"
-        cp -r "$SRC" "$DST"
-        ok "  $dir → $DST"
-    else
-        warn "  dotfiles/configs/$dir not found — skipping"
-    fi
-done
-
-if [[ -d "$HOME/dotfiles/configs/Pictures" ]]; then
-    cp -r "$HOME/dotfiles/configs/Pictures" "$HOME/"
-    ok "Pictures copied to $HOME/"
-else
-    skip "No Pictures dir in dotfiles"
-fi
-
-info "Fixing ownership of $HOME..."
-sudo chown -R "$USER:$USER" "$HOME" && ok "Ownership corrected"
-
-if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
-    info "Installing sddm-astronaut-theme..."
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)" \
-        && ok "SDDM theme installed" \
-        || warn "SDDM theme install failed — SDDM will use default theme"
-else
-    skip "sddm-astronaut-theme already installed"
-fi
-
-GTK_THEME_SRC="$HOME/dotfiles/configs/diinki-retro-dark"
-GTK_THEME_DST="/usr/share/themes/diinki-retro-dark"
-if [[ -d "$GTK_THEME_SRC" && ! -d "$GTK_THEME_DST" ]]; then
-    info "Installing GTK theme diinki-retro-dark..."
-    sudo mv "$GTK_THEME_SRC" /usr/share/themes/ \
-        && ok "GTK theme installed" \
-        || warn "GTK theme move failed"
-elif [[ -d "$GTK_THEME_DST" ]]; then
-    skip "diinki-retro-dark already in /usr/share/themes"
-else
-    warn "GTK theme source not found at $GTK_THEME_SRC — skipping"
-fi
-
-gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark" 2>/dev/null \
-    && ok "GTK theme set" \
-    || warn "gsettings failed — set GTK theme manually after first login"
-
-# ---------------------------------------------------------------------------
-# Optional utilities
-# ---------------------------------------------------------------------------
-
-step "Optional utilities"
-
-utils() {
-    info "Installing gaming and multimedia utilities..."
-
-    yay -Syu --needed --noconfirm \
-        ardour \
-        flatpak \
-        lutris \
-        millennium \
-        protonplus \
-        spotify \
-        steam \
-        steam-native-runtime \
-        wine-staging \
-        winetricks \
-        && ok "Utility packages installed" \
-        || warn "Some utility packages failed"
-
-    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv 2>/dev/null \
-        && ok "winetricks components installed" \
-        || warn "winetricks had errors"
-
-    wineboot -u 2>/dev/null && ok "wineboot done" || warn "wineboot failed (non-fatal)"
-
-    if [[ ! -f ./advcpmv/install.sh ]]; then
-        info "Installing advcpmv..."
-        curl -fsSL https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh \
-            --create-dirs -o ./advcpmv/install.sh \
-            && (cd advcpmv && sh install.sh) \
-            && ok "advcpmv installed" \
-            || warn "advcpmv install failed (non-fatal)"
-    else
-        skip "advcpmv already downloaded"
-    fi
-
-    mkdir -p "$HOME/.config/Kvantum"
-    printf '[General]\ntheme=catppuccin-frappe-mauve\n' > "$HOME/.config/Kvantum/kvantum.kvconfig"
-    ok "Kvantum theme set to catppuccin-frappe-mauve"
-
-    info "Installing flatpak apps..."
-    flatpak install -y flathub org.vinegarhq.Sober   2>/dev/null && ok "  Sober installed"   || warn "  Sober flatpak failed"
-    flatpak install -y flathub com.stremio.Stremio   2>/dev/null && ok "  Stremio installed" || warn "  Stremio flatpak failed"
-    flatpak install -y flathub com.obsproject.Studio 2>/dev/null && ok "  OBS installed"     || warn "  OBS flatpak failed"
-
-    mkdir -p "$HOME/.config/arti"
-    if [[ ! -f "$HOME/.config/arti/arti.toml" ]]; then
-        info "Writing arti.toml..."
-        cat > "$HOME/.config/arti/arti.toml" <<'ARTI'
-[application]
-watch_configuration = true
-permit_debugging = false
-allow_running_as_root = false
-
-[proxy]
-socks_listen = 9150
-
-[logging]
-console = "info"
-log_sensitive_information = false
-time_granularity = "1s"
-
-[storage]
-cache_dir = "${ARTI_CACHE}"
-state_dir = "${ARTI_LOCAL_DATA}"
-
-[storage.permissions]
-dangerously_trust_everyone = false
-trust_user = ":current"
-trust_group = ":username"
-
-[path_rules]
-ipv4_subnet_family_prefix = 16
-ipv6_subnet_family_prefix = 32
-reachable_addrs = ["*:80", "*:443"]
-long_lived_ports = [22, 80, 443, 6667, 8300]
-
-[preemptive_circuits]
-disable_at_threshold = 8
-initial_predicted_ports = [80, 443]
-prediction_lifetime = "30 mins"
-min_exit_circs_for_port = 2
-
-[channel]
-padding = "normal"
-
-[circuit_timing]
-max_dirtiness = "10 minutes"
-request_timeout = "30 sec"
-request_max_retries = 8
-request_loyalty = "50 msec"
-
-[address_filter]
-allow_local_addrs = false
-allow_onion_addrs = true
-
-[stream_timeouts]
-connect_timeout = "15 sec"
-resolve_timeout = "10 sec"
-resolve_ptr_timeout = "10 sec"
-
-[system]
-max_files = 8192
-
-[vanguards]
-mode = "lite"
-ARTI
-        ok "arti.toml written"
-    else
-        skip "arti.toml already exists"
-    fi
-
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" \
-        && ok "oh-my-bash installed" \
-        || warn "oh-my-bash install failed — bash will still work normally"
+sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/" || {
+    sudo rm -f "$HOME/.bashrc"
+    sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/"
 }
 
-echo
-read -rp "[INPUT] Install extra utilities (gaming, flatpaks, arti, oh-my-bash)? [Y/n] " ans
-ans=${ans:-Y}
-if [[ "${ans,,}" == "y" ]]; then
-    utils
+# Define an array of config directories to copy
+CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5" "qutebrowser")
+
+# Loop through and copy each config directory
+for dir in "${CONFIG_DIRS[@]}"; do
+    if [ -d "$HOME/.config/$dir" ]; then 
+        sudo rm -rf "$HOME/.config/$dir"
+    fi
+
+    sudo cp -f -r "$HOME/dotfiles/configs/$dir" "$HOME/.config/"
+done
+
+sudo chown -R $USER:$USER $HOME
+
+sudo cp -f -r "$HOME/dotfiles/configs/Pictures" "$HOME/" &> /dev/null
+
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)"
+
+sudo mv "$HOME/dotfiles/configs/diinki-retro-dark" /usr/share/themes
+
+gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
+
+# Automatically determine CPU brand (AMD or Intel)
+CPU_VENDOR=$(lscpu | grep "Model name" | awk '{print $3}')
+echo "Detected CPU vendor: $CPU_VENDOR"
+
+# Add relevant kernel parameters to GRUB based on the CPU vendor
+GRUB_FILE="/etc/default/grub"
+if [[ "$CPU_VENDOR" == "AMD" ]]; then
+    echo "Configuring GRUB for AMD (amd_pstate=active and mitigations=off)..."
+    sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="\([^"]*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 amd_pstate=active mitigations=off"/' "$GRUB_FILE"
+elif [[ "$CPU_VENDOR" == "Intel" ]]; then
+    echo "Configuring GRUB for Intel (intel_pstate=active and mitigations=off)..."
+    sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="\([^"]*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 intel_pstate=active mitigations=off"/' "$GRUB_FILE"
 else
-    info "Skipping optional utilities."
+    echo "Unknown CPU vendor. No specific configurations applied."
 fi
 
-# ---------------------------------------------------------------------------
-# Finalise
-# ---------------------------------------------------------------------------
+echo -e "\n------------------------------------------------------------------------\n"
 
-step "Finalising"
+utils() {
+    print_info "\nStarting utilities setup..."
 
-info "Regenerating initramfs (mkinitcpio -P)..."
-sudo mkinitcpio -P \
-    && ok "initramfs regenerated" \
-    || warn "mkinitcpio had errors — boot may fail, check output above"
+    yay -Syu --noconfirm arti flatpak lutris winetricks protonplus spotify ardour wine-staging winetricks millennium steam steam-native-runtime
 
-info "Regenerating GRUB config..."
-sudo grub-mkconfig -o /boot/grub/grub.cfg \
-    && ok "GRUB config written to /boot/grub/grub.cfg" \
-    || die "grub-mkconfig failed — do not reboot until this is fixed"
+    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv
 
-echo
-echo "============================================================"
-echo "  Installation complete!"
-echo "  - OpenRC is configured as init (init=/usr/bin/openrc-init)"
-echo "  - GRUB has been updated"
-echo "  - pacman.conf backup: /etc/pacman.conf.bak"
-echo "  If the system fails to boot:"
-echo "    1. Boot from Arch ISO"
-echo "    2. arch-chroot into your install"
-echo "    3. Restore: cp /etc/pacman.conf.bak /etc/pacman.conf"
-echo "============================================================"
-echo
-info "Rebooting in 10 seconds... Ctrl+C to cancel."
-info "If shutdown hangs: Alt+PrtSc, then press R E I S U B one at a time."
-sleep 10
+    wineboot -u
+    
+    curl https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-dirs -o ./advcpmv/install.sh && (cd advcpmv && sh install.sh)
+    
+    mkdir -p ~/.config/Kvantum/ && touch ~/.config/Kvantum/kvantum.kvconfig
+    echo '[General]\ntheme=catppuccin-frappe-mauve' > ~/.config/Kvantum/kvantum.kvconfig
+    
+    flatpak install flathub org.vinegarhq.Sober
+    flatpak install flathub com.stremio.Stremio
+    flatpak install flathub com.obsproject.Studio
+    
+    mkdir -p "$HOME/.config/arti" && cat > "$HOME/.config/arti/arti.toml" <<EOF
+    # Arti Configuration File
+    # Created on May 1, 2025
+    
+    # Basic application behavior
+    [application]
+    watch_configuration = true
+    permit_debugging = false
+    allow_running_as_root = false
+    
+    # SOCKS proxy setup
+    [proxy]
+    socks_listen = 9150  # Standard Tor Browser port
+    
+    # Configure logging
+    [logging]
+    console = "info"
+    log_sensitive_information = false
+    time_granularity = "1s"
+    
+    # Files for storing stuff on disk
+    [storage]
+    cache_dir = "${ARTI_CACHE}"
+    state_dir = "${ARTI_LOCAL_DATA}"
+    
+    [storage.permissions]
+    dangerously_trust_everyone = false
+    trust_user = ":current"
+    trust_group = ":username"
+    
+    # Circuit configuration for better anonymity
+    [path_rules]
+    ipv4_subnet_family_prefix = 16
+    ipv6_subnet_family_prefix = 32
+    reachable_addrs = ["*:80", "*:443"]  # Common ports for better connectivity
+    long_lived_ports = [22, 80, 443, 6667, 8300]
+    
+    # Preemptive circuit settings for better performance
+    [preemptive_circuits]
+    disable_at_threshold = 8
+    initial_predicted_ports = [80, 443]
+    prediction_lifetime = "30 mins"
+    min_exit_circs_for_port = 2
+    
+    # Channel padding for enhanced security
+    [channel]
+    padding = "normal"
+    
+    # Circuit timing settings
+    [circuit_timing]
+    max_dirtiness = "10 minutes"
+    request_timeout = "30 sec"
+    request_max_retries = 8
+    request_loyalty = "50 msec"
+    
+    # Address filtering
+    [address_filter]
+    allow_local_addrs = false
+    allow_onion_addrs = true
+    
+    # Stream timeout configuration
+    [stream_timeouts]
+    connect_timeout = "15 sec"
+    resolve_timeout = "10 sec"
+    resolve_ptr_timeout = "10 sec"
+    
+    # System resource configuration
+    [system]
+    max_files = 8192
+    
+    [vanguards]
+    mode = "lite"
+EOF
+    
+    echo -e "\n------------------------------------------------------------------------\n"
+    
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+}
 
-sudo openrc-shutdown -r now 2>/dev/null || sudo reboot
+read -p "Do you wanna install extra utilities (Y/n)? " ans
+ans=${ans:-Y}
+
+if [[ "$ans" == "Y" || "$ans" == "y" ]]; then
+    utils
+else
+    echo "Skipping utils installation."
+fi
+
+sudo mkinitcpio -P && sudo reboot
