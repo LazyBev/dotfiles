@@ -253,7 +253,7 @@ sudo cp -f "$HOME/dotfiles/.bashrc" "$HOME/" || {
 }
 
 # Define an array of config directories to copy
-CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5" "doom" "qutebrowser")
+CONFIG_DIRS=("waybar" "dunst" "wlogout" "niri" "fuzzel" "fcitx5" "qutebrowser")
 
 # Loop through and copy each config directory
 for dir in "${CONFIG_DIRS[@]}"; do
@@ -263,11 +263,6 @@ for dir in "${CONFIG_DIRS[@]}"; do
 
     sudo cp -f -r "$HOME/dotfiles/configs/$dir" "$HOME/.config/"
 done
-
-# Define an array of emacs directories to copy
-EMACS_DIRS=(".emacs.local" ".emacs.rc")
-
-sudo cp -f -r "$HOME/dotfiles/.emacs" "$HOME/"
 
 sudo chown -R $USER:$USER $HOME
 
@@ -302,13 +297,7 @@ utils() {
 
     yay -Syu --noconfirm arti flatpak lutris winetricks protonplus spotify ardour wine-staging winetricks millennium steam steam-native-runtime
 
-    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 dxvk
-
-    git clone --depth 1 https://github.com/doomemacs/doomemacs ~/.emacs.d
-    ~/.emacs.d/bin/doom install
-    ~/.emacs.d/bin/doom sync
-    ~/.emacs.d/bin/doom doctor
-
+    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv
 
     wineboot -u
     
