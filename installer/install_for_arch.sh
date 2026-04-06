@@ -210,6 +210,7 @@ yay -Syu --needed --noconfirm \
     networkmanager \
     nm-connection-editor \
     noto-fonts-emoji \
+    niri \
     nwg-look \
     obsidian \
     pamixer \
@@ -558,59 +559,47 @@ gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark" 2>/dev/n
     && ok "GTK theme set" \
     || warn "gsettings failed — set GTK theme manually after first login"
 
-# ---------------------------------------------------------------------------
-# Optional utilities
-# ---------------------------------------------------------------------------
+info "Installing gaming and multimedia utilities..."
 
-step "Optional utilities"
+yay -Syu --needed --noconfirm \
+    ardour \
+    flatpak \
+    lutris \
+    millennium \
+    protonplus \
+    spotify \
+    steam \
+    steam-native-runtime \
+    wine-staging \
+    winetricks && ok "Utility packages installed" || warn "Some utility packages failed"
 
-utils() {
-    info "Installing gaming and multimedia utilities..."
+winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv 2>/dev/null && ok "winetricks components installed" \
+    || warn "winetricks had errors"
 
-    yay -Syu --needed --noconfirm \
-        ardour \
-        flatpak \
-        lutris \
-        millennium \
-        protonplus \
-        spotify \
-        steam \
-        steam-native-runtime \
-        wine-staging \
-        winetricks \
-        && ok "Utility packages installed" \
-        || warn "Some utility packages failed"
+wineboot -u 2>/dev/null && ok "wineboot done" || warn "wineboot failed (non-fatal)"
 
-    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv 2>/dev/null \
-        && ok "winetricks components installed" \
-        || warn "winetricks had errors"
+if [[ ! -f ./advcpmv/install.sh ]]; then
+    info "Installing advcpmv..."
+    curl -fsSL https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh --create-dirs -o ./advcpmv/install.sh \
+        && (cd advcpmv && sh install.sh) \
+        && ok "advcpmv installed" || warn "advcpmv install failed (non-fatal)"
+else
+    skip "advcpmv already downloaded"
+fi
 
-    wineboot -u 2>/dev/null && ok "wineboot done" || warn "wineboot failed (non-fatal)"
+mkdir -p "$HOME/.config/Kvantum"
+printf '[General]\ntheme=catppuccin-frappe-mauve\n' > "$HOME/.config/Kvantum/kvantum.kvconfig"
+ok "Kvantum theme set to catppuccin-frappe-mauve"
 
-    if [[ ! -f ./advcpmv/install.sh ]]; then
-        info "Installing advcpmv..."
-        curl -fsSL https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh \
-            --create-dirs -o ./advcpmv/install.sh \
-            && (cd advcpmv && sh install.sh) \
-            && ok "advcpmv installed" \
-            || warn "advcpmv install failed (non-fatal)"
-    else
-        skip "advcpmv already downloaded"
-    fi
+info "Installing flatpak apps..."
+flatpak install -y flathub org.vinegarhq.Sober   2>/dev/null && ok "  Sober installed"   || warn "  Sober flatpak failed"
+flatpak install -y flathub com.stremio.Stremio   2>/dev/null && ok "  Stremio installed" || warn "  Stremio flatpak failed"
+flatpak install -y flathub com.obsproject.Studio 2>/dev/null && ok "  OBS installed"     || warn "  OBS flatpak failed"
 
-    mkdir -p "$HOME/.config/Kvantum"
-    printf '[General]\ntheme=catppuccin-frappe-mauve\n' > "$HOME/.config/Kvantum/kvantum.kvconfig"
-    ok "Kvantum theme set to catppuccin-frappe-mauve"
-
-    info "Installing flatpak apps..."
-    flatpak install -y flathub org.vinegarhq.Sober   2>/dev/null && ok "  Sober installed"   || warn "  Sober flatpak failed"
-    flatpak install -y flathub com.stremio.Stremio   2>/dev/null && ok "  Stremio installed" || warn "  Stremio flatpak failed"
-    flatpak install -y flathub com.obsproject.Studio 2>/dev/null && ok "  OBS installed"     || warn "  OBS flatpak failed"
-
-    mkdir -p "$HOME/.config/arti"
-    if [[ ! -f "$HOME/.config/arti/arti.toml" ]]; then
-        info "Writing arti.toml..."
-        cat > "$HOME/.config/arti/arti.toml" <<'ARTI'
+mkdir -p "$HOME/.config/arti"
+if [[ ! -f "$HOME/.config/arti/arti.toml" ]]; then
+    info "Writing arti.toml..."
+    cat > "$HOME/.config/arti/arti.toml" <<'ARTI'
 [application]
 watch_configuration = true
 permit_debugging = false
@@ -669,20 +658,15 @@ max_files = 8192
 [vanguards]
 mode = "lite"
 ARTI
-        ok "arti.toml written"
-    else
-        skip "arti.toml already exists"
-    fi
+    ok "arti.toml written"
+else
+    skip "arti.toml already exists"
+fi
 
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" \
-        && ok "oh-my-bash installed" \
-        || warn "oh-my-bash install failed — bash will still work normally"
-}
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" && ok "oh-my-bash installed" \
+    || warn "oh-my-bash install failed — bash will still work normally"
 
 echo
-read -rp "[INPUT] Install extra utilities (gaming, flatpaks, arti, oh-my-bash)? [Y/n] " ans
-ans=${ans:-Y}
-[[ "${ans,,}" == "y" ]] && utils || info "Skipping optional utilities."
 
 # ---------------------------------------------------------------------------
 # Finalise
