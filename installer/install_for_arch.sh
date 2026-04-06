@@ -61,14 +61,10 @@ declare -a pacman_conf_patches=(
     "/# Misc options/a ILoveCandy"
 )
 
-# Fix the Arch mirrorlist — handles both '#Server' and '## ... \n## Server'
-# style comment formats produced by the Arch mirrorlist generator.
 info "Ensuring Arch mirrorlist has active Server lines..."
 if ! grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
     info "  No active Server lines found — uncommenting..."
-    # Handle '## Server = ...' (double-hash with space)
     sudo sed -i 's/^## \(Server = \)/\1/' /etc/pacman.d/mirrorlist
-    # Handle '#Server = ...' (single-hash no space, older format)
     sudo sed -i 's/^#\(Server = \)/\1/' /etc/pacman.d/mirrorlist
     if grep -q '^Server' /etc/pacman.d/mirrorlist; then
         ok "  Mirrorlist Server lines uncommented"
@@ -124,14 +120,19 @@ else
     skip "Artix repo blocks already present in pacman.conf"
 fi
 
-# Bootstrap stub — uses correct Artix mirror path: /$repo/os/x86_64
-# $repo expands per-repo-block (system, world, galaxy, lib32)
+# Bootstrap stub — official origin first (slow but complete), fast mirrors after.
+# galaxy is not mirrored everywhere; the origin + dotsrc/osbeck carry all repos.
 if [[ ! -f /etc/pacman.d/artix-mirrorlist ]] \
     || grep -q 'packages/\$repo' /etc/pacman.d/artix-mirrorlist; then
-    info "Writing correct bootstrap artix-mirrorlist stub..."
+    info "Writing bootstrap artix-mirrorlist stub..."
     sudo mkdir -p /etc/pacman.d
     sudo tee /etc/pacman.d/artix-mirrorlist > /dev/null <<'STUB'
-# Bootstrap stub — replaced by artix-mirrorlist package after first sync
+# Bootstrap stub — replaced by artix-mirrorlist package after first sync.
+# Official origin is listed first to guarantee all repos (system/world/galaxy/lib32)
+# are reachable even if fast mirrors don't carry galaxy.
+Server = https://artixlinux.org/packages/$repo/os/x86_64
+Server = https://mirrors.dotsrc.org/artix-linux/$repo/os/x86_64
+Server = https://mirror.osbeck.com/artix-linux/$repo/os/x86_64
 Server = https://mirror.pascalpuffke.de/artix-linux/$repo/os/x86_64
 Server = https://mirrors.xtom.de/artix-linux/$repo/os/x86_64
 Server = https://ftp.halifax.rwth-aachen.de/artix-linux/$repo/os/x86_64
