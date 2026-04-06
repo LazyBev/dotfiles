@@ -121,23 +121,29 @@ else
 fi
 
 # Always write the bootstrap stub unless the real artix-mirrorlist package is installed.
-# Never skip based on file content — old stubs with bad mirrors must be replaced.
-# galaxy is not mirrored everywhere; dotsrc + osbeck + the official CDN all carry it.
+# Never skip — old stubs with wrong URL paths must be replaced.
+# Correct URL format is /repos/$repo/os/$arch (SourceForge CDN) or /$repo/os/$arch (official mirrors).
+# The previous stubs used /$repo/os/x86_64 on third-party mirrors — wrong path, hence 404s.
 if ! pacman -Q artix-mirrorlist &>/dev/null; then
-    info "Writing bootstrap artix-mirrorlist stub..."
+    info "Fetching artix-mirrorlist from gitea (authoritative source)..."
     sudo mkdir -p /etc/pacman.d
-    sudo tee /etc/pacman.d/artix-mirrorlist > /dev/null <<'STUB'
-# Bootstrap stub — replaced by artix-mirrorlist package after first sync.
-# Mirrors verified to carry all repos including galaxy:
-Server = https://mirrors.dotsrc.org/artix-linux/$repo/os/x86_64
-Server = https://mirror.osbeck.com/artix-linux/$repo/os/x86_64
-Server = https://mirrors.xtom.de/artix-linux/$repo/os/x86_64
-Server = https://ftp.halifax.rwth-aachen.de/artix-linux/$repo/os/x86_64
-Server = https://mirror.pascalpuffke.de/artix-linux/$repo/os/x86_64
-# Official CDN last — slow but complete, guaranteed fallback
-Server = https://artixlinux.org/packages/$repo/os/x86_64
+    if sudo curl -fsSL --max-time 20 \
+        "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist" \
+        -o /etc/pacman.d/artix-mirrorlist 2>/dev/null \
+        && grep -q '^Server' /etc/pacman.d/artix-mirrorlist; then
+        ok "artix-mirrorlist fetched from gitea"
+    else
+        warn "gitea fetch failed — writing hardcoded stub with correct URL format"
+        sudo tee /etc/pacman.d/artix-mirrorlist > /dev/null <<'STUB'
+# Bootstrap stub — uses correct SourceForge CDN URL format: /repos/$repo/os/$arch
+Server = https://netcologne.dl.sourceforge.net/project/artix-linux/repos/$repo/os/$arch
+Server = https://freefr.dl.sourceforge.net/project/artix-linux/repos/$repo/os/$arch
+Server = https://netix.dl.sourceforge.net/project/artix-linux/repos/$repo/os/$arch
+Server = https://mirror1.artixlinux.org/$repo/os/$arch
+Server = https://mirror2.artixlinux.org/$repo/os/$arch
 STUB
-    ok "Bootstrap artix-mirrorlist stub written"
+        ok "Bootstrap artix-mirrorlist stub written"
+    fi
 else
     skip "artix-mirrorlist package already installed — leaving mirrorlist intact"
 fi
