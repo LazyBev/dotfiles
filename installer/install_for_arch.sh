@@ -569,6 +569,7 @@ yay -Syu --needed --noconfirm \
     protonplus \
     spotify \
     steam \
+    vencord-bin \
     steam-native-runtime \
     wine-staging \
     winetricks && ok "Utility packages installed" || warn "Some utility packages failed"
