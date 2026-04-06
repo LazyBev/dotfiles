@@ -20,6 +20,11 @@ declare -a pacman_conf=(
     "/# Misc options/a ILoveCandy"
 )
 
+if ! sudo reflector --country US --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
+    sudo curl -o /etc/pacman.d/mirrorlist "https://archlinux.org/mirrorlist/?country=US&protocol=https&use_mirror_status=on" \
+        && sudo sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
+fi
+
 # Backup the pacman.conf before modifying
 echo "Backing up /etc/pacman.conf"
 sudo cp /etc/pacman.conf /etc/pacman.conf.bak || { echo "Failed to back up pacman.conf"; exit 1;}
