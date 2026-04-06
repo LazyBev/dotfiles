@@ -57,9 +57,13 @@ declare -a pacman_conf_patches=(
     "s/#Color/Color/"
     "s/#ParallelDownloads/ParallelDownloads/"
     "s/#\\[multilib\\]/\\[multilib\\]/"
-    "s/#Include = \\/etc\\/pacman\\.d\\/mirrorlist/Include = \\/etc\\/pacman\\.d\\/mirrorlist/"
     "/# Misc options/a ILoveCandy"
 )
+# Uncomment the Include = mirrorlist line that immediately follows [multilib] only.
+# A global s/#Include/Include/ also hits the commented example in [options] and
+# causes pacman to parse the Arch mirrorlist as pacman.conf — producing hundreds of
+# "directive 'Server' in section 'options' not recognised" warnings.
+MULTILIB_INCLUDE_FIX='/^\[multilib\]/{n;s/^#Include/Include/}' 
 
 info "Ensuring Arch mirrorlist has active Server lines..."
 if ! grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
@@ -88,10 +92,14 @@ fi
 
 info "Applying pacman.conf patches..."
 for change in "${pacman_conf_patches[@]}"; do
-    sudo sed -i "$change" /etc/pacman.conf \
-        && info "  Applied: $change" \
-        || warn "  May already be applied (non-fatal): $change"
+    sudo sed -i "$change" /etc/pacman.conf         && info "  Applied: $change"         || warn "  May already be applied (non-fatal): $change"
 done
+# Apply the multilib Include fix separately (scoped to avoid hitting [options] example line)
+if grep -q '^\[multilib\]' /etc/pacman.conf && ! grep -A1 '^\[multilib\]' /etc/pacman.conf | grep -q '^Include'; then
+    sudo sed -i "$MULTILIB_INCLUDE_FIX" /etc/pacman.conf         && info "  Applied: multilib Include uncomment"         || warn "  multilib Include may already be active"
+else
+    skip "multilib Include already active"
+fi
 ok "pacman.conf patched"
 
 # ---------------------------------------------------------------------------
@@ -158,6 +166,15 @@ sudo pacman-key --lsign-key 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null
 
 info "Syncing package databases..."
 sudo pacman -Sy --noconfirm || die "pacman -Sy failed — check your network and mirror"
+
+info "Removing pacman-mirrorlist (conflicts with artix-mirrorlist)..."
+if pacman -Q pacman-mirrorlist &>/dev/null; then
+    sudo pacman -Rdd --noconfirm pacman-mirrorlist \
+        && ok "pacman-mirrorlist removed" \
+        || warn "pacman-mirrorlist removal failed — will try installing anyway"
+else
+    skip "pacman-mirrorlist not installed"
+fi
 
 info "Installing artix-mirrorlist and artix-keyring..."
 sudo pacman -S --noconfirm --needed artix-mirrorlist artix-keyring \
