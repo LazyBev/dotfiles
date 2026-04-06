@@ -5,47 +5,58 @@ set -eo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/helper.sh"
 
-trap 'trap_message' INT TERM
-
 # ---------------------------------------------------------------------------
-# Helpers
+# Logging helpers
 # ---------------------------------------------------------------------------
 
-info()    { echo "[INFO]  $*"; }
-warn()    { echo "[WARN]  $*"; }
-skip()    { echo "[SKIP]  $*"; }
-die()     { echo "[FATAL] $*"; exit 1; }
-
-# Run a pacman/yay install and keep going even if one package is not found.
-# Packages that do exist will still install.
-pkg_install() {
-    local mgr="$1"; shift
-    local -a missing=()
-    for pkg in "$@"; do
-        if ! "$mgr" -S --needed --noconfirm "$pkg" 2>/dev/null; then
-            warn "Package not found / failed: $pkg — skipping"
-            missing+=("$pkg")
-        fi
-    done
-    [[ ${#missing[@]} -gt 0 ]] && warn "Skipped packages: ${missing[*]}"
-    return 0
+_log() { printf "[%-5s] %s\n" "$1" "$2"; }
+info()  { _log "INFO"  "$*"; }
+warn()  { _log "WARN"  "$*"; }
+skip()  { _log "SKIP"  "$*"; }
+ok()    { _log "OK"    "$*"; }
+step()  { echo; echo "==> $*"; echo "------------------------------------------------------------"; }
+die()   {
+    _log "FATAL" "$*"
+    echo
+    echo "  The script failed at the step above."
+    echo "  Your pacman.conf backup is at /etc/pacman.conf.bak if you need to roll back."
+    exit 1
 }
 
-# rc-update wrapper — skips gracefully if the service file doesn't exist
-rc_enable() {
-    local svc="$1" lvl="${2:-default}"
-    if [[ -f /etc/openrc/init.d/$svc || -f /etc/init.d/$svc ]]; then
-        sudo rc-update add "$svc" "$lvl" 2>/dev/null || skip "rc-update: $svc already in $lvl"
-    else
-        skip "Service file missing for $svc — not enabling"
-    fi
-}
+# Trap unexpected exits (ERR fires on any non-zero exit when set -e is active)
+trap 'echo; die "Unexpected error on line ${LINENO} — command: ${BASH_COMMAND}"' ERR
+trap 'echo; warn "Script interrupted by user."; exit 130' INT TERM
+
+# ---------------------------------------------------------------------------
+# Preflight checks
+# ---------------------------------------------------------------------------
+
+step "Preflight checks"
+
+[[ $EUID -ne 0 ]] || die "Do not run this script as root. It will sudo what it needs."
+command -v pacman &>/dev/null || die "pacman not found — are you on Arch?"
+command -v curl   &>/dev/null || die "curl not found — install it first: sudo pacman -S curl"
+command -v git    &>/dev/null || { warn "git not found — installing..."; sudo pacman -S --noconfirm git; }
+
+# Verify internet connectivity before doing anything
+info "Checking internet connectivity..."
+if ! curl -fsSL --max-time 10 https://archlinux.org &>/dev/null; then
+    die "No internet connection detected. Check your network and try again."
+fi
+ok "Internet connectivity confirmed"
+
+# Warn if running inside a chroot / container
+if [[ ! -d /sys/firmware/efi && ! -d /run/openrc ]]; then
+    warn "EFI not detected and OpenRC not running — make sure you're on the target machine, not a chroot."
+fi
 
 # ---------------------------------------------------------------------------
 # Pacman config
 # ---------------------------------------------------------------------------
 
-declare -a pacman_conf=(
+step "Configuring pacman"
+
+declare -a pacman_conf_patches=(
     "s/#Color/Color/"
     "s/#ParallelDownloads/ParallelDownloads/"
     "s/#\\[multilib\\]/\\[multilib\\]/"
@@ -53,33 +64,42 @@ declare -a pacman_conf=(
     "/# Misc options/a ILoveCandy"
 )
 
-if ! sudo reflector --country US --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
+info "Updating Arch mirrorlist..."
+if sudo reflector --country US --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
+    ok "reflector updated mirrorlist"
+else
     warn "reflector failed — falling back to curl mirrorlist"
-    sudo curl -fsSo /etc/pacman.d/mirrorlist \
+    sudo curl -fsSo /etc/pacman.d/mirrorlist --max-time 30 \
         "https://archlinux.org/mirrorlist/?country=US&protocol=https&use_mirror_status=on" \
-        || die "Could not fetch mirrorlist"
+        || die "Could not fetch Arch mirrorlist — check your connection"
     sudo sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
+    ok "curl mirrorlist fetched and uncommented"
 fi
 
 if [[ ! -f /etc/pacman.conf.bak ]]; then
-    info "Backing up /etc/pacman.conf"
+    info "Backing up /etc/pacman.conf → /etc/pacman.conf.bak"
     sudo cp /etc/pacman.conf /etc/pacman.conf.bak || die "Failed to back up pacman.conf"
+    ok "Backup created"
 else
-    skip "pacman.conf backup already exists"
+    skip "pacman.conf backup already exists at /etc/pacman.conf.bak"
 fi
 
-info "Patching /etc/pacman.conf"
-for change in "${pacman_conf[@]}"; do
-    sudo sed -i "$change" /etc/pacman.conf || warn "sed change may have already been applied: $change"
+info "Applying pacman.conf patches..."
+for change in "${pacman_conf_patches[@]}"; do
+    sudo sed -i "$change" /etc/pacman.conf \
+        && info "  Applied: $change" \
+        || warn "  May already be applied (non-fatal): $change"
 done
+ok "pacman.conf patched"
 
 # ---------------------------------------------------------------------------
 # Artix repos — injected above Arch repos so systemd-free builds win
 # ---------------------------------------------------------------------------
 
-info "Adding Artix repositories..."
+step "Adding Artix repositories"
 
 if ! grep -q '^\[system\]' /etc/pacman.conf; then
+    info "Injecting Artix repo blocks above [core]..."
     sudo sed -i '/^\[core\]/i \
 [system]\
 Include = /etc/pacman.d/artix-mirrorlist\
@@ -93,80 +113,86 @@ Include = /etc/pacman.d/artix-mirrorlist\
 [lib32]\
 Include = /etc/pacman.d/artix-mirrorlist\
 ' /etc/pacman.conf
+    ok "Artix repo blocks added"
 else
-    skip "Artix repo blocks already in pacman.conf"
+    skip "Artix repo blocks already present in pacman.conf"
 fi
 
-# Bootstrap artix-mirrorlist from a public mirror — no directory scraping
+# Bootstrap: inject hardcoded Server= lines so pacman can resolve packages
+# before the mirrorlist file exists
 if [[ ! -f /etc/pacman.d/artix-mirrorlist ]]; then
-    info "Fetching artix-mirrorlist..."
+    info "artix-mirrorlist not present — bootstrapping via hardcoded mirror..."
 
-    # Multiple known-good public mirrors in priority order
-    declare -a MIRRORLIST_URLS=(
-        "https://mirror.pascalpuffke.de/artix-linux/packages/system/x86_64"
-        "https://artix.wheaton.edu/system/x86_64"
-        "https://mirrors.dotsrc.org/artix-linux/packages/system/x86_64"
-        "https://ftp.halifax.rwth-aachen.de/artix-linux/packages/system/x86_64"
-    )
-
-    DOWNLOADED=0
-    for BASE in "${MIRRORLIST_URLS[@]}"; do
-        info "Trying mirror: $BASE"
-        # Fetch index, find the mirrorlist package name
-        PKG=$(curl -fsSL --max-time 10 "$BASE/" 2>/dev/null \
-            | grep -oP 'artix-mirrorlist-[0-9][^"]+\.pkg\.tar\.zst' | tail -1)
-        if [[ -n "$PKG" ]]; then
-            info "Found $PKG — downloading..."
-            if sudo curl -fsSo /tmp/artix-mirrorlist.pkg.tar.zst \
-                --max-time 60 "${BASE}/${PKG}"; then
-                DOWNLOADED=1
-                break
-            else
-                warn "Download failed from $BASE — trying next mirror"
-            fi
-        else
-            warn "No package found at $BASE — trying next mirror"
-        fi
-    done
-
-    if [[ "$DOWNLOADED" -eq 0 ]]; then
-        die "Could not download artix-mirrorlist from any mirror. Check your internet connection and try again."
+    if ! grep -q 'mirror.pascalpuffke.de' /etc/pacman.conf; then
+        info "  Injecting temporary Server= lines..."
+        sudo sed -i '/^\[system\]/a Server = https://mirror.pascalpuffke.de/artix-linux/packages/system/x86_64' /etc/pacman.conf
+        sudo sed -i '/^\[world\]/a Server  = https://mirror.pascalpuffke.de/artix-linux/packages/world/x86_64'  /etc/pacman.conf
+        sudo sed -i '/^\[galaxy\]/a Server = https://mirror.pascalpuffke.de/artix-linux/packages/galaxy/x86_64' /etc/pacman.conf
+        ok "  Temporary mirror lines injected"
+    else
+        skip "  Temporary mirror lines already present"
     fi
 
-    sudo pacman -U --noconfirm /tmp/artix-mirrorlist.pkg.tar.zst \
-        || die "Failed to install artix-mirrorlist"
+    info "Trusting Artix signing key..."
+    sudo pacman-key --recv-keys 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
+        && ok "  Key received" \
+        || warn "  Key recv failed (may already be trusted)"
+    sudo pacman-key --lsign-key 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
+        && ok "  Key locally signed" \
+        || warn "  Key lsign failed (may already be signed)"
+
+    info "Syncing package databases..."
+    sudo pacman -Sy --noconfirm || die "pacman -Sy failed — check your network and mirror"
+
+    info "Installing artix-mirrorlist and artix-keyring..."
+    sudo pacman -S --noconfirm --needed artix-mirrorlist artix-keyring \
+        || die "Failed to install artix-mirrorlist/artix-keyring — is the hardcoded mirror reachable?"
+
+    info "Populating Artix keyring..."
+    sudo pacman-key --populate artix || warn "pacman-key --populate artix had errors (usually harmless)"
+    ok "artix-mirrorlist and artix-keyring installed"
 else
-    skip "artix-mirrorlist already present"
+    skip "artix-mirrorlist already present at /etc/pacman.d/artix-mirrorlist"
 fi
 
-sudo pacman -Sy
+info "Final package database sync..."
+sudo pacman -Sy --noconfirm || die "pacman -Sy failed"
+ok "Databases synced"
 
 if ! pacman -Q artix-keyring &>/dev/null; then
     info "Installing artix-keyring..."
-    sudo pacman -S --noconfirm artix-keyring || die "Failed to install artix-keyring"
-    sudo pacman-key --populate artix
+    sudo pacman -S --noconfirm --needed artix-keyring || die "Failed to install artix-keyring"
+    sudo pacman-key --populate artix || warn "pacman-key --populate artix had errors"
+    ok "artix-keyring installed"
 else
     skip "artix-keyring already installed"
 fi
 
 # ---------------------------------------------------------------------------
-# Migrate: pull out systemd, drop in OpenRC + elogind
+# Migrate: systemd → OpenRC + elogind
 # ---------------------------------------------------------------------------
 
-info "Migrating from systemd to OpenRC..."
+step "Migrating from systemd to OpenRC"
 
-# Try openrc-base first (Artix meta), fall back to plain openrc
+# Probe for Artix meta-packages — they exist on some repo snapshots but not all
+info "Probing for openrc-base and base-artix meta-packages..."
 OPENRC_PKG="openrc"
-if pacman -Ss '^openrc-base$' 2>/dev/null | grep -q openrc-base; then
+if pacman -Ss '^openrc-base$' 2>/dev/null | grep -q 'openrc-base'; then
     OPENRC_PKG="openrc-base"
+    info "  Found openrc-base — will use as OpenRC package"
+else
+    info "  openrc-base not found — using plain openrc"
 fi
 
-# Try base-artix, fall back to nothing (base from Artix repo will shadow Arch's)
 BASE_ARTIX_ARGS=()
-if pacman -Ss '^base-artix$' 2>/dev/null | grep -q base-artix; then
+if pacman -Ss '^base-artix$' 2>/dev/null | grep -q 'base-artix'; then
     BASE_ARTIX_ARGS=(base-artix)
+    info "  Found base-artix — will install"
+else
+    info "  base-artix not found — base from Artix repo will shadow Arch's automatically"
 fi
 
+info "Installing OpenRC + elogind (systemd replacement stack)..."
 sudo pacman -S --needed --noconfirm \
     "$OPENRC_PKG" \
     "${BASE_ARTIX_ARGS[@]}" \
@@ -177,49 +203,53 @@ sudo pacman -S --needed --noconfirm \
     dbus-openrc \
     sysvinit \
     openrc-arch-services-git \
-    || die "Failed to install OpenRC base packages"
+    || die "Failed to install OpenRC base stack — see output above"
+ok "OpenRC stack installed"
 
-# Force-remove systemd — elogind/libelogind satisfy virtual deps
+info "Force-removing systemd (elogind satisfies virtual deps)..."
 if pacman -Q systemd &>/dev/null; then
     sudo pacman -Rdd --noconfirm systemd systemd-libs systemd-sysvcompat 2>/dev/null \
-        || warn "systemd removal had errors — continuing"
+        && ok "systemd removed" \
+        || warn "systemd removal had non-fatal errors — continuing"
 else
-    skip "systemd already removed"
+    skip "systemd already absent"
 fi
 
-# Refresh util-linux + procps-ng from Artix repo
-sudo pacman -S --needed --noconfirm util-linux procps-ng || warn "util-linux/procps-ng refresh failed — may be fine"
+info "Refreshing util-linux and procps-ng from Artix repo..."
+sudo pacman -S --needed --noconfirm util-linux procps-ng \
+    && ok "util-linux + procps-ng refreshed" \
+    || warn "util-linux/procps-ng refresh had errors — may be fine if already at Artix version"
 
 # ---------------------------------------------------------------------------
-# Start
+# Full system upgrade + yay
 # ---------------------------------------------------------------------------
 
-print_bold_blue "\nBev's dotfiles"
-echo -e "\n------------------------------------------------------------------------\n"
-print_info "\nStarting prerequisites setup..."
+step "System upgrade and AUR helper"
 
-sudo pacman -Syu --noconfirm || warn "Full upgrade had warnings — continuing"
+info "Running full system upgrade..."
+sudo pacman -Syu --noconfirm \
+    && ok "System upgraded" \
+    || warn "Upgrade had warnings — check output above"
 
-# Install yay if missing
 if ! command -v yay &>/dev/null; then
-    info "Installing yay..."
-    [[ -d yay-bin ]] && sudo rm -rf yay-bin
-    sudo git clone https://aur.archlinux.org/yay-bin.git || die "Failed to clone yay-bin"
+    info "Installing yay (AUR helper)..."
+    [[ -d yay-bin ]] && { warn "Stale yay-bin dir found — removing"; sudo rm -rf yay-bin; }
+    git clone https://aur.archlinux.org/yay-bin.git || die "Failed to clone yay-bin"
     sudo chown -R "$USER:$USER" yay-bin
-    (cd yay-bin && makepkg -si --noconfirm) || die "Failed to build yay"
+    (cd yay-bin && makepkg -si --noconfirm) || die "makepkg failed for yay-bin"
     sudo rm -rf yay-bin
+    ok "yay installed"
 else
-    skip "yay already installed"
+    skip "yay already installed ($(yay --version 2>/dev/null | head -1))"
 fi
 
 # ---------------------------------------------------------------------------
 # Main package install
-# yay --needed means already-installed packages are silently skipped.
-# Unknown packages warn but don't abort (pkg_install wrapper not used here
-# because yay handles its own missing-pkg reporting; --needed covers idempotency).
 # ---------------------------------------------------------------------------
 
-info "Installing main packages..."
+step "Installing main packages"
+info "This may take a while depending on your connection speed..."
+
 yay -Syu --needed --noconfirm \
     acpi \
     acpid \
@@ -375,98 +405,137 @@ yay -Syu --needed --noconfirm \
     ytfzf \
     zen-browser-bin \
     zip \
-    || warn "Some packages failed to install — check output above"
+    && ok "Main packages installed" \
+    || warn "Some packages failed — check output above (non-fatal, continuing)"
 
+# iwd: only if iwctl isn't present
 if ! command -v iwctl &>/dev/null; then
-    yay -Syu --needed --noconfirm iwd iwd-openrc || warn "iwd install failed"
+    info "iwctl not found — installing iwd..."
+    yay -Syu --needed --noconfirm iwd iwd-openrc \
+        && ok "iwd installed" \
+        || warn "iwd install failed"
 else
-    skip "iwd already present"
+    skip "iwd already present ($(iwctl --version 2>/dev/null || echo 'version unknown'))"
 fi
 
 # ---------------------------------------------------------------------------
-# Remove conflicting JACK
+# JACK conflict
 # ---------------------------------------------------------------------------
 
+step "Checking for JACK conflicts"
+
 if pacman -Q jack2 &>/dev/null; then
-    info "Removing conflicting jack2..."
-    sudo pacman -Rdd --noconfirm jack2 || warn "jack2 removal failed — may already be gone"
+    info "Conflicting jack2 found — removing..."
+    sudo pacman -Rdd --noconfirm jack2 \
+        && ok "jack2 removed" \
+        || warn "jack2 removal failed — PipeWire-JACK may have issues"
 else
-    skip "jack2 not installed"
+    skip "jack2 not installed — no conflict"
 fi
 
 # ---------------------------------------------------------------------------
 # PulseAudio removal
 # ---------------------------------------------------------------------------
 
+step "Checking for PulseAudio"
+
 if pacman -Q | grep -qE '^pulseaudio'; then
-    info "Removing PulseAudio..."
-    rc-service pulseaudio stop 2>/dev/null || true
+    info "PulseAudio detected — stopping and removing..."
+    rc-service pulseaudio stop 2>/dev/null \
+        && info "  PulseAudio service stopped" \
+        || info "  PulseAudio service was not running (fine)"
     mapfile -t pa_pkgs < <(pacman -Q | awk '{print $1}' | grep -E '^pulseaudio')
-    [[ ${#pa_pkgs[@]} -gt 0 ]] && sudo pacman -Rns --noconfirm "${pa_pkgs[@]}" \
-        || warn "PulseAudio removal had errors"
+    info "  Packages to remove: ${pa_pkgs[*]}"
+    sudo pacman -Rns --noconfirm "${pa_pkgs[@]}" \
+        && ok "PulseAudio removed" \
+        || warn "PulseAudio removal had errors — may need manual cleanup"
 else
     skip "PulseAudio not installed"
 fi
 
-if ! groups | grep -q '\baudio\b'; then
-    sudo usermod -aG audio "$USER"
+if ! groups "$USER" | grep -q '\baudio\b'; then
+    info "Adding $USER to audio group..."
+    sudo usermod -aG audio "$USER" && ok "$USER added to audio group"
 else
-    skip "User already in audio group"
+    skip "$USER already in audio group"
 fi
 
 # ---------------------------------------------------------------------------
-# OpenRC service setup
+# OpenRC services
 # ---------------------------------------------------------------------------
 
-info "Enabling OpenRC services..."
+step "Enabling OpenRC services"
 
-rc_enable udev        sysinit
+# rc_enable: skips cleanly if service file is missing
+rc_enable() {
+    local svc="$1" lvl="${2:-default}"
+    if [[ -f /etc/openrc/init.d/$svc || -f /etc/init.d/$svc ]]; then
+        if sudo rc-update add "$svc" "$lvl" 2>/dev/null; then
+            ok "  Enabled: $svc @ $lvl"
+        else
+            skip "  $svc already in $lvl runlevel"
+        fi
+    else
+        warn "  Service file not found for '$svc' — skipping (install may have used a different name)"
+    fi
+}
+
+rc_enable udev         sysinit
 rc_enable udev-trigger sysinit
 rc_enable udev-settle  sysinit
 rc_enable elogind      boot
 rc_enable acpid        boot
 rc_enable dbus         boot
 rc_enable NetworkManager default
-rc_enable bluetoothd    default
-rc_enable tlp           default
-rc_enable cronie        default
-rc_enable sddm          default
+rc_enable bluetoothd   default
+rc_enable tlp          default
+rc_enable cronie       default
+rc_enable sddm         default
 
 # getty on tty1 — openrc-init doesn't auto-spawn TTYs like systemd does
 AGETTY_SRC="/etc/openrc/init.d/agetty"
 AGETTY_TTY1="/etc/openrc/init.d/agetty.tty1"
 if [[ -f "$AGETTY_SRC" ]]; then
     if [[ ! -e "$AGETTY_TTY1" ]]; then
-        sudo ln -sf "$AGETTY_SRC" "$AGETTY_TTY1"
+        info "Creating agetty.tty1 symlink..."
+        sudo ln -sf "$AGETTY_SRC" "$AGETTY_TTY1" && ok "agetty.tty1 symlink created"
     else
         skip "agetty.tty1 symlink already exists"
     fi
     rc_enable agetty.tty1 default
 else
-    warn "agetty service file not found at $AGETTY_SRC — TTY1 not configured"
+    warn "agetty service not found at $AGETTY_SRC — TTY1 getty not configured (you may get no login prompt)"
 fi
 
 # ---------------------------------------------------------------------------
 # CPU microcode
 # ---------------------------------------------------------------------------
 
+step "CPU microcode"
+
 VENDOR=$(lscpu | awk '/Vendor ID/{print $3}')
+info "Detected CPU vendor: $VENDOR"
 case "$VENDOR" in
     GenuineIntel)
-        info "Intel CPU — installing intel-ucode"
-        sudo pacman -S --needed --noconfirm intel-ucode || warn "intel-ucode install failed"
+        sudo pacman -S --needed --noconfirm intel-ucode \
+            && ok "intel-ucode installed" \
+            || warn "intel-ucode install failed"
         ;;
     AuthenticAMD)
-        info "AMD CPU — installing amd-ucode"
-        sudo pacman -S --needed --noconfirm amd-ucode || warn "amd-ucode install failed"
+        sudo pacman -S --needed --noconfirm amd-ucode \
+            && ok "amd-ucode installed" \
+            || warn "amd-ucode install failed"
         ;;
     *)
-        warn "Unknown CPU vendor: $VENDOR — skipping microcode" ;;
+        warn "Unknown CPU vendor '$VENDOR' — skipping microcode (boot may still work)"
+        ;;
 esac
 
 # ---------------------------------------------------------------------------
 # NVIDIA
 # ---------------------------------------------------------------------------
+
+step "GPU detection"
 
 if lspci | grep -qi nvidia; then
     info "NVIDIA GPU detected — installing drivers..."
@@ -484,63 +553,99 @@ if lspci | grep -qi nvidia; then
         opencl-nvidia \
         vulkan-mesa-layers \
         xf86-video-nouveau \
-        || warn "Some NVIDIA packages failed"
+        && ok "NVIDIA drivers installed" \
+        || warn "Some NVIDIA packages failed — GPU may not work correctly"
 else
-    skip "No NVIDIA GPU detected"
+    skip "No NVIDIA GPU found (lspci)"
 fi
 
 # ---------------------------------------------------------------------------
 # D-Bus session
 # ---------------------------------------------------------------------------
 
+step "D-Bus session"
+
 if [[ -z "$DBUS_SESSION_BUS_ADDRESS" ]]; then
-    eval "$(dbus-launch --sh-syntax)" 2>/dev/null || warn "dbus-launch failed — dbus may not be running yet"
+    info "No D-Bus session found — launching one..."
+    eval "$(dbus-launch --sh-syntax)" 2>/dev/null \
+        && ok "D-Bus session started" \
+        || warn "dbus-launch failed — some config steps may not work until after first login"
+else
+    skip "D-Bus session already active ($DBUS_SESSION_BUS_ADDRESS)"
 fi
 
 # ---------------------------------------------------------------------------
-# Strip pam_systemd from PAM stack
+# Strip pam_systemd
 # ---------------------------------------------------------------------------
+
+step "PAM cleanup"
 
 PAM_FILE="/etc/pam.d/system-auth"
-if [[ -f "$PAM_FILE" ]] && grep -q 'pam_systemd' "$PAM_FILE"; then
-    info "Removing pam_systemd from $PAM_FILE..."
-    sudo sed -i '/pam_systemd/d' "$PAM_FILE"
+if [[ -f "$PAM_FILE" ]]; then
+    if grep -q 'pam_systemd' "$PAM_FILE"; then
+        info "Removing pam_systemd entries from $PAM_FILE..."
+        sudo sed -i '/pam_systemd/d' "$PAM_FILE" && ok "pam_systemd removed"
+    else
+        skip "No pam_systemd entries in $PAM_FILE"
+    fi
 else
-    skip "pam_systemd not in $PAM_FILE"
+    skip "$PAM_FILE not found (may be named differently on your system)"
+fi
+
+# Also check login PAM
+PAM_LOGIN="/etc/pam.d/login"
+if [[ -f "$PAM_LOGIN" ]] && grep -q 'pam_systemd' "$PAM_LOGIN"; then
+    info "Removing pam_systemd from $PAM_LOGIN..."
+    sudo sed -i '/pam_systemd/d' "$PAM_LOGIN" && ok "pam_systemd removed from login"
 fi
 
 # ---------------------------------------------------------------------------
-# GRUB — inject init=/usr/bin/openrc-init + CPU params
+# GRUB
 # ---------------------------------------------------------------------------
+
+step "GRUB configuration"
 
 GRUB_FILE="/etc/default/grub"
-[[ -f "$GRUB_FILE" ]] || die "GRUB config not found at $GRUB_FILE"
+[[ -f "$GRUB_FILE" ]] || die "GRUB config not found at $GRUB_FILE — is GRUB installed?"
 
+info "Detecting CPU model for kernel params..."
 CPU_MODEL=$(lscpu | awk '/Model name/{print $3}')
+info "  CPU model string: $CPU_MODEL"
+
 case "$CPU_MODEL" in
-    AMD*)   EXTRA_PARAMS="init=/usr/bin/openrc-init amd_pstate=active mitigations=off" ;;
-    Intel*) EXTRA_PARAMS="init=/usr/bin/openrc-init intel_pstate=active mitigations=off" ;;
-    *)      EXTRA_PARAMS="init=/usr/bin/openrc-init"
-            warn "Unknown CPU model — only setting init param" ;;
+    AMD*)
+        EXTRA_PARAMS="init=/usr/bin/openrc-init amd_pstate=active mitigations=off"
+        info "  Using AMD params: $EXTRA_PARAMS"
+        ;;
+    Intel*)
+        EXTRA_PARAMS="init=/usr/bin/openrc-init intel_pstate=active mitigations=off"
+        info "  Using Intel params: $EXTRA_PARAMS"
+        ;;
+    *)
+        EXTRA_PARAMS="init=/usr/bin/openrc-init"
+        warn "  Unknown CPU model — only adding init param: $EXTRA_PARAMS"
+        ;;
 esac
 
-# Only patch if openrc-init isn't already in there
 if ! grep -q 'openrc-init' "$GRUB_FILE"; then
+    info "Patching GRUB_CMDLINE_LINUX_DEFAULT..."
     sudo sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"\([^\"]*\)\"/GRUB_CMDLINE_LINUX_DEFAULT=\"\1 ${EXTRA_PARAMS}\"/" "$GRUB_FILE"
+    ok "GRUB cmdline updated"
+    info "  New cmdline: $(grep GRUB_CMDLINE_LINUX_DEFAULT "$GRUB_FILE")"
 else
-    skip "openrc-init already in GRUB_CMDLINE_LINUX_DEFAULT"
+    skip "openrc-init already present in GRUB_CMDLINE_LINUX_DEFAULT"
 fi
 
 # ---------------------------------------------------------------------------
-# Config setup
+# Dotfiles + config
 # ---------------------------------------------------------------------------
 
-echo -e "\n------------------------------------------------------------------------\n"
-print_info "\nStarting config setup..."
+step "Installing dotfiles and config"
 
 # Fontconfig
 mkdir -p "$HOME/.config/fontconfig"
 if [[ ! -f "$HOME/.config/fontconfig/fonts.conf" ]]; then
+    info "Writing fonts.conf..."
     cat > "$HOME/.config/fontconfig/fonts.conf" <<'FONTS'
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
@@ -573,53 +678,65 @@ if [[ ! -f "$HOME/.config/fontconfig/fonts.conf" ]]; then
   </alias>
 </fontconfig>
 FONTS
+    ok "fonts.conf written"
 else
     skip "fonts.conf already exists"
 fi
 
-# niri-edit helper
+# niri-edit helper script
 if [[ ! -x /usr/bin/niri-edit ]]; then
+    info "Installing niri-edit helper..."
     sudo tee /usr/bin/niri-edit > /dev/null <<'EOF'
 #!/bin/sh
 ghostty -e nvim ~/.config/niri/config.kdl
 EOF
     sudo chmod +x /usr/bin/niri-edit
+    ok "niri-edit installed at /usr/bin/niri-edit"
 else
     skip "niri-edit already installed"
 fi
 
 # .bashrc
 if [[ -f "$HOME/dotfiles/.bashrc" ]]; then
-    cp -f "$HOME/dotfiles/.bashrc" "$HOME/" || {
-        rm -f "$HOME/.bashrc"
-        cp -f "$HOME/dotfiles/.bashrc" "$HOME/"
-    }
+    info "Copying .bashrc from dotfiles..."
+    cp -f "$HOME/dotfiles/.bashrc" "$HOME/" \
+        && ok ".bashrc installed" \
+        || { rm -f "$HOME/.bashrc"; cp -f "$HOME/dotfiles/.bashrc" "$HOME/" && ok ".bashrc installed (retry)"; }
 else
-    warn "dotfiles/.bashrc not found — skipping"
+    warn "dotfiles/.bashrc not found — skipping (your current .bashrc is untouched)"
 fi
 
-# Config directories — always overwrite to keep dotfiles in sync
+# Config directories
+info "Syncing config directories..."
 for dir in waybar dunst wlogout niri fuzzel fcitx5 qutebrowser; do
     SRC="$HOME/dotfiles/configs/$dir"
     DST="$HOME/.config/$dir"
     if [[ -d "$SRC" ]]; then
         rm -rf "$DST"
         cp -r "$SRC" "$DST"
+        ok "  $dir → $DST"
     else
-        warn "dotfiles/configs/$dir not found — skipping"
+        warn "  dotfiles/configs/$dir not found — skipping"
     fi
 done
 
-[[ -d "$HOME/dotfiles/configs/Pictures" ]] \
-    && cp -r "$HOME/dotfiles/configs/Pictures" "$HOME/" \
-    || skip "No Pictures dir in dotfiles"
+# Pictures
+if [[ -d "$HOME/dotfiles/configs/Pictures" ]]; then
+    cp -r "$HOME/dotfiles/configs/Pictures" "$HOME/"
+    ok "Pictures copied to $HOME/"
+else
+    skip "No Pictures dir in dotfiles"
+fi
 
-sudo chown -R "$USER:$USER" "$HOME"
+info "Fixing ownership of $HOME..."
+sudo chown -R "$USER:$USER" "$HOME" && ok "Ownership corrected"
 
 # SDDM theme
 if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
+    info "Installing sddm-astronaut-theme..."
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)" \
-        || warn "SDDM theme install failed"
+        && ok "SDDM theme installed" \
+        || warn "SDDM theme install failed — SDDM will use default theme"
 else
     skip "sddm-astronaut-theme already installed"
 fi
@@ -628,22 +745,29 @@ fi
 GTK_THEME_SRC="$HOME/dotfiles/configs/diinki-retro-dark"
 GTK_THEME_DST="/usr/share/themes/diinki-retro-dark"
 if [[ -d "$GTK_THEME_SRC" && ! -d "$GTK_THEME_DST" ]]; then
-    sudo mv "$GTK_THEME_SRC" /usr/share/themes/
+    info "Installing GTK theme diinki-retro-dark..."
+    sudo mv "$GTK_THEME_SRC" /usr/share/themes/ \
+        && ok "GTK theme installed" \
+        || warn "GTK theme move failed"
 elif [[ -d "$GTK_THEME_DST" ]]; then
-    skip "diinki-retro-dark theme already in /usr/share/themes"
+    skip "diinki-retro-dark already in /usr/share/themes"
 else
-    warn "GTK theme source not found — skipping"
+    warn "GTK theme source not found at $GTK_THEME_SRC — skipping"
 fi
-gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark" 2>/dev/null || true
 
-echo -e "\n------------------------------------------------------------------------\n"
+info "Setting GTK theme via gsettings..."
+gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark" 2>/dev/null \
+    && ok "GTK theme set" \
+    || warn "gsettings failed — GTK theme may need to be set manually after first login"
 
 # ---------------------------------------------------------------------------
 # Optional utilities
 # ---------------------------------------------------------------------------
 
+step "Optional utilities"
+
 utils() {
-    print_info "\nStarting utilities setup..."
+    info "Installing gaming and multimedia utilities..."
 
     yay -Syu --needed --noconfirm \
         ardour \
@@ -656,29 +780,40 @@ utils() {
         steam-native-runtime \
         wine-staging \
         winetricks \
-        || warn "Some utils packages failed"
+        && ok "Utility packages installed" \
+        || warn "Some utility packages failed"
 
-    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv 2>/dev/null || warn "winetricks components failed"
-    wineboot -u 2>/dev/null || warn "wineboot failed"
+    info "Running winetricks components..."
+    winetricks d3dx9 d3dcompiler_43 d3dcompiler_47 ddxv 2>/dev/null \
+        && ok "winetricks components installed" \
+        || warn "winetricks had errors — some Windows compatibility may be missing"
+
+    info "Running wineboot..."
+    wineboot -u 2>/dev/null && ok "wineboot done" || warn "wineboot failed (non-fatal)"
 
     if [[ ! -f ./advcpmv/install.sh ]]; then
+        info "Installing advcpmv (advanced cp/mv with progress)..."
         curl -fsSL https://raw.githubusercontent.com/jarun/advcpmv/master/install.sh \
             --create-dirs -o ./advcpmv/install.sh \
             && (cd advcpmv && sh install.sh) \
-            || warn "advcpmv install failed"
+            && ok "advcpmv installed" \
+            || warn "advcpmv install failed (non-fatal)"
     else
-        skip "advcpmv install.sh already downloaded"
+        skip "advcpmv already downloaded"
     fi
 
     mkdir -p "$HOME/.config/Kvantum"
     printf '[General]\ntheme=catppuccin-frappe-mauve\n' > "$HOME/.config/Kvantum/kvantum.kvconfig"
+    ok "Kvantum theme set to catppuccin-frappe-mauve"
 
-    flatpak install -y flathub org.vinegarhq.Sober  2>/dev/null || warn "Sober flatpak failed"
-    flatpak install -y flathub com.stremio.Stremio  2>/dev/null || warn "Stremio flatpak failed"
-    flatpak install -y flathub com.obsproject.Studio 2>/dev/null || warn "OBS flatpak failed"
+    info "Installing flatpak apps..."
+    flatpak install -y flathub org.vinegarhq.Sober   2>/dev/null && ok "  Sober installed"   || warn "  Sober flatpak failed"
+    flatpak install -y flathub com.stremio.Stremio   2>/dev/null && ok "  Stremio installed" || warn "  Stremio flatpak failed"
+    flatpak install -y flathub com.obsproject.Studio 2>/dev/null && ok "  OBS installed"     || warn "  OBS flatpak failed"
 
     mkdir -p "$HOME/.config/arti"
     if [[ ! -f "$HOME/.config/arti/arti.toml" ]]; then
+        info "Writing arti.toml..."
         cat > "$HOME/.config/arti/arti.toml" <<'ARTI'
 [application]
 watch_configuration = true
@@ -738,34 +873,56 @@ max_files = 8192
 [vanguards]
 mode = "lite"
 ARTI
+        ok "arti.toml written"
     else
         skip "arti.toml already exists"
     fi
 
-    echo -e "\n------------------------------------------------------------------------\n"
-
+    info "Installing oh-my-bash..."
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" \
-        || warn "oh-my-bash install failed"
+        && ok "oh-my-bash installed" \
+        || warn "oh-my-bash install failed — bash will still work normally"
 }
 
-read -rp "Install extra utilities? [Y/n] " ans
+echo
+read -rp "[INPUT] Install extra utilities (gaming, flatpaks, arti, oh-my-bash)? [Y/n] " ans
 ans=${ans:-Y}
 if [[ "${ans,,}" == "y" ]]; then
     utils
 else
-    info "Skipping utils."
+    info "Skipping optional utilities."
 fi
 
 # ---------------------------------------------------------------------------
 # Finalise
 # ---------------------------------------------------------------------------
 
-sudo mkinitcpio -P || warn "mkinitcpio had errors"
-sudo grub-mkconfig -o /boot/grub/grub.cfg || die "grub-mkconfig failed"
+step "Finalising"
 
-echo ""
-info "Done. Rebooting into OpenRC in 5 seconds..."
-info "If shutdown hangs: Alt+PrtSc, then R E I S U B"
-sleep 5
+info "Regenerating initramfs (mkinitcpio -P)..."
+sudo mkinitcpio -P \
+    && ok "initramfs regenerated" \
+    || warn "mkinitcpio had errors — boot may fail, check output above"
+
+info "Regenerating GRUB config..."
+sudo grub-mkconfig -o /boot/grub/grub.cfg \
+    && ok "GRUB config written to /boot/grub/grub.cfg" \
+    || die "grub-mkconfig failed — do not reboot until this is fixed"
+
+echo
+echo "============================================================"
+echo "  Installation complete!"
+echo "  - OpenRC is configured as init (init=/usr/bin/openrc-init)"
+echo "  - GRUB has been updated"
+echo "  - pacman.conf backup: /etc/pacman.conf.bak"
+echo "  If the system fails to boot:"
+echo "    1. Boot from Arch ISO"
+echo "    2. arch-chroot into your install"
+echo "    3. Restore: cp /etc/pacman.conf.bak /etc/pacman.conf"
+echo "============================================================"
+echo
+info "Rebooting in 10 seconds... Ctrl+C to cancel."
+info "If shutdown hangs: Alt+PrtSc, then press R E I S U B one at a time."
+sleep 10
 
 sudo openrc-shutdown -r now 2>/dev/null || sudo reboot
