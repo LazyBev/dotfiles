@@ -23,7 +23,7 @@ die()   {
     exit 1
 }
 
-# Trap unexpected exits (ERR fires on any non-zero exit when set -e is active)
+# Trap unexpected exits
 trap 'echo; die "Unexpected error on line ${LINENO} — command: ${BASH_COMMAND}"' ERR
 trap 'echo; warn "Script interrupted by user."; exit 130' INT TERM
 
@@ -38,14 +38,12 @@ command -v pacman &>/dev/null || die "pacman not found — are you on Arch?"
 command -v curl   &>/dev/null || die "curl not found — install it first: sudo pacman -S curl"
 command -v git    &>/dev/null || { warn "git not found — installing..."; sudo pacman -S --noconfirm git; }
 
-# Verify internet connectivity before doing anything
 info "Checking internet connectivity..."
 if ! curl -fsSL --max-time 10 https://archlinux.org &>/dev/null; then
     die "No internet connection detected. Check your network and try again."
 fi
 ok "Internet connectivity confirmed"
 
-# Warn if running inside a chroot / container
 if [[ ! -d /sys/firmware/efi && ! -d /run/openrc ]]; then
     warn "EFI not detected and OpenRC not running — make sure you're on the target machine, not a chroot."
 fi
@@ -65,15 +63,18 @@ declare -a pacman_conf_patches=(
 )
 
 info "Updating Arch mirrorlist..."
-if sudo reflector --country US --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
+if sudo reflector --country GB --latest 20 --sort rate --save /etc/pacman.d/mirrorlist 2>/dev/null; then
     ok "reflector updated mirrorlist"
 else
     warn "reflector failed — falling back to curl mirrorlist"
-    sudo curl -fsSo /etc/pacman.d/mirrorlist --max-time 30 \
-        "https://archlinux.org/mirrorlist/?country=US&protocol=https&use_mirror_status=on" \
+    sudo curl -fsSo /tmp/arch-mirrorlist --max-time 30 \
+        "https://archlinux.org/mirrorlist/?country=GB&protocol=https&use_mirror_status=on" \
         || die "Could not fetch Arch mirrorlist — check your connection"
-    sudo sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
-    ok "curl mirrorlist fetched and uncommented"
+    # Extract only Server lines (strip the leading #) and write a clean file
+    grep '^#Server' /tmp/arch-mirrorlist | sed 's/^#//' \
+        | sudo tee /etc/pacman.d/mirrorlist > /dev/null \
+        || die "Failed to write /etc/pacman.d/mirrorlist"
+    ok "curl mirrorlist fetched and written"
 fi
 
 if [[ ! -f /etc/pacman.conf.bak ]]; then
@@ -118,20 +119,19 @@ else
     skip "Artix repo blocks already present in pacman.conf"
 fi
 
-# Bootstrap: inject hardcoded Server= lines so pacman can resolve packages
-# before the mirrorlist file exists
+# Bootstrap: write a working stub mirrorlist so the Include= lines resolve
+# cleanly on the first pacman -Sy. $repo expands to the repo name (system,
+# world, galaxy, lib32) automatically — same format as the real file.
 if [[ ! -f /etc/pacman.d/artix-mirrorlist ]]; then
-    info "artix-mirrorlist not present — bootstrapping via hardcoded mirror..."
-
-    if ! grep -q 'mirror.pascalpuffke.de' /etc/pacman.conf; then
-        info "  Injecting temporary Server= lines..."
-        sudo sed -i '/^\[system\]/a Server = https://mirror.pascalpuffke.de/artix-linux/packages/system/x86_64' /etc/pacman.conf
-        sudo sed -i '/^\[world\]/a Server  = https://mirror.pascalpuffke.de/artix-linux/packages/world/x86_64'  /etc/pacman.conf
-        sudo sed -i '/^\[galaxy\]/a Server = https://mirror.pascalpuffke.de/artix-linux/packages/galaxy/x86_64' /etc/pacman.conf
-        ok "  Temporary mirror lines injected"
-    else
-        skip "  Temporary mirror lines already present"
-    fi
+    info "artix-mirrorlist not present — writing bootstrap stub..."
+    sudo mkdir -p /etc/pacman.d
+    sudo tee /etc/pacman.d/artix-mirrorlist > /dev/null <<'STUB'
+# Bootstrap stub — will be replaced by artix-mirrorlist package
+Server = https://mirror.pascalpuffke.de/artix-linux/packages/$repo/x86_64
+Server = https://mirrors.xtom.de/artix-linux/packages/$repo/x86_64
+Server = https://artix.harting.dev/packages/$repo/x86_64
+STUB
+    ok "Bootstrap artix-mirrorlist stub written"
 
     info "Trusting Artix signing key..."
     sudo pacman-key --recv-keys 56C9F05E9A5F9B09A71EBE85C9B5DE7A2B67C0AB 2>/dev/null \
@@ -146,7 +146,7 @@ if [[ ! -f /etc/pacman.d/artix-mirrorlist ]]; then
 
     info "Installing artix-mirrorlist and artix-keyring..."
     sudo pacman -S --noconfirm --needed artix-mirrorlist artix-keyring \
-        || die "Failed to install artix-mirrorlist/artix-keyring — is the hardcoded mirror reachable?"
+        || die "Failed to install artix-mirrorlist/artix-keyring — is the mirror reachable?"
 
     info "Populating Artix keyring..."
     sudo pacman-key --populate artix || warn "pacman-key --populate artix had errors (usually harmless)"
@@ -174,7 +174,6 @@ fi
 
 step "Migrating from systemd to OpenRC"
 
-# Probe for Artix meta-packages — they exist on some repo snapshots but not all
 info "Probing for openrc-base and base-artix meta-packages..."
 OPENRC_PKG="openrc"
 if pacman -Ss '^openrc-base$' 2>/dev/null | grep -q 'openrc-base'; then
@@ -466,7 +465,6 @@ fi
 
 step "Enabling OpenRC services"
 
-# rc_enable: skips cleanly if service file is missing
 rc_enable() {
     local svc="$1" lvl="${2:-default}"
     if [[ -f /etc/openrc/init.d/$svc || -f /etc/init.d/$svc ]]; then
@@ -492,7 +490,7 @@ rc_enable tlp          default
 rc_enable cronie       default
 rc_enable sddm         default
 
-# getty on tty1 — openrc-init doesn't auto-spawn TTYs like systemd does
+# getty on tty1
 AGETTY_SRC="/etc/openrc/init.d/agetty"
 AGETTY_TTY1="/etc/openrc/init.d/agetty.tty1"
 if [[ -f "$AGETTY_SRC" ]]; then
@@ -504,7 +502,7 @@ if [[ -f "$AGETTY_SRC" ]]; then
     fi
     rc_enable agetty.tty1 default
 else
-    warn "agetty service not found at $AGETTY_SRC — TTY1 getty not configured (you may get no login prompt)"
+    warn "agetty service not found at $AGETTY_SRC — TTY1 getty not configured"
 fi
 
 # ---------------------------------------------------------------------------
@@ -527,7 +525,7 @@ case "$VENDOR" in
             || warn "amd-ucode install failed"
         ;;
     *)
-        warn "Unknown CPU vendor '$VENDOR' — skipping microcode (boot may still work)"
+        warn "Unknown CPU vendor '$VENDOR' — skipping microcode"
         ;;
 esac
 
@@ -592,7 +590,6 @@ else
     skip "$PAM_FILE not found (may be named differently on your system)"
 fi
 
-# Also check login PAM
 PAM_LOGIN="/etc/pam.d/login"
 if [[ -f "$PAM_LOGIN" ]] && grep -q 'pam_systemd' "$PAM_LOGIN"; then
     info "Removing pam_systemd from $PAM_LOGIN..."
