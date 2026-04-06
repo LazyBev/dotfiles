@@ -97,36 +97,41 @@ else
     skip "Artix repo blocks already in pacman.conf"
 fi
 
-# Bootstrap artix-mirrorlist from CDN if not present
+# Bootstrap artix-mirrorlist from a public mirror — no directory scraping
 if [[ ! -f /etc/pacman.d/artix-mirrorlist ]]; then
     info "Fetching artix-mirrorlist..."
 
-    # Scrape the CDN directory listing for the latest package filename
-    CDN_INDEX=$(curl -fsSL 'https://mirrors.artixlinux.org/packages/system/x86_64/' 2>/dev/null) \
-        || { warn "CDN index fetch failed — trying fallback mirror"; CDN_INDEX=""; }
+    # Multiple known-good public mirrors in priority order
+    declare -a MIRRORLIST_URLS=(
+        "https://mirror.pascalpuffke.de/artix-linux/packages/system/x86_64"
+        "https://artix.wheaton.edu/system/x86_64"
+        "https://mirrors.dotsrc.org/artix-linux/packages/system/x86_64"
+        "https://ftp.halifax.rwth-aachen.de/artix-linux/packages/system/x86_64"
+    )
 
-    MIRRORLIST_PKG=$(echo "$CDN_INDEX" \
-        | grep -oP 'artix-mirrorlist-[0-9][^"]+\.pkg\.tar\.zst' | tail -1)
-
-    # Fallback: try the EU mirror if the primary CDN gave nothing
-    if [[ -z "$MIRRORLIST_PKG" ]]; then
-        warn "Primary CDN gave no result — trying eu.mirrorlist.artixlinux.org"
-        CDN_INDEX=$(curl -fsSL 'https://eu-mirror.artixlinux.org/packages/system/x86_64/' 2>/dev/null) || true
-        MIRRORLIST_PKG=$(echo "$CDN_INDEX" \
+    DOWNLOADED=0
+    for BASE in "${MIRRORLIST_URLS[@]}"; do
+        info "Trying mirror: $BASE"
+        # Fetch index, find the mirrorlist package name
+        PKG=$(curl -fsSL --max-time 10 "$BASE/" 2>/dev/null \
             | grep -oP 'artix-mirrorlist-[0-9][^"]+\.pkg\.tar\.zst' | tail -1)
-        CDN_BASE="https://eu-mirror.artixlinux.org/packages/system/x86_64"
-    else
-        CDN_BASE="https://mirrors.artixlinux.org/packages/system/x86_64"
-    fi
+        if [[ -n "$PKG" ]]; then
+            info "Found $PKG — downloading..."
+            if sudo curl -fsSo /tmp/artix-mirrorlist.pkg.tar.zst \
+                --max-time 60 "${BASE}/${PKG}"; then
+                DOWNLOADED=1
+                break
+            else
+                warn "Download failed from $BASE — trying next mirror"
+            fi
+        else
+            warn "No package found at $BASE — trying next mirror"
+        fi
+    done
 
-    if [[ -z "$MIRRORLIST_PKG" ]]; then
-        die "Could not find artix-mirrorlist package on any CDN. Check your internet connection."
+    if [[ "$DOWNLOADED" -eq 0 ]]; then
+        die "Could not download artix-mirrorlist from any mirror. Check your internet connection and try again."
     fi
-
-    info "Downloading ${MIRRORLIST_PKG}..."
-    sudo curl -fsSo /tmp/artix-mirrorlist.pkg.tar.zst \
-        "${CDN_BASE}/${MIRRORLIST_PKG}" \
-        || die "Failed to download artix-mirrorlist from ${CDN_BASE}"
 
     sudo pacman -U --noconfirm /tmp/artix-mirrorlist.pkg.tar.zst \
         || die "Failed to install artix-mirrorlist"
