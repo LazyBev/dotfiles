@@ -249,33 +249,6 @@ case "$VENDOR" in
 esac
 
 # ---------------------------------------------------------------------------
-# NVIDIA
-# ---------------------------------------------------------------------------
-
-step "GPU detection"
-
-if lspci | grep -qi nvidia; then
-    info "NVIDIA GPU detected — installing drivers..."
-    yay -Syu --needed --sudoloop --noconfirm \
-        egl-wayland \
-        lib32-nvidia-utils \
-        lib32-opencl-nvidia \
-        lib32-vulkan-mesa-layers \
-        libva-nvidia-driver \
-        nvidia-dkms \
-        nvidia-hook \
-        nvidia-inst \
-        nvidia-settings \
-        nvidia-utils \
-        opencl-nvidia \
-        vulkan-mesa-layers \
-        && ok "NVIDIA drivers installed" \
-        || warn "Some NVIDIA packages failed — GPU may not work correctly"
-else
-    skip "No NVIDIA GPU found (lspci)"
-fi
-
-# ---------------------------------------------------------------------------
 # D-Bus session
 # ---------------------------------------------------------------------------
 
