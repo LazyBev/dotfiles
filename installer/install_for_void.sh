@@ -149,16 +149,15 @@ fi
 chown "$USERNAME:$USERNAME" "$SWAY_CFG"
 
 # ── Dotfiles / Configs ──────────────────────────────────────────────────────
-CONFIG_SRC="$USER_HOME/dotfiles/configs"
 
-if [[ -d "$CONFIG_SRC" ]]; then
-  info "Installing user configs..."
+if [[ -f "$HOME/dotfiles/.bashrc" ]]; then
+    info "Copying .bashrc from dotfiles..."
+    cp -f "$HOME/dotfiles/.bashrc" "$HOME/" && ok ".bashrc installed"
+else
+    warn "dotfiles/.bashrc not found — skipping"
+fi
 
-  # Ensure target dirs exist
-  sudo -u "$USERNAME" mkdir -p "$USER_HOME/.config"
-  sudo -u "$USERNAME" mkdir -p "$USER_HOME/Pictures"
-
- info "Syncing config directories..."
+info "Syncing config directories..."
 for dir in waybar dunst wlogout niri fuzzel fcitx5 qutebrowser; do
     SRC="$HOME/dotfiles/configs/$dir"
     DST="$HOME/.config/$dir"
@@ -178,7 +177,8 @@ else
     skip "No Pictures dir in dotfiles"
 fi
 
-chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config" "$USER_HOME/Pictures"
+info "Fixing ownership of $HOME..."
+sudo chown -R "$USER:$USER" "$HOME" && ok "Ownership corrected"
 
 # ── Done ────────────────────────────────────────────────────────────────────
 cat <<EOF
