@@ -27,7 +27,7 @@ xbps-install -y void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
 xbps-install -Sy   # re-sync with new repos enabled
 
 # ── vpsm dependencies ────────────────────────────────────────────────────────
-xbps-install -y git ripgrep xtools
+xbps-install -y git ripgrep xtools zsh
 
 # ── vpsm install ──────────────────────────────────────────────────────────────
 # Step 1: void-packages must be cloned by the user (we can't fork for them).
@@ -72,6 +72,7 @@ xbps-install -y \
   dbus \
   elogind \
   rtkit
+
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 xbps-install -y \
