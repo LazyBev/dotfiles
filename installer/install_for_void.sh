@@ -75,7 +75,7 @@ echo "export PATH=\$PATH:\$HOME/.bin" >> ~/.bashrc
 # ── Sway stack ──────────────────────────────────────────────────────────────
 xbps-install -y \
   sway swaylock swayidle swaybg \
-  waybar foot fuzzel dunst \
+  Waybar foot fuzzel dunst \
   wl-clipboard grim slurp \
   xdg-desktop-portal-wlr xdg-utils \
   polkit polkit-gnome \
