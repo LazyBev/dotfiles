@@ -265,7 +265,7 @@ yay -Syu --needed --noconfirm \
     xarchiver \
     xbindkeys \
     xdg-desktop-portal \
-    xdg-desktop-portal-gtk \
+    xdg-desktop-portal-wlr \
     xdotool \
     xf86-input-libinput \
     xorg-xev \
@@ -542,6 +542,14 @@ if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
 else
     skip "sddm-astronaut-theme already installed"
 fi
+
+mkdir -p ~/.config/xdg-desktop-portal
+cat >| ~/.config/xdg-desktop-portal/portals.conf << 'EOF'
+[preferred]
+default=gnome
+org.freedesktop.impl.portal.ScreenCast=gnome
+org.freedesktop.impl.portal.Screenshot=gnome
+EOF
 
 GTK_THEME_SRC="$HOME/dotfiles/configs/diinki-retro-dark"
 GTK_THEME_DST="/usr/share/themes/diinki-retro-dark"
