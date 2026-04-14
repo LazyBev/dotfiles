@@ -92,7 +92,7 @@ xbps-install -y \
 # ── Network ───────────────────────────────────────────────────────────────────
 xbps-install -y \
   NetworkManager \
-  NetworkManager-applet
+  network-manager-applet
 
 # ── Useful CLI / dev tools ────────────────────────────────────────────────────
 xbps-install -y \
