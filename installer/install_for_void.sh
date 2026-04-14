@@ -57,7 +57,7 @@ xbps-install -y \
   swaylock \
   swayidle \
   swaybg \
-  waybar \
+  Waybar \
   foot \
   fuzzel \
   dunst \
@@ -127,8 +127,6 @@ xbps-install -y \
   nvidia-dkms \
   linux-headers \
   mesa-dri \
-  mesa-vaapi \
-  mesa-vdpau \
   vulkan-loader \
   amdvlk
 
