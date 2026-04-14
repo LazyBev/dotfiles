@@ -68,6 +68,8 @@ exec dbus-update-activation-environment --all \
 exec /usr/bin/pipewire
 exec /usr/bin/pipewire-pulse
 exec /usr/bin/wireplumber
+exec nm-applet --indicator
+exec fcitx5
 # Shell operator chaining doesn't work with bare exec; wrap in sh -c
 exec sh -c '/usr/lib/polkit-kde-authentication-agent-1 || /usr/libexec/polkit-gnome-authentication-agent-1'
 exec bash -lc "pkill waybar || true; waybar &"
