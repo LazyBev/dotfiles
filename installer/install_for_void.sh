@@ -148,6 +148,40 @@ fi
 
 chown "$USERNAME:$USERNAME" "$SWAY_CFG"
 
+# ── Dotfiles / Configs ──────────────────────────────────────────────────────
+CONFIG_SRC="$USER_HOME/configs"
+
+if [[ -d "$CONFIG_SRC" ]]; then
+  info "Installing user configs..."
+
+  # Ensure target dirs exist
+  sudo -u "$USERNAME" mkdir -p "$USER_HOME/.config"
+  sudo -u "$USERNAME" mkdir -p "$USER_HOME/Pictures"
+
+  # Copy everything except Pictures into ~/.config
+  for item in "$CONFIG_SRC"/*; do
+    name="$(basename "$item")"
+
+    if [[ "$name" == "Pictures" ]]; then
+      continue
+    fi
+
+    sudo -u "$USERNAME" cp -r "$item" "$USER_HOME/.config/"
+  done
+
+  # Copy Pictures separately
+  if [[ -d "$CONFIG_SRC/Pictures" ]]; then
+    sudo -u "$USERNAME" cp -r "$CONFIG_SRC/Pictures/"* "$USER_HOME/Pictures/" 2>/dev/null || true
+  fi
+
+  # Fix ownership
+  chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config" "$USER_HOME/Pictures"
+
+  ok "Configs installed."
+else
+  warn "No configs directory found at $CONFIG_SRC"
+fi
+
 # ── Done ────────────────────────────────────────────────────────────────────
 cat <<EOF
 
