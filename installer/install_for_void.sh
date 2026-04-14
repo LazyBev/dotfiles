@@ -61,7 +61,7 @@ xbps-install -y \
   wl-clipboard grim slurp \
   xdg-desktop-portal-wlr xdg-utils \
   polkit polkit-gnome \
-  dbus elogind rtkit chrony
+  dbus elogind rtkit chrony fcitx5 fcitx5-anthy
 
 # ── Fonts ───────────────────────────────────────────────────────────────────
 xbps-install -y \
