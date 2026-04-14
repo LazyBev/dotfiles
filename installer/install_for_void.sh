@@ -200,7 +200,7 @@ step "Writing .bash_profile"
 
 if [ -z "\$WAYLAND_DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then
    # exec sway --unsupported-gpu
-   true
+   echo "Miau"
 fi
 EOF
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
