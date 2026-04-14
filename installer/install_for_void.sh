@@ -78,7 +78,7 @@ xbps-install -y \
 xbps-install -y \
   noto-fonts-ttf \
   noto-fonts-emoji \
-  font-fira-code \
+  font-firacode \
   font-awesome6
 
 # ── Audio (PipeWire) ──────────────────────────────────────────────────────────
