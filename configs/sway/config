@@ -180,7 +180,7 @@ bindsym $mod+r mode "resize"
 # ── Floating rules ────────────────────────────────────────────────────────────
 for_window [app_id="pavucontrol"]                            floating enable, resize set 600 400
 for_window [app_id="nm-connection-editor"]                   floating enable
-for_window [title="Picture-in-Picture"]                      floating enable
+for_window [title="Picture-in-Picture"]                      floating enable, resize set 480 270
 for_window [window_role="dialog"]                            floating enable
 for_window [window_role="pop-up"]                            floating enable
 
