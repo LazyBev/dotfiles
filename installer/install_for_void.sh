@@ -113,7 +113,7 @@ xbps-install -y \
 chsh -s /bin/zsh "$USERNAME"
 
 # ── doas ──────────────────────────────────────────────────────────────────────
-xbps-install -y doas
+xbps-install -S opendoas
 # Allow user to run doas with persist (no password re-prompt for a short window)
 cat > /etc/doas.conf <<EOF
 permit persist $USERNAME as root
