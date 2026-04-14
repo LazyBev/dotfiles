@@ -1,6 +1,6 @@
 # ~/.config/sway/config
 # Void Linux | runit | nouveau
-# Terminal: foot | Shell: zsh | Launcher: fuzzel
+# Terminal: foot | Shell: bash | Launcher: fuzzel
 
 # ── Modifier ──────────────────────────────────────────────────────────────────
 set $mod Mod1
@@ -9,7 +9,7 @@ set $mod Mod1
 set $term        foot
 set $menu        fuzzel
 set $lock        swaylock -f -c 000000
-set $shell       zsh
+set $shell       bash
 
 # ── Output / display ──────────────────────────────────────────────────────────
 output eDP-1 mode 1920x1080@120Hz scale 2 transform normal
@@ -47,6 +47,7 @@ client.unfocused        #505050 #1a1b26  #565f89  #505050   #505050
 client.urgent           #f7768e #f7768e  #1a1b26  #f7768e   #f7768e
 
 # ── Environment (Wayland/Qt/GTK) ──────────────────────────────────────────────
+# --all is correct here; --systemd is wrong on runit
 exec dbus-update-activation-environment --all \
     XDG_SESSION_TYPE=wayland \
     XDG_CURRENT_DESKTOP=sway \
@@ -67,9 +68,10 @@ exec dbus-update-activation-environment --all \
 exec /usr/bin/pipewire
 exec /usr/bin/pipewire-pulse
 exec /usr/bin/wireplumber
-exec /usr/lib/polkit-kde-authentication-agent-1 || /usr/libexec/polkit-gnome-authentication-agent-1
-exec zsh -lc "pkill waybar || true; waybar &"
-exec zsh -lc "pkill dunst || true; dunst &"
+# Shell operator chaining doesn't work with bare exec; wrap in sh -c
+exec sh -c '/usr/lib/polkit-kde-authentication-agent-1 || /usr/libexec/polkit-gnome-authentication-agent-1'
+exec bash -lc "pkill waybar || true; waybar &"
+exec bash -lc "pkill dunst || true; dunst &"
 exec swayidle -w \
     timeout 300  'swaylock -f -c 000000' \
     timeout 600  'swaymsg "output * dpms off"' \
@@ -86,7 +88,7 @@ bindsym $mod+t            exec dolphin
 bindsym $mod+s            exec steam
 bindsym $mod+d            exec $menu
 bindsym $mod+v            exec lutris
-bindsym $mod+u            exec zsh -c "pgrep waybar && killall waybar || waybar &"
+bindsym $mod+u            exec bash -c "pgrep waybar && killall waybar || waybar &"
 bindsym $mod+y            exec waypaper
 bindsym $mod+c            exec $term -e $shell -c "nvim ~/.config/sway/config"
 
@@ -104,7 +106,7 @@ bindsym $mod+Shift+l      move right
 bindsym $mod+Shift+i      move up
 bindsym $mod+Shift+k      move down
 
-bindsym $mod+w            fullscreen
+# $mod+w removed (was duplicate of $mod+f for fullscreen)
 bindsym $mod+f            fullscreen
 bindsym $mod+Tab          floating toggle
 
