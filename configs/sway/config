@@ -83,7 +83,7 @@ exec_always mkdir -p ~/Pictures/Screenshots
 # ── Key bindings — apps ───────────────────────────────────────────────────────
 bindsym $mod+Return       exec $term
 bindsym $mod+b            exec qutebrowser
-bindsym $mod+Shift+b      exec zen-browser
+bindsym $mod+Shift+b      exec firefox
 bindsym $mod+t            exec dolphin
 bindsym $mod+s            exec steam
 bindsym $mod+d            exec $menu
@@ -137,8 +137,12 @@ bindsym $mod+Shift+6  move container to workspace 6
 bindsym $mod+Shift+7  move container to workspace 7
 bindsym $mod+Shift+8  move container to workspace 8
 bindsym $mod+Shift+9  move container to workspace 9
-bindsym $mod+Shift+m  move container to workspace next
-bindsym $mod+Shift+n  move container to workspace prev
+
+bindsym $mod+w            fullscreen disable; floating disable; resize set 100ppt 100ppt
+bindsym $mod+n            workspace next
+bindsym $mod+m            workspace prev
+bindsym $mod+Shift+n      move container to workspace next; workspace next
+bindsym $mod+Shift+m      move container to workspace prev; workspace prev
 
 # ── Key bindings — system ─────────────────────────────────────────────────────
 bindsym $mod+Shift+BackSpace  exec swaymsg exit
