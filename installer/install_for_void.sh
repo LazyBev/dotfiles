@@ -23,7 +23,6 @@ die()   {
     _log "FATAL" "$*"
     echo
     echo "  The script failed at the step above."
-    echo "  Your pacman.conf backup is at /etc/pacman.conf.bak if you need to roll back."
     exit 1
 }
 
