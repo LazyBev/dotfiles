@@ -3,7 +3,20 @@
 
 set -euo pipefail
 
-# ── Args ────────────────────────────────────────────────────────────────────
+# ── Logging ──────────────────────────────────────────────────────────────────
+# Defined first so die() is available during arg validation below
+_log() { printf "[%-5s] %s\n" "$1" "$2"; }
+info()  { _log "INFO" "$*"; }
+warn()  { _log "WARN" "$*"; }
+ok()    { _log "OK"   "$*"; }
+skip()  { _log "SKIP" "$*"; }
+step()  { echo -e "\n==> $*\n--------------------------------"; }
+die()   { _log "FATAL" "$*"; exit 1; }
+
+trap 'die "Error on line ${LINENO}: ${BASH_COMMAND}"' ERR
+trap 'warn "Interrupted"; exit 130' INT TERM
+
+# ── Args ─────────────────────────────────────────────────────────────────────
 USERNAME="${1:-}"
 if [[ -z "$USERNAME" ]]; then
     echo "Usage: $0 <username>"
@@ -16,40 +29,29 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 USER_HOME="/home/$USERNAME"
+# die() is now defined above, so this is safe
 USER_UID=$(id -u "$USERNAME" 2>/dev/null) || die "User $USERNAME not found"
 
-# ── Logging ──────────────────────────────────────────────────────────────────
-_log() { printf "[%-5s] %s\n" "$1" "$2"; }
-info()  { _log "INFO" "$*"; }
-warn()  { _log "WARN" "$*"; }
-ok()    { _log "OK"   "$*"; }
-skip()  { _log "SKIP" "$*"; }
-step()  { echo -e "\n==> $*\n--------------------------------"; }
-die()   { _log "FATAL" "$*"; exit 1; }
-
-trap 'die "Error on line ${LINENO}: ${BASH_COMMAND}"' ERR
-trap 'warn "Interrupted"; exit 130' INT TERM
-
-# ── Ownership ───────────────────────────────────────────────────────────────
+# ── Ownership ────────────────────────────────────────────────────────────────
 step "Fixing ownership"
 chown -R "$USERNAME:$USERNAME" "$USER_HOME"
 
-# ── System update ───────────────────────────────────────────────────────────
+# ── System update ─────────────────────────────────────────────────────────────
 step "Updating system"
 xbps-install -Syu -y
 
-# ── Repos ───────────────────────────────────────────────────────────────────
+# ── Repos ─────────────────────────────────────────────────────────────────────
 step "Enabling repos"
 xbps-install -y void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
 xbps-install -Syu -y
 
-# ── Base + CLI tools ─────────────────────────────────────────────────────────
+# ── Base + CLI tools ──────────────────────────────────────────────────────────
 step "Installing base packages"
 xbps-install -y \
     git bash curl wget jq ripgrep fd bat fzf neovim tmux btop \
     dbus elogind rtkit chrony opendoas
 
-# ── Sway stack ──────────────────────────────────────────────────────────────
+# ── Sway stack ────────────────────────────────────────────────────────────────
 step "Installing Sway stack"
 xbps-install -y \
     sway swaylock swayidle swaybg \
@@ -57,10 +59,11 @@ xbps-install -y \
     wl-clipboard grim slurp \
     xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
     polkit polkit-gnome \
+    waypaper \
     fcitx5 fcitx5-anthy \
     seatd
 
-# ── Fonts ───────────────────────────────────────────────────────────────────
+# ── Fonts ─────────────────────────────────────────────────────────────────────
 step "Installing fonts"
 xbps-install -y \
     noto-fonts-ttf noto-fonts-emoji \
@@ -68,15 +71,16 @@ xbps-install -y \
 
 setfont ter-v22n || true
 
-# ── Audio ───────────────────────────────────────────────────────────────────
+# ── Audio ─────────────────────────────────────────────────────────────────────
 step "Installing audio"
+# wireplumber ships wpctl; pamixer/pavucontrol for volume control
 xbps-install -y pipewire wireplumber alsa-utils pamixer pavucontrol
 
-# ── Network ─────────────────────────────────────────────────────────────────
+# ── Network ───────────────────────────────────────────────────────────────────
 step "Installing network tools"
 xbps-install -y NetworkManager network-manager-applet
 
-# ── GPU (nouveau) ───────────────────────────────────────────────────────────
+# ── GPU (nouveau) ─────────────────────────────────────────────────────────────
 step "Setting up Nouveau"
 
 xbps-remove -Ry nvidia nvidia-libs nvidia-libs-32bit nvidia-dkms 2>/dev/null || true
@@ -93,34 +97,32 @@ sed -i '/blacklist nouveau/d' /etc/modprobe.d/* 2>/dev/null || true
 
 dracut --force --regenerate-all
 
-# ── GRUB ────────────────────────────────────────────────────────────────────
+# ── GRUB ──────────────────────────────────────────────────────────────────────
 step "Updating GRUB"
 GRUB_CFG=/etc/default/grub
 sed -i 's/nvidia-drm.modeset=1//g'         "$GRUB_CFG"
 sed -i 's/rd.driver.blacklist=nouveau//g'  "$GRUB_CFG"
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# ── doas ────────────────────────────────────────────────────────────────────
+# ── doas ──────────────────────────────────────────────────────────────────────
 step "Configuring doas"
 xbps-install -y opendoas
 echo "permit persist $USERNAME as root" > /etc/doas.conf
 chmod 0400 /etc/doas.conf
 
-# ── Groups ──────────────────────────────────────────────────────────────────
+# ── Groups ────────────────────────────────────────────────────────────────────
 step "Configuring user groups"
 usermod -aG \
     _seatd,input,video,audio,wheel,network,plugdev,storage,optical,cdrom,kvm \
     "$USERNAME"
 ok "Groups set for $USERNAME"
 
-# ── seatd ───────────────────────────────────────────────────────────────────
+# ── seatd ─────────────────────────────────────────────────────────────────────
 step "Configuring seatd"
 ln -sf /etc/sv/seatd /var/service/ 2>/dev/null || true
 
-# Ensure socket is group-accessible on every boot via an rc.local-style hook
 cat > /etc/runit/core-services/06-seatd-perms.sh <<'EOF'
 #!/bin/sh
-# Fix seatd socket permissions after seatd starts
 sleep 1
 chown root:_seatd /run/seatd.sock 2>/dev/null || true
 chmod 660 /run/seatd.sock 2>/dev/null || true
@@ -128,13 +130,12 @@ EOF
 chmod +x /etc/runit/core-services/06-seatd-perms.sh 2>/dev/null || \
     warn "Could not install seatd perms hook (non-fatal)"
 
-# ── XDG runtime dir ─────────────────────────────────────────────────────────
+# ── XDG runtime dir ───────────────────────────────────────────────────────────
 step "Configuring XDG runtime dir"
 mkdir -p "/run/user/$USER_UID"
 chmod 700 "/run/user/$USER_UID"
 chown "$USERNAME:$USERNAME" "/run/user/$USER_UID"
 
-# Persist across boots via tmpfiles-style setup in runit
 cat > /etc/runit/core-services/07-xdg-runtime.sh <<'EOF'
 #!/bin/sh
 UID_VAL=$(id -u USER_PLACEHOLDER 2>/dev/null) || exit 0
@@ -147,7 +148,7 @@ sed -i "s/USER_PLACEHOLDER/$USERNAME/g" \
 chmod +x /etc/runit/core-services/07-xdg-runtime.sh 2>/dev/null || \
     warn "Could not install XDG runtime hook (non-fatal)"
 
-# ── Wayland session ─────────────────────────────────────────────────────────
+# ── Wayland session ───────────────────────────────────────────────────────────
 step "Installing Wayland session"
 mkdir -p /usr/share/wayland-sessions
 cat > /usr/share/wayland-sessions/sway.desktop <<'EOF'
@@ -158,7 +159,7 @@ Exec=env WLR_BACKENDS=drm WLR_NO_HARDWARE_CURSORS=1 sway --unsupported-gpu
 Type=Application
 EOF
 
-# ── XDG portal config ───────────────────────────────────────────────────────
+# ── XDG portal config ─────────────────────────────────────────────────────────
 step "Configuring xdg-desktop-portal"
 mkdir -p /etc/xdg-desktop-portal
 cat > /etc/xdg-desktop-portal/sway-portals.conf <<'EOF'
@@ -167,7 +168,7 @@ default=wlr
 org.freedesktop.impl.portal.Secret=gnome-keyring
 EOF
 
-# ── Services ────────────────────────────────────────────────────────────────
+# ── Services ──────────────────────────────────────────────────────────────────
 step "Enabling services"
 for svc in dbus elogind NetworkManager chronyd rtkit seatd; do
     if [[ -d /etc/sv/$svc ]]; then
@@ -178,12 +179,12 @@ for svc in dbus elogind NetworkManager chronyd rtkit seatd; do
     fi
 done
 
-# ── Shell ───────────────────────────────────────────────────────────────────
+# ── Shell ─────────────────────────────────────────────────────────────────────
 step "Configuring shell"
 xbps-install -y bash
 chsh -s /bin/bash "$USERNAME" || true
 
-# ── bash_profile (auto-launch sway on tty1) ─────────────────────────────────
+# ── bash_profile (auto-launch sway on tty1) ───────────────────────────────────
 step "Writing .bash_profile"
 cat > "$USER_HOME/.bash_profile" <<EOF
 # Auto-launch sway on TTY1
@@ -210,33 +211,33 @@ EOF
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 ok ".bash_profile written"
 
-# ── void-packages ───────────────────────────────────────────────────────────
+# ── void-packages ─────────────────────────────────────────────────────────────
 step "Setting up void-packages"
 VOID_PKGS="$USER_HOME/.void-packages"
 if [[ ! -d "$VOID_PKGS" ]]; then
     sudo -u "$USERNAME" git clone https://github.com/void-linux/void-packages.git "$VOID_PKGS"
 fi
 
-sudo -u "$USERNAME" bash -c '
-grep -q "XBPS_DISTDIR" ~/.bashrc 2>/dev/null || \
-echo "export XBPS_DISTDIR=\$HOME/.void-packages" >> ~/.bashrc
-'
+# Use explicit path rather than ~ to ensure correct expansion
+sudo -u "$USERNAME" bash -c \
+    "grep -q 'XBPS_DISTDIR' \"$USER_HOME/.bashrc\" 2>/dev/null || \
+     echo 'export XBPS_DISTDIR=\$HOME/.void-packages' >> \"$USER_HOME/.bashrc\""
 
-# ── vpsm ────────────────────────────────────────────────────────────────────
+# ── vpsm ──────────────────────────────────────────────────────────────────────
 step "Setting up vpsm"
 VPSM_DIR="$USER_HOME/vpsm"
 if [[ ! -d "$VPSM_DIR" ]]; then
     sudo -u "$USERNAME" git clone https://github.com/sinetoami/vpsm.git "$VPSM_DIR"
 fi
 
-sudo -u "$USERNAME" bash -c '
-mkdir -p ~/.bin
-ln -sf ~/vpsm/vpsm ~/.bin/vpsm
-grep -q ".bin" ~/.bashrc 2>/dev/null || \
-echo "export PATH=\$PATH:\$HOME/.bin" >> ~/.bashrc
-'
+# Use explicit paths; ~ inside single-quoted sudo bash -c won't expand to USER_HOME
+sudo -u "$USERNAME" bash -c \
+    "mkdir -p \"$USER_HOME/.bin\" && \
+     ln -sf \"$USER_HOME/vpsm/vpsm\" \"$USER_HOME/.bin/vpsm\" && \
+     grep -q '.bin' \"$USER_HOME/.bashrc\" 2>/dev/null || \
+     echo 'export PATH=\$PATH:\$HOME/.bin' >> \"$USER_HOME/.bashrc\""
 
-# ── Sway config ─────────────────────────────────────────────────────────────
+# ── Sway config ───────────────────────────────────────────────────────────────
 step "Configuring Sway"
 SWAY_CFG="$USER_HOME/.config/sway/config"
 
@@ -249,11 +250,8 @@ else
     skip "Sway config already exists"
 fi
 
-# Fix dbus-update-activation-environment (remove --all, breaks on some setups)
-sed -i 's/dbus-update-activation-environment --all/dbus-update-activation-environment --systemd/' \
-    "$SWAY_CFG" 2>/dev/null || true
-
-# PipeWire autostart
+# Do NOT replace --all with --systemd; this is runit, not systemd
+# Append PipeWire autostart and correct polkit exec if not already present
 if ! grep -q "pipewire" "$SWAY_CFG"; then
     cat >> "$SWAY_CFG" <<'EOF'
 
@@ -261,12 +259,13 @@ if ! grep -q "pipewire" "$SWAY_CFG"; then
 exec /usr/bin/pipewire
 exec /usr/bin/pipewire-pulse
 exec /usr/bin/wireplumber
-exec /usr/libexec/polkit-gnome-authentication-agent-1
+# Wrap in sh -c so || fallback works (sway exec doesn't chain shell operators)
+exec sh -c '/usr/lib/polkit-kde-authentication-agent-1 || /usr/libexec/polkit-gnome-authentication-agent-1'
 EOF
 fi
 chown "$USERNAME:$USERNAME" "$SWAY_CFG"
 
-# ── PipeWire user services ───────────────────────────────────────────────────
+# ── PipeWire user services ────────────────────────────────────────────────────
 step "Linking PipeWire user services"
 USER_SV="$USER_HOME/.config/service"
 for pw_svc in pipewire pipewire-pulse wireplumber; do
@@ -278,10 +277,10 @@ for pw_svc in pipewire pipewire-pulse wireplumber; do
 done
 chown -R "$USERNAME:$USERNAME" "$USER_SV" 2>/dev/null || true
 
-# ── XDG user dirs ───────────────────────────────────────────────────────────
+# ── XDG user dirs ─────────────────────────────────────────────────────────────
 sudo -u "$USERNAME" xdg-user-dirs-update 2>/dev/null || true
 
-# ── Dotfiles sync ───────────────────────────────────────────────────────────
+# ── Dotfiles sync ─────────────────────────────────────────────────────────────
 step "Syncing dotfiles"
 
 if [[ -f "$USER_HOME/dotfiles/.bashrc" ]]; then
@@ -310,17 +309,19 @@ else
     skip "Pictures not found"
 fi
 
-# ── oh-my-bash ──────────────────────────────────────────────────────────────
+# ── oh-my-bash ────────────────────────────────────────────────────────────────
 step "Installing oh-my-bash"
-sudo -u "$USERNAME" bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" \
-    --unattended || warn "oh-my-bash install failed (non-fatal)"
+# Pipe into bash -s so --unattended is passed as an arg to the install script,
+# not treated as an argument to the bash binary itself
+curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh \
+    | sudo -u "$USERNAME" bash -s -- --unattended \
+    || warn "oh-my-bash install failed (non-fatal)"
 
-# ── Final ownership fix ─────────────────────────────────────────────────────
+# ── Final ownership fix ───────────────────────────────────────────────────────
 step "Final ownership fix"
 chown -R "$USERNAME:$USERNAME" "$USER_HOME"
 
-# ── Done ────────────────────────────────────────────────────────────────────
+# ── Done ──────────────────────────────────────────────────────────────────────
 cat <<EOF
 
 ========================================
