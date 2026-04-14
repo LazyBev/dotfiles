@@ -130,23 +130,20 @@ EOF
 chmod +x /etc/runit/core-services/06-seatd-perms.sh 2>/dev/null || \
     warn "Could not install seatd perms hook (non-fatal)"
 
-# ── XDG runtime dir ───────────────────────────────────────────────────────────
-step "Configuring XDG runtime dir"
-mkdir -p "/run/user/$USER_UID"
-chmod 700 "/run/user/$USER_UID"
-chown "$USERNAME:$USERNAME" "/run/user/$USER_UID"
+# ── XDG runtime dir (pam_rundir) ─────────────────────────────────────────────
+# pam_rundir creates /run/user/$UID automatically on login; no manual dir or
+# runit hook needed
+step "Configuring XDG runtime dir via pam_rundir"
+xbps-install -y pam_rundir
 
-cat > /etc/runit/core-services/07-xdg-runtime.sh <<'EOF'
-#!/bin/sh
-UID_VAL=$(id -u USER_PLACEHOLDER 2>/dev/null) || exit 0
-mkdir -p "/run/user/$UID_VAL"
-chmod 700 "/run/user/$UID_VAL"
-chown USER_PLACEHOLDER "/run/user/$UID_VAL"
-EOF
-sed -i "s/USER_PLACEHOLDER/$USERNAME/g" \
-    /etc/runit/core-services/07-xdg-runtime.sh
-chmod +x /etc/runit/core-services/07-xdg-runtime.sh 2>/dev/null || \
-    warn "Could not install XDG runtime hook (non-fatal)"
+PAM_LOGIN=/etc/pam.d/login
+# Append only if not already present
+if ! grep -q 'pam_rundir.so' "$PAM_LOGIN"; then
+    printf 'session\toptional\tpam_rundir.so\n' >> "$PAM_LOGIN"
+    ok "pam_rundir appended to $PAM_LOGIN"
+else
+    skip "pam_rundir already in $PAM_LOGIN"
+fi
 
 # ── Wayland session ───────────────────────────────────────────────────────────
 step "Installing Wayland session"
