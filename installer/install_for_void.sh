@@ -66,7 +66,8 @@ xbps-install -y \
 step "Installing fonts"
 xbps-install -y \
     noto-fonts-ttf noto-fonts-emoji \
-    font-firacode font-awesome6 terminus-font
+    font-firacode font-awesome6 terminus-font \
+    nerd-fonts
 
 setfont ter-v22n || true
 
