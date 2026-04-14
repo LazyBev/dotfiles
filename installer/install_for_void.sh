@@ -6,6 +6,30 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "$SCRIPT_DIR/helper.sh"
+
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+_log() { printf "[%-5s] %s\n" "$1" "$2"; }
+info()  { _log "INFO"  "$*"; }
+warn()  { _log "WARN"  "$*"; }
+skip()  { _log "SKIP"  "$*"; }
+ok()    { _log "OK"    "$*"; }
+step()  { echo; echo "==> $*"; echo "------------------------------------------------------------"; }
+die()   {
+    _log "FATAL" "$*"
+    echo
+    echo "  The script failed at the step above."
+    echo "  Your pacman.conf backup is at /etc/pacman.conf.bak if you need to roll back."
+    exit 1
+}
+
+trap 'echo; die "Unexpected error on line ${LINENO} — command: ${BASH_COMMAND}"' ERR
+trap 'echo; warn "Script interrupted by user."; exit 130' INT TERM
+
 USERNAME="${1:-}"
 if [[ -z "$USERNAME" ]]; then
   echo "Usage: $0 <username>"
