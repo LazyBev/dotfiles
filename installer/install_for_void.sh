@@ -94,7 +94,7 @@ xbps-install -y \
   pam_rundir \
   dbus \
   elogind \
-  rtkit
+  rtkit \
   chrony
 
 
