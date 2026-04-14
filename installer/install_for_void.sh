@@ -95,6 +95,7 @@ xbps-install -y \
   dbus \
   elogind \
   rtkit
+  chrony
 
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
@@ -102,7 +103,10 @@ xbps-install -y \
   noto-fonts-ttf \
   noto-fonts-emoji \
   font-firacode \
-  font-awesome6
+  font-awesome6 \
+  terminus-font
+
+setfont ter-122n
 
 # ── Audio (PipeWire) ──────────────────────────────────────────────────────────
 xbps-install -y \
@@ -185,7 +189,7 @@ xbps-install -y sddm
 ln -sf /etc/sv/sddm /var/service/ 2>/dev/null || true
 
 # ── Enable runit services ─────────────────────────────────────────────────────
-for svc in dbus elogind NetworkManager rtkit; do
+for svc in dbus elogind NetworkManager chronyd rtkit; do
   ln -sf /etc/sv/$svc /var/service/ 2>/dev/null || true
 done
 
