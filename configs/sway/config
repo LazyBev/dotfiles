@@ -1,58 +1,36 @@
 # ~/.config/sway/config
-# Based on niri config — Void Linux | NVIDIA+AMD PRIME
+# Void Linux | runit | nouveau
 # Terminal: foot | Shell: zsh | Launcher: fuzzel
+
 # ── Modifier ──────────────────────────────────────────────────────────────────
 set $mod Mod1
- 
+
 # ── Variables ─────────────────────────────────────────────────────────────────
 set $term        foot
 set $menu        fuzzel
 set $lock        swaylock -f -c 000000
 set $shell       zsh
- 
-# ── NVIDIA / PRIME environment ────────────────────────────────────────────────
-env LIBVA_DRIVER_NAME         nvidia
-env GBM_BACKEND               nvidia-drm
-env __GLX_VENDOR_LIBRARY_NAME nvidia
-env WLR_NO_HARDWARE_CURSORS   1
- 
-# ── Wayland environment ───────────────────────────────────────────────────────
-env XDG_SESSION_TYPE          wayland
-env XDG_CURRENT_DESKTOP       sway
-env XDG_SESSION_DESKTOP       sway
-env GDK_BACKEND               wayland
-env GTK_USE_PORTAL            1
-env QT_QPA_PLATFORM           wayland
-env QT_WAYLAND_DISABLE_WINDOWDECORATION 1
-env QT_AUTO_SCREEN_SCALE_FACTOR 1
-env ELECTRON_OZONE_PLATFORM_HINT wayland
-env MOZ_ENABLE_WAYLAND        1
-env SDL_VIDEODRIVER           wayland
-env CLUTTER_BACKEND           wayland
-env _JAVA_AWT_WM_NONREPARENTING 1
-env XCURSOR_SIZE              24
- 
+
 # ── Output / display ──────────────────────────────────────────────────────────
 output eDP-1 mode 1920x1080@120Hz scale 2 transform normal
 output * bg ~/Pictures/manhattan.jpg fill
- 
+
 # ── Input ─────────────────────────────────────────────────────────────────────
 input type:keyboard {
-    xkb_layout  gb
-    xkb_options numpad:mac
+    xkb_layout   gb
     repeat_delay 250
     repeat_rate  40
 }
- 
+
 input type:touchpad {
     tap enabled
     natural_scroll enabled
     dwt enabled
 }
- 
+
 # ── Font ──────────────────────────────────────────────────────────────────────
 font pango:Fira Code 10
- 
+
 # ── Gaps & borders ────────────────────────────────────────────────────────────
 gaps inner 10
 gaps outer 0
@@ -60,16 +38,32 @@ default_border pixel 2
 default_floating_border pixel 2
 smart_gaps on
 smart_borders on
- 
+
 # ── Colors ────────────────────────────────────────────────────────────────────
 # class                 border   bg       text     indicator child_border
 client.focused          #fcd1d7 #1a1b26  #c0caf5  #fcd1d7   #fcd1d7
 client.focused_inactive #505050 #1a1b26  #a9b1d6  #505050   #505050
 client.unfocused        #505050 #1a1b26  #565f89  #505050   #505050
 client.urgent           #f7768e #f7768e  #1a1b26  #f7768e   #f7768e
- 
+
+# ── Environment (Wayland/Qt/GTK) ──────────────────────────────────────────────
+exec dbus-update-activation-environment --all \
+    XDG_SESSION_TYPE=wayland \
+    XDG_CURRENT_DESKTOP=sway \
+    XDG_SESSION_DESKTOP=sway \
+    GDK_BACKEND=wayland \
+    GTK_USE_PORTAL=1 \
+    QT_QPA_PLATFORM=wayland \
+    QT_WAYLAND_DISABLE_WINDOWDECORATION=1 \
+    QT_AUTO_SCREEN_SCALE_FACTOR=1 \
+    ELECTRON_OZONE_PLATFORM_HINT=wayland \
+    MOZ_ENABLE_WAYLAND=1 \
+    SDL_VIDEODRIVER=wayland \
+    CLUTTER_BACKEND=wayland \
+    _JAVA_AWT_WM_NONREPARENTING=1 \
+    XCURSOR_SIZE=24
+
 # ── Autostart ─────────────────────────────────────────────────────────────────
-exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=sway
 exec /usr/bin/pipewire
 exec /usr/bin/pipewire-pulse
 exec /usr/bin/wireplumber
@@ -81,9 +75,9 @@ exec swayidle -w \
     timeout 600  'swaymsg "output * dpms off"' \
     resume       'swaymsg "output * dpms on"' \
     before-sleep 'swaylock -f -c 000000'
- 
+
 exec_always mkdir -p ~/Pictures/Screenshots
- 
+
 # ── Key bindings — apps ───────────────────────────────────────────────────────
 bindsym $mod+Return       exec $term
 bindsym $mod+b            exec qutebrowser
@@ -95,30 +89,30 @@ bindsym $mod+v            exec lutris
 bindsym $mod+u            exec zsh -c "pgrep waybar && killall waybar || waybar &"
 bindsym $mod+y            exec waypaper
 bindsym $mod+c            exec $term -e $shell -c "nvim ~/.config/sway/config"
- 
+
 # ── Key bindings — window ─────────────────────────────────────────────────────
 bindsym Ctrl+$mod+q       kill
 bindsym $mod+Shift+Slash  exec swaynag -t warning -m 'Keybind help: see ~/.config/sway/config'
- 
+
 bindsym $mod+j            focus left
 bindsym $mod+l            focus right
 bindsym $mod+i            focus up
 bindsym $mod+k            focus down
- 
+
 bindsym $mod+Shift+j      move left
 bindsym $mod+Shift+l      move right
 bindsym $mod+Shift+i      move up
 bindsym $mod+Shift+k      move down
- 
+
 bindsym $mod+w            fullscreen
 bindsym $mod+f            fullscreen
 bindsym $mod+Tab          floating toggle
- 
+
 bindsym $mod+minus        resize shrink width 10px
 bindsym $mod+equal        resize grow width 10px
 bindsym $mod+Shift+minus  resize shrink height 10px
 bindsym $mod+Shift+equal  resize grow height 10px
- 
+
 # ── Key bindings — workspaces ─────────────────────────────────────────────────
 bindsym $mod+1  workspace 1
 bindsym $mod+2  workspace 2
@@ -131,7 +125,7 @@ bindsym $mod+8  workspace 8
 bindsym $mod+9  workspace 9
 bindsym $mod+m  workspace next
 bindsym $mod+n  workspace prev
- 
+
 bindsym $mod+Shift+1  move container to workspace 1
 bindsym $mod+Shift+2  move container to workspace 2
 bindsym $mod+Shift+3  move container to workspace 3
@@ -143,25 +137,23 @@ bindsym $mod+Shift+8  move container to workspace 8
 bindsym $mod+Shift+9  move container to workspace 9
 bindsym $mod+Shift+m  move container to workspace next
 bindsym $mod+Shift+n  move container to workspace prev
- 
 
 # ── Key bindings — system ─────────────────────────────────────────────────────
 bindsym $mod+Shift+BackSpace  exec swaymsg exit
 bindsym Mod4+Shift+l          exec $lock
-bindsym $mod+Ctrl+p           exec systemctl reboot
-bindsym $mod+Shift+p          exec systemctl poweroff
- 
+bindsym $mod+Ctrl+p           exec doas reboot
+bindsym $mod+Shift+p          exec doas poweroff
+
 # ── Key bindings — audio ──────────────────────────────────────────────────────
 bindsym --locked XF86AudioRaiseVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1+
 bindsym --locked XF86AudioLowerVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1-
 bindsym --locked XF86AudioMute        exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
 bindsym --locked XF86AudioMicMute     exec wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
- 
+
 # ── Key bindings — screenshots ────────────────────────────────────────────────
 bindsym $mod+x       exec grim -g "$(slurp)" ~/Pictures/Screenshots/scr-$(date +%Y-%m-%d-%H-%M-%S).png
 bindsym $mod+Shift+x exec grim ~/Pictures/Screenshots/scr-$(date +%Y-%m-%d-%H-%M-%S).png
 bindsym $mod+Ctrl+x  exec grim -g "$(swaymsg -t get_tree | jq -r '.. | select(.focused?) | .rect | "\(.x),\(.y) \(.width)x\(.height)"')" ~/Pictures/Screenshots/scr-$(date +%Y-%m-%d-%H-%M-%S).png
- 
 
 # ── Resize mode ───────────────────────────────────────────────────────────────
 mode "resize" {
@@ -173,18 +165,19 @@ mode "resize" {
     bindsym Right  resize grow   width  10px
     bindsym Up     resize shrink height 10px
     bindsym Down   resize grow   height 10px
- 
+
     bindsym Return mode "default"
     bindsym Escape mode "default"
 }
 bindsym $mod+r mode "resize"
- 
+
 # ── Floating rules ────────────────────────────────────────────────────────────
 for_window [app_id="pavucontrol"]                            floating enable, resize set 600 400
 for_window [app_id="nm-connection-editor"]                   floating enable
 for_window [app_id="zen$" title="^Picture-in-Picture$"]      floating enable
 for_window [window_role="dialog"]                            floating enable
 for_window [window_role="pop-up"]                            floating enable
- 
+
 # ── XDG portal ────────────────────────────────────────────────────────────────
 include /etc/sway/config.d/*
+
