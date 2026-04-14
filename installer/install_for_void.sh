@@ -60,7 +60,8 @@ xbps-install -y \
     xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
     polkit polkit-gnome \
     fcitx5 fcitx5-anthy \
-    seatd firefox dolphin
+    seatd firefox dolphin \
+    gnome-tweaks
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 step "Installing fonts"
@@ -285,7 +286,7 @@ else
     warn "No .bashrc in dotfiles"
 fi
 
-for dir in waybar dunst wlogout sway fuzzel fcitx5 qutebrowser; do
+for dir in waybar dunst sway fuzzel fcitx5 qutebrowser; do
     SRC="$USER_HOME/dotfiles/configs/$dir"
     DST="$USER_HOME/.config/$dir"
     if [[ -d "$SRC" ]]; then
@@ -304,6 +305,22 @@ else
     skip "Pictures not found"
 fi
 
+GTK_THEME_SRC="$HOME/dotfiles/configs/diinki-retro-dark"
+GTK_THEME_DST="/usr/share/themes/diinki-retro-dark"
+if [[ -d "$GTK_THEME_SRC" && ! -d "$GTK_THEME_DST" ]]; then
+    sudo mv "$GTK_THEME_SRC" /usr/share/themes/ \
+        && ok "GTK theme installed" \
+        || warn "GTK theme move failed"
+elif [[ -d "$GTK_THEME_DST" ]]; then
+    skip "diinki-retro-dark already in /usr/share/themes"
+else
+    warn "GTK theme source not found at $GTK_THEME_SRC — skipping"
+fi
+
+gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark" 2>/dev/null \
+    && ok "GTK theme set" \
+    || warn "gsettings failed — set GTK theme manually after first login"
+
 # ── oh-my-bash ────────────────────────────────────────────────────────────────
 step "Installing oh-my-bash"
 # Pipe into bash -s so --unattended is passed as an arg to the install script,
@@ -315,6 +332,11 @@ curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/in
 # ── Final ownership fix ───────────────────────────────────────────────────────
 step "Final ownership fix"
 chown -R "$USERNAME:$USERNAME" "$USER_HOME"
+
+sudo sv down dhcpcd
+sudo rm /var/service/dhcpcd
+sudo sv down wpa_supplicant
+sudo rm /var/service/wpa_supplicant
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 cat <<EOF
