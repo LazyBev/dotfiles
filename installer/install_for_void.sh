@@ -82,7 +82,7 @@ xbps-install -y \
 # ── Sway stack ──────────────────────────────────────────────────────────────
 xbps-install -y \
   sway swaylock swayidle swaybg \
-  waybar foot fuzzel dunst \
+  Waybar foot fuzzel dunst \
   wl-clipboard grim slurp \
   xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
   polkit polkit-gnome \
