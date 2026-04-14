@@ -1,5 +1,5 @@
 #!/bin/bash
-# void-sway-setup.sh (runit + bash + nouveau + pipewire)
+# void-sway-setup.sh (runit + bash + nouveau + pipewire + seatd)
 
 set -euo pipefail
 
@@ -16,10 +16,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 USER_HOME="/home/$USERNAME"
-
-# ── Paths ───────────────────────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/helper.sh" 2>/dev/null || true
+USER_UID=$(id -u "$USERNAME" 2>/dev/null) || die "User $USERNAME not found"
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 _log() { printf "[%-5s] %s\n" "$1" "$2"; }
@@ -42,80 +39,48 @@ step "Updating system"
 xbps-install -Syu -y
 
 # ── Repos ───────────────────────────────────────────────────────────────────
+step "Enabling repos"
 xbps-install -y void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
 xbps-install -Syu -y
 
-# ── Dotfiles repo check ─────────────────────────────────────────────────────
-if [[ ! -d "$USER_HOME/dotfiles" ]]; then
-    warn "dotfiles repo not found at $USER_HOME/dotfiles"
-fi
-
-# ── void-packages ───────────────────────────────────────────────────────────
-VOID_PKGS="$USER_HOME/.void-packages"
-if [[ ! -d "$VOID_PKGS" ]]; then
-    sudo -u "$USERNAME" git clone https://github.com/void-linux/void-packages.git "$VOID_PKGS"
-fi
-
-sudo -u "$USERNAME" bash -c '
-grep -q "XBPS_DISTDIR" ~/.bashrc 2>/dev/null || \
-echo "export XBPS_DISTDIR=\$HOME/.void-packages" >> ~/.bashrc
-'
-
-# ── vpsm ────────────────────────────────────────────────────────────────────
-VPSM_DIR="$USER_HOME/vpsm"
-if [[ ! -d "$VPSM_DIR" ]]; then
-    sudo -u "$USERNAME" git clone https://github.com/sinetoami/vpsm.git "$VPSM_DIR"
-fi
-
-sudo -u "$USERNAME" bash -c '
-mkdir -p ~/.bin
-ln -sf ~/vpsm/vpsm ~/.bin/vpsm
-grep -q ".bin" ~/.bashrc 2>/dev/null || \
-echo "export PATH=\$PATH:\$HOME/.bin" >> ~/.bashrc
-'
-
 # ── Base + CLI tools ─────────────────────────────────────────────────────────
-step "Installing packages"
+step "Installing base packages"
 xbps-install -y \
-  git bash curl wget jq ripgrep fd bat fzf neovim tmux btop
+    git bash curl wget jq ripgrep fd bat fzf neovim tmux btop \
+    dbus elogind rtkit chrony opendoas
 
 # ── Sway stack ──────────────────────────────────────────────────────────────
+step "Installing Sway stack"
 xbps-install -y \
-  sway swaylock swayidle swaybg \
-  Waybar foot fuzzel dunst \
-  wl-clipboard grim slurp \
-  xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
-  polkit polkit-gnome \
-  dbus elogind rtkit chrony fcitx5 fcitx5-anthy
+    sway swaylock swayidle swaybg \
+    Waybar foot fuzzel dunst \
+    wl-clipboard grim slurp \
+    xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
+    polkit polkit-gnome \
+    fcitx5 fcitx5-anthy \
+    seatd
 
 # ── Fonts ───────────────────────────────────────────────────────────────────
+step "Installing fonts"
 xbps-install -y \
-  noto-fonts-ttf noto-fonts-emoji \
-  font-firacode font-awesome6 terminus-font
+    noto-fonts-ttf noto-fonts-emoji \
+    font-firacode font-awesome6 terminus-font
 
 setfont ter-v22n || true
 
 # ── Audio ───────────────────────────────────────────────────────────────────
+step "Installing audio"
 xbps-install -y pipewire wireplumber alsa-utils pamixer pavucontrol
-usermod -aG audio,video "$USERNAME"
 
 # ── Network ─────────────────────────────────────────────────────────────────
+step "Installing network tools"
 xbps-install -y NetworkManager network-manager-applet
-
-# ── Shell ───────────────────────────────────────────────────────────────────
-chsh -s /bin/bash "$USERNAME" || true
-
-# ── doas ────────────────────────────────────────────────────────────────────
-xbps-install -y opendoas
-echo "permit persist $USERNAME as root" > /etc/doas.conf
-chmod 0400 /etc/doas.conf
 
 # ── GPU (nouveau) ───────────────────────────────────────────────────────────
 step "Setting up Nouveau"
 
 xbps-remove -Ry nvidia nvidia-libs nvidia-libs-32bit nvidia-dkms 2>/dev/null || true
 
-# Try mesa-vulkan-nouveau first, fall back to vulkan-nouveau
 xbps-install -y mesa-dri vulkan-loader || true
 if ! xbps-install -y mesa-vulkan-nouveau 2>/dev/null; then
     warn "mesa-vulkan-nouveau not found, trying vulkan-nouveau"
@@ -129,28 +94,71 @@ sed -i '/blacklist nouveau/d' /etc/modprobe.d/* 2>/dev/null || true
 dracut --force --regenerate-all
 
 # ── GRUB ────────────────────────────────────────────────────────────────────
+step "Updating GRUB"
 GRUB_CFG=/etc/default/grub
-sed -i 's/nvidia-drm.modeset=1//g'          "$GRUB_CFG"
-sed -i 's/rd.driver.blacklist=nouveau//g'   "$GRUB_CFG"
+sed -i 's/nvidia-drm.modeset=1//g'         "$GRUB_CFG"
+sed -i 's/rd.driver.blacklist=nouveau//g'  "$GRUB_CFG"
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# ── SDDM ────────────────────────────────────────────────────────────────────
-step "Setting up SDDM"
-xbps-install -y sddm
+# ── doas ────────────────────────────────────────────────────────────────────
+step "Configuring doas"
+xbps-install -y opendoas
+echo "permit persist $USERNAME as root" > /etc/doas.conf
+chmod 0400 /etc/doas.conf
 
-# Install Sway Wayland session for SDDM
+# ── Groups ──────────────────────────────────────────────────────────────────
+step "Configuring user groups"
+usermod -aG \
+    _seatd,input,video,audio,wheel,network,plugdev,storage,optical,cdrom,kvm \
+    "$USERNAME"
+ok "Groups set for $USERNAME"
+
+# ── seatd ───────────────────────────────────────────────────────────────────
+step "Configuring seatd"
+ln -sf /etc/sv/seatd /var/service/ 2>/dev/null || true
+
+# Ensure socket is group-accessible on every boot via an rc.local-style hook
+cat > /etc/runit/core-services/06-seatd-perms.sh <<'EOF'
+#!/bin/sh
+# Fix seatd socket permissions after seatd starts
+sleep 1
+chown root:_seatd /run/seatd.sock 2>/dev/null || true
+chmod 660 /run/seatd.sock 2>/dev/null || true
+EOF
+chmod +x /etc/runit/core-services/06-seatd-perms.sh 2>/dev/null || \
+    warn "Could not install seatd perms hook (non-fatal)"
+
+# ── XDG runtime dir ─────────────────────────────────────────────────────────
+step "Configuring XDG runtime dir"
+mkdir -p "/run/user/$USER_UID"
+chmod 700 "/run/user/$USER_UID"
+chown "$USERNAME:$USERNAME" "/run/user/$USER_UID"
+
+# Persist across boots via tmpfiles-style setup in runit
+cat > /etc/runit/core-services/07-xdg-runtime.sh <<'EOF'
+#!/bin/sh
+UID_VAL=$(id -u USER_PLACEHOLDER 2>/dev/null) || exit 0
+mkdir -p "/run/user/$UID_VAL"
+chmod 700 "/run/user/$UID_VAL"
+chown USER_PLACEHOLDER "/run/user/$UID_VAL"
+EOF
+sed -i "s/USER_PLACEHOLDER/$USERNAME/g" \
+    /etc/runit/core-services/07-xdg-runtime.sh
+chmod +x /etc/runit/core-services/07-xdg-runtime.sh 2>/dev/null || \
+    warn "Could not install XDG runtime hook (non-fatal)"
+
+# ── Wayland session ─────────────────────────────────────────────────────────
+step "Installing Wayland session"
 mkdir -p /usr/share/wayland-sessions
 cat > /usr/share/wayland-sessions/sway.desktop <<'EOF'
 [Desktop Entry]
 Name=Sway
 Comment=An i3-compatible Wayland compositor
-Exec=sway
+Exec=env WLR_BACKENDS=drm WLR_NO_HARDWARE_CURSORS=1 sway --unsupported-gpu
 Type=Application
 EOF
 
-ln -sf /etc/sv/sddm /var/service/ 2>/dev/null || true
-
-# ── XDG portal config for Sway ──────────────────────────────────────────────
+# ── XDG portal config ───────────────────────────────────────────────────────
 step "Configuring xdg-desktop-portal"
 mkdir -p /etc/xdg-desktop-portal
 cat > /etc/xdg-desktop-portal/sway-portals.conf <<'EOF'
@@ -161,7 +169,7 @@ EOF
 
 # ── Services ────────────────────────────────────────────────────────────────
 step "Enabling services"
-for svc in dbus elogind NetworkManager chronyd rtkit; do
+for svc in dbus elogind NetworkManager chronyd rtkit seatd; do
     if [[ -d /etc/sv/$svc ]]; then
         ln -sf /etc/sv/$svc /var/service/ 2>/dev/null || true
         ok "Enabled $svc"
@@ -170,8 +178,63 @@ for svc in dbus elogind NetworkManager chronyd rtkit; do
     fi
 done
 
-# ── User dirs ───────────────────────────────────────────────────────────────
-sudo -u "$USERNAME" xdg-user-dirs-update 2>/dev/null || true
+# ── Shell ───────────────────────────────────────────────────────────────────
+step "Configuring shell"
+xbps-install -y bash
+chsh -s /bin/bash "$USERNAME" || true
+
+# ── bash_profile (auto-launch sway on tty1) ─────────────────────────────────
+step "Writing .bash_profile"
+cat > "$USER_HOME/.bash_profile" <<EOF
+# Auto-launch sway on TTY1
+export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=sway
+export XDG_SESSION_DESKTOP=sway
+export SEATD_SOCK=/run/seatd.sock
+export WLR_BACKENDS=drm
+export WLR_NO_HARDWARE_CURSORS=1
+export MOZ_ENABLE_WAYLAND=1
+export QT_QPA_PLATFORM=wayland
+export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+export GDK_BACKEND=wayland
+export SDL_VIDEODRIVER=wayland
+export CLUTTER_BACKEND=wayland
+export _JAVA_AWT_WM_NONREPARENTING=1
+export XCURSOR_SIZE=24
+
+if [ -z "\$WAYLAND_DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then
+    exec sway --unsupported-gpu
+fi
+EOF
+chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
+ok ".bash_profile written"
+
+# ── void-packages ───────────────────────────────────────────────────────────
+step "Setting up void-packages"
+VOID_PKGS="$USER_HOME/.void-packages"
+if [[ ! -d "$VOID_PKGS" ]]; then
+    sudo -u "$USERNAME" git clone https://github.com/void-linux/void-packages.git "$VOID_PKGS"
+fi
+
+sudo -u "$USERNAME" bash -c '
+grep -q "XBPS_DISTDIR" ~/.bashrc 2>/dev/null || \
+echo "export XBPS_DISTDIR=\$HOME/.void-packages" >> ~/.bashrc
+'
+
+# ── vpsm ────────────────────────────────────────────────────────────────────
+step "Setting up vpsm"
+VPSM_DIR="$USER_HOME/vpsm"
+if [[ ! -d "$VPSM_DIR" ]]; then
+    sudo -u "$USERNAME" git clone https://github.com/sinetoami/vpsm.git "$VPSM_DIR"
+fi
+
+sudo -u "$USERNAME" bash -c '
+mkdir -p ~/.bin
+ln -sf ~/vpsm/vpsm ~/.bin/vpsm
+grep -q ".bin" ~/.bashrc 2>/dev/null || \
+echo "export PATH=\$PATH:\$HOME/.bin" >> ~/.bashrc
+'
 
 # ── Sway config ─────────────────────────────────────────────────────────────
 step "Configuring Sway"
@@ -181,24 +244,30 @@ if [[ ! -f "$SWAY_CFG" ]]; then
     mkdir -p "$(dirname "$SWAY_CFG")"
     cp /etc/sway/config "$SWAY_CFG"
     chown "$USERNAME:$USERNAME" "$SWAY_CFG"
+    ok "Default sway config copied"
+else
+    skip "Sway config already exists"
 fi
 
-# ── PipeWire autostart (exec, not exec_always) ──────────────────────────────
+# Fix dbus-update-activation-environment (remove --all, breaks on some setups)
+sed -i 's/dbus-update-activation-environment --all/dbus-update-activation-environment --systemd/' \
+    "$SWAY_CFG" 2>/dev/null || true
+
+# PipeWire autostart
 if ! grep -q "pipewire" "$SWAY_CFG"; then
-cat >> "$SWAY_CFG" <<'EOF'
+    cat >> "$SWAY_CFG" <<'EOF'
 
 # PipeWire / audio
-exec pipewire
-exec pipewire-pulse
-exec wireplumber
+exec /usr/bin/pipewire
+exec /usr/bin/pipewire-pulse
+exec /usr/bin/wireplumber
 exec /usr/libexec/polkit-gnome-authentication-agent-1
 EOF
 fi
-
 chown "$USERNAME:$USERNAME" "$SWAY_CFG"
 
-# ── PipeWire user runit services ─────────────────────────────────────────────
-# Optional: set up ~/.config/service/ entries for user-level runit management
+# ── PipeWire user services ───────────────────────────────────────────────────
+step "Linking PipeWire user services"
 USER_SV="$USER_HOME/.config/service"
 for pw_svc in pipewire pipewire-pulse wireplumber; do
     if [[ -d /etc/sv/$pw_svc ]] && [[ ! -L "$USER_SV/$pw_svc" ]]; then
@@ -208,6 +277,9 @@ for pw_svc in pipewire pipewire-pulse wireplumber; do
     fi
 done
 chown -R "$USERNAME:$USERNAME" "$USER_SV" 2>/dev/null || true
+
+# ── XDG user dirs ───────────────────────────────────────────────────────────
+sudo -u "$USERNAME" xdg-user-dirs-update 2>/dev/null || true
 
 # ── Dotfiles sync ───────────────────────────────────────────────────────────
 step "Syncing dotfiles"
@@ -222,7 +294,6 @@ fi
 for dir in waybar dunst wlogout sway fuzzel fcitx5 qutebrowser; do
     SRC="$USER_HOME/dotfiles/configs/$dir"
     DST="$USER_HOME/.config/$dir"
-
     if [[ -d "$SRC" ]]; then
         rm -rf "$DST"
         cp -r "$SRC" "$DST"
@@ -239,10 +310,15 @@ else
     skip "Pictures not found"
 fi
 
-# ── Final ownership fix ─────────────────────────────────────────────────────
-chown -R "$USERNAME:$USERNAME" "$USER_HOME"
+# ── oh-my-bash ──────────────────────────────────────────────────────────────
+step "Installing oh-my-bash"
+sudo -u "$USERNAME" bash -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" \
+    --unattended || warn "oh-my-bash install failed (non-fatal)"
 
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" --unattended
+# ── Final ownership fix ─────────────────────────────────────────────────────
+step "Final ownership fix"
+chown -R "$USERNAME:$USERNAME" "$USER_HOME"
 
 # ── Done ────────────────────────────────────────────────────────────────────
 cat <<EOF
@@ -252,12 +328,13 @@ cat <<EOF
 
  User:    $USERNAME
  Shell:   bash
- WM:      sway
- DM:      sddm
+ WM:      sway (auto-launches on TTY1)
  GPU:     nouveau
  Audio:   pipewire + wireplumber
+ Seat:    seatd
  Portal:  xdg-desktop-portal-wlr
 
- Reboot to start greetd and launch Sway.
+ Reboot and log in on TTY1 — sway will
+ launch automatically.
 ========================================
 EOF
