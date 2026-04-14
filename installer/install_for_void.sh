@@ -242,6 +242,8 @@ fi
 # ── Final ownership fix ─────────────────────────────────────────────────────
 chown -R "$USERNAME:$USERNAME" "$USER_HOME"
 
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" --unattended
+
 # ── Done ────────────────────────────────────────────────────────────────────
 cat <<EOF
 
