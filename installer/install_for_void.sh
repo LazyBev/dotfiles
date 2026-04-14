@@ -10,14 +10,33 @@ USERNAME="${1:-}"
 
 USER_HOME="/home/$USERNAME"
 
-# ── Logging ─────────────────────────────────────────────────────────────────
-log() { printf "[%-5s] %s\n" "$1" "$2"; }
-info(){ log INFO "$*"; }
-warn(){ log WARN "$*"; }
-ok(){ log OK "$*"; }
-die(){ log FATAL "$*"; exit 1; }
+#!/bin/bash
 
-trap 'die "Error on line $LINENO: $BASH_COMMAND"' ERR
+set -eo pipefail
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "$SCRIPT_DIR/helper.sh"
+
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+_log() { printf "[%-5s] %s\n" "$1" "$2"; }
+info()  { _log "INFO"  "$*"; }
+warn()  { _log "WARN"  "$*"; }
+skip()  { _log "SKIP"  "$*"; }
+ok()    { _log "OK"    "$*"; }
+step()  { echo; echo "==> $*"; echo "------------------------------------------------------------"; }
+die()   {
+    _log "FATAL" "$*"
+    echo
+    echo "  The script failed at the step above."
+    exit 1
+}
+
+trap 'echo; die "Unexpected error on line ${LINENO} — command: ${BASH_COMMAND}"' ERR
+trap 'echo; warn "Script interrupted by user."; exit 130' INT TERM
+
 
 # ── Fix ownership ───────────────────────────────────────────────────────────
 info "Fixing ownership..."
