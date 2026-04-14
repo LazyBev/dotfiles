@@ -88,7 +88,7 @@ bindsym $mod+t            exec dolphin
 bindsym $mod+s            exec steam
 bindsym $mod+d            exec $menu
 bindsym $mod+v            exec lutris
-bindsym $mod+u            exec bash -c "pgrep waybar && killall waybar || waybar &"
+bindsym $mod+u            exec bash -c "pkill -x waybar || waybar &"
 bindsym $mod+y            exec waypaper
 bindsym $mod+c            exec $term -e $shell -c "nvim ~/.config/sway/config"
 
