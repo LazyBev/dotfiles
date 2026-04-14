@@ -60,7 +60,7 @@ xbps-install -y \
     xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
     polkit polkit-gnome \
     fcitx5 fcitx5-anthy \
-    seatd firefox
+    seatd firefox dolphin
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 step "Installing fonts"
