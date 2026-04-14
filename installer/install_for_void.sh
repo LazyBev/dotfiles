@@ -149,7 +149,7 @@ fi
 chown "$USERNAME:$USERNAME" "$SWAY_CFG"
 
 # ── Dotfiles / Configs ──────────────────────────────────────────────────────
-CONFIG_SRC="$USER_HOME/configs"
+CONFIG_SRC="$USER_HOME/dotfiles/configs"
 
 if [[ -d "$CONFIG_SRC" ]]; then
   info "Installing user configs..."
@@ -158,29 +158,27 @@ if [[ -d "$CONFIG_SRC" ]]; then
   sudo -u "$USERNAME" mkdir -p "$USER_HOME/.config"
   sudo -u "$USERNAME" mkdir -p "$USER_HOME/Pictures"
 
-  # Copy everything except Pictures into ~/.config
-  for item in "$CONFIG_SRC"/*; do
-    name="$(basename "$item")"
-
-    if [[ "$name" == "Pictures" ]]; then
-      continue
+ info "Syncing config directories..."
+for dir in waybar dunst wlogout niri fuzzel fcitx5 qutebrowser; do
+    SRC="$HOME/dotfiles/configs/$dir"
+    DST="$HOME/.config/$dir"
+    if [[ -d "$SRC" ]]; then
+        rm -rf "$DST"
+        cp -r "$SRC" "$DST"
+        ok "  $dir → $DST"
+    else
+        warn "  dotfiles/configs/$dir not found — skipping"
     fi
+done
 
-    sudo -u "$USERNAME" cp -r "$item" "$USER_HOME/.config/"
-  done
-
-  # Copy Pictures separately
-  if [[ -d "$CONFIG_SRC/Pictures" ]]; then
-    sudo -u "$USERNAME" cp -r "$CONFIG_SRC/Pictures/"* "$USER_HOME/Pictures/" 2>/dev/null || true
-  fi
-
-  # Fix ownership
-  chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config" "$USER_HOME/Pictures"
-
-  ok "Configs installed."
+if [[ -d "$HOME/dotfiles/configs/Pictures" ]]; then
+    cp -r "$HOME/dotfiles/configs/Pictures" "$HOME/"
+    ok "Pictures copied to $HOME/"
 else
-  warn "No configs directory found at $CONFIG_SRC"
+    skip "No Pictures dir in dotfiles"
 fi
+
+chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config" "$USER_HOME/Pictures"
 
 # ── Done ────────────────────────────────────────────────────────────────────
 cat <<EOF
