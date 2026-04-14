@@ -195,6 +195,37 @@ EOF
   chown "$USERNAME:$USERNAME" "$SWAY_CFG"
 fi
 
+for dir in waybar dunst wlogout sway fuzzel fcitx5 qutebrowser; do
+    SRC="$HOME/dotfiles/configs/$dir"
+    DST="$HOME/.config/$dir"
+    if [[ -d "$SRC" ]]; then
+        rm -rf "$DST"
+        cp -r "$SRC" "$DST"
+        ok "  $dir → $DST"
+    else
+        warn "  dotfiles/configs/$dir not found — skipping"
+    fi
+done
+
+if [[ -d "$HOME/dotfiles/configs/Pictures" ]]; then
+    cp -r "$HOME/dotfiles/configs/Pictures" "$HOME/"
+    ok "Pictures copied to $HOME/"
+else
+    skip "No Pictures dir in dotfiles"
+fi
+
+info "Fixing ownership of $HOME..."
+sudo chown -R "$USER:$USER" "$HOME" && ok "Ownership corrected"
+
+if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
+    info "Installing sddm-astronaut-theme..."
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)" \
+        && ok "SDDM theme installed" \
+        || warn "SDDM theme install failed — SDDM will use default theme"
+else
+    skip "sddm-astronaut-theme already installed"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 cat <<EOF
 
