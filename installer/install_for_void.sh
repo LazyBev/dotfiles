@@ -183,21 +183,21 @@ chsh -s /bin/bash "$USERNAME" || true
 step "Writing .bash_profile"
 cat > "$USER_HOME/.bash_profile" <<EOF
 # Auto-launch sway on TTY1
-export XDG_RUNTIME_DIR=/run/user/\$(id -u)
-export XDG_SESSION_TYPE=wayland
-export XDG_CURRENT_DESKTOP=sway
-export XDG_SESSION_DESKTOP=sway
-export SEATD_SOCK=/run/seatd.sock
-export WLR_BACKENDS=drm
-export WLR_NO_HARDWARE_CURSORS=1
-export MOZ_ENABLE_WAYLAND=1
-export QT_QPA_PLATFORM=wayland
-export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
-export GDK_BACKEND=wayland
-export SDL_VIDEODRIVER=wayland
-export CLUTTER_BACKEND=wayland
-export _JAVA_AWT_WM_NONREPARENTING=1
-export XCURSOR_SIZE=24
+#export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+#export XDG_SESSION_TYPE=wayland
+#export XDG_CURRENT_DESKTOP=sway
+#export XDG_SESSION_DESKTOP=sway
+#export SEATD_SOCK=/run/seatd.sock
+#export WLR_BACKENDS=drm
+#export WLR_NO_HARDWARE_CURSORS=1
+#export MOZ_ENABLE_WAYLAND=1
+#export QT_QPA_PLATFORM=wayland
+#export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+#export GDK_BACKEND=wayland
+#export SDL_VIDEODRIVER=wayland
+#export CLUTTER_BACKEND=wayland
+#export _JAVA_AWT_WM_NONREPARENTING=1
+#export XCURSOR_SIZE=24
 
 if [ -z "\$WAYLAND_DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then
    exec sway --unsupported-gpu
