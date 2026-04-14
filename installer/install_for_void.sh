@@ -82,7 +82,7 @@ xbps-install -y \
 # ── Sway stack ──────────────────────────────────────────────────────────────
 xbps-install -y \
   sway swaylock swayidle swaybg \
-  Waybar foot fuzzel dunst \
+  waybar foot fuzzel dunst \
   wl-clipboard grim slurp \
   xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
   polkit polkit-gnome \
@@ -134,25 +134,21 @@ sed -i 's/nvidia-drm.modeset=1//g'          "$GRUB_CFG"
 sed -i 's/rd.driver.blacklist=nouveau//g'   "$GRUB_CFG"
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# ── greetd (replaces SDDM for Sway) ─────────────────────────────────────────
-step "Setting up greetd + tuigreet"
-xbps-install -y greetd greetd-tuigreet
+# ── SDDM ────────────────────────────────────────────────────────────────────
+step "Setting up SDDM"
+xbps-install -y sddm
 
-mkdir -p /etc/greetd
-cat > /etc/greetd/config.toml <<EOF
-[terminal]
-vt = 1
-
-[default_session]
-command = "tuigreet --cmd sway --time --remember"
-user = "greeter"
+# Install Sway Wayland session for SDDM
+mkdir -p /usr/share/wayland-sessions
+cat > /usr/share/wayland-sessions/sway.desktop <<'EOF'
+[Desktop Entry]
+Name=Sway
+Comment=An i3-compatible Wayland compositor
+Exec=sway
+Type=Application
 EOF
 
-# Remove SDDM if previously installed
-xbps-remove -Ry sddm 2>/dev/null || true
-rm -f /var/service/sddm 2>/dev/null || true
-
-ln -sf /etc/sv/greetd /var/service/ 2>/dev/null || true
+ln -sf /etc/sv/sddm /var/service/ 2>/dev/null || true
 
 # ── XDG portal config for Sway ──────────────────────────────────────────────
 step "Configuring xdg-desktop-portal"
@@ -255,7 +251,7 @@ cat <<EOF
  User:    $USERNAME
  Shell:   bash
  WM:      sway
- DM:      greetd + tuigreet
+ DM:      sddm
  GPU:     nouveau
  Audio:   pipewire + wireplumber
  Portal:  xdg-desktop-portal-wlr
