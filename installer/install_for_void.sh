@@ -59,7 +59,6 @@ xbps-install -y \
     wl-clipboard grim slurp \
     xdg-desktop-portal xdg-desktop-portal-wlr xdg-utils \
     polkit polkit-gnome \
-    waypaper \
     fcitx5 fcitx5-anthy \
     seatd
 
