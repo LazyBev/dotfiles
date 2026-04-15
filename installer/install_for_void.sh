@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# void-sway-setup.sh (clean rewrite: runit + sway + pipewire + seatd)
+# void-sway-setup.sh (full rewrite: runit + sway + pipewire + dotfiles + sddm)
 
 set -euo pipefail
 
@@ -20,69 +20,57 @@ USERNAME="${1:-}"
 [[ $EUID -ne 0 ]] && die "Run as root"
 
 id "$USERNAME" &>/dev/null || die "User '$USERNAME' not found"
-USER_HOME="/home/$USERNAME"
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+USER_HOME="/home/$USERNAME"
+DOTFILES="$USER_HOME/dotfiles"
+
+# ── Helpers ───────────────────────────────────────────────────────────────
 enable_service() {
     local svc="$1"
-    if [[ -d "/etc/sv/$svc" && ! -e "/var/service/$svc" ]]; then
+    [[ -d "/etc/sv/$svc" && ! -e "/var/service/$svc" ]] && {
         ln -s "/etc/sv/$svc" "/var/service/"
         ok "Enabled $svc"
-    else
-        info "$svc already enabled"
-    fi
+    } || true
 }
 
 pkg_install() {
     xbps-install -y "$@"
 }
 
-pkg_if_missing() {
-    for pkg in "$@"; do
-        if ! xbps-query -Rs "^$pkg$" | grep -q "$pkg"; then
-            pkg_install "$pkg"
-        else
-            info "$pkg already installed"
-        fi
-    done
-}
-
 # ── System update ───────────────────────────────────────────────────────────
 step "Updating system"
 xbps-install -Syu -y
 
-# ── Repos ───────────────────────────────────────────────────────────────────
+# ── Repositories ───────────────────────────────────────────────────────────
 step "Enabling repositories"
 pkg_install void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
 xbps-install -Syu -y
 
-# ── Base system ─────────────────────────────────────────────────────────────
-step "Installing base system"
+# ── Base packages ──────────────────────────────────────────────────────────
+step "Installing base packages"
 pkg_install \
     git curl wget jq ripgrep fd bat fzf \
     neovim tmux btop \
     dbus elogind rtkit chrony opendoas \
-    xdg-user-dirs xdg-utils linux-firmware
+    xdg-user-dirs xdg-utils linux-firmware \
+    cpupower irqbalance \
+    sddm qt5-svg qt5-quickcontrols2 qt5-graphicaleffects
 
-# ── Performance tuning ──────────────────────────────────────────────────────
-step "Configuring performance"
-
-pkg_install cpupower irqbalance
+# ── Performance ────────────────────────────────────────────────────────────
+step "Performance tuning"
 
 echo 'governor="performance"' > /etc/default/cpupower
 
 enable_service cpupower
 enable_service irqbalance
 
-# Disk scheduler (safe generic)
 for sched in /sys/block/*/queue/scheduler; do
     [[ -f "$sched" ]] && echo mq-deadline > "$sched" 2>/dev/null || true
 done
 
-ok "Performance tuning applied"
+# ── Sway stack ─────────────────────────────────────────────────────────────
+step "Installing Sway stack"
 
-# ── Sway stack ──────────────────────────────────────────────────────────────
-step "Installing Wayland stack"
 pkg_install \
     sway swaylock swayidle swaybg \
     waybar foot fuzzel dunst \
@@ -93,8 +81,9 @@ pkg_install \
     pipewire wireplumber alsa-utils pamixer pavucontrol \
     NetworkManager network-manager-applet xz unzip zip
 
-# ── Fonts ───────────────────────────────────────────────────────────────────
+# ── Fonts ──────────────────────────────────────────────────────────────────
 step "Installing fonts"
+
 pkg_install \
     noto-fonts-ttf noto-fonts-emoji \
     font-firacode font-awesome6 terminus-font \
@@ -102,8 +91,8 @@ pkg_install \
 
 setfont ter-v22n || true
 
-# ── GPU (Nouveau safe config) ───────────────────────────────────────────────
-step "Configuring Nouveau"
+# ── GPU (Nouveau safe) ─────────────────────────────────────────────────────
+step "Configuring GPU (Nouveau)"
 
 xbps-remove -Ry nvidia nvidia-dkms nvidia-libs 2>/dev/null || true
 
@@ -116,49 +105,37 @@ EOF
 
 dracut --force --regenerate-all
 
-# ── doas ────────────────────────────────────────────────────────────────────
-step "Configuring doas"
-echo "permit persist :wheel" > /etc/doas.conf
-chmod 0400 /etc/doas.conf
-
-# ── Groups ──────────────────────────────────────────────────────────────────
-step "Adding user to groups"
-usermod -aG _seatd,input,video,audio,wheel,network "$USERNAME"
-
-# ── Services ────────────────────────────────────────────────────────────────
+# ── Services ───────────────────────────────────────────────────────────────
 step "Enabling services"
 
-for svc in dbus elogind NetworkManager chronyd rtkit seatd; do
+for svc in dbus elogind NetworkManager chronyd rtkit seatd sddm; do
     enable_service "$svc"
 done
 
-# Remove conflicts
 rm -f /var/service/dhcpcd 2>/dev/null || true
 rm -f /var/service/wpa_supplicant 2>/dev/null || true
 
-# ── XDG runtime ─────────────────────────────────────────────────────────────
-step "Configuring XDG runtime"
+# ── doas ───────────────────────────────────────────────────────────────────
+step "Configuring doas"
+
+echo "permit persist :wheel" > /etc/doas.conf
+chmod 0400 /etc/doas.conf
+
+# ── Groups ─────────────────────────────────────────────────────────────────
+step "User groups"
+
+usermod -aG _seatd,input,video,audio,wheel,network "$USERNAME"
+
+# ── PAM runtime dir ───────────────────────────────────────────────────────
+step "XDG runtime setup"
 
 pkg_install pam_rundir
 
 grep -q pam_rundir.so /etc/pam.d/login || \
     echo 'session optional pam_rundir.so' >> /etc/pam.d/login
 
-# ── Environment ─────────────────────────────────────────────────────────────
-step "Setting user environment"
-
-mkdir -p "$USER_HOME/.config/environment.d"
-
-cat > "$USER_HOME/.config/environment.d/wayland.conf" <<EOF
-XDG_CURRENT_DESKTOP=sway
-XDG_SESSION_TYPE=wayland
-MOZ_ENABLE_WAYLAND=1
-EOF
-
-chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config"
-
-# ── Sway session ────────────────────────────────────────────────────────────
-step "Creating Sway session"
+# ── Wayland session ───────────────────────────────────────────────────────
+step "Sway session"
 
 mkdir -p /usr/share/wayland-sessions
 
@@ -169,8 +146,8 @@ Exec=env WLR_RENDERER=gles2 sway
 Type=Application
 EOF
 
-# ── Optional TTY autostart ──────────────────────────────────────────────────
-step "Configuring TTY autostart"
+# ── TTY autostart (fallback) ──────────────────────────────────────────────
+step "TTY autostart"
 
 cat > "$USER_HOME/.bash_profile" <<'EOF'
 if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
@@ -180,14 +157,106 @@ EOF
 
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 
-# ── Final ───────────────────────────────────────────────────────────────────
+# ── 🔥 SDDM AUTO-USER (PASSWORD STILL REQUIRED) ───────────────────────────
+step "Configuring SDDM auto-user"
+
+enable_service dbus
+
+if [[ -d /etc/sv/sddm ]]; then
+    ln -sf /etc/sv/sddm /var/service/sddm
+    ok "SDDM enabled"
+else
+    warn "SDDM service not found"
+fi
+
+# kill tty1 getty to avoid conflicts
+rm -f /var/service/getty-tty1 2>/dev/null || true
+sv down getty-tty1 2>/dev/null || true
+
+mkdir -p /etc/sddm.conf.d
+
+cat > /etc/sddm.conf.d/10-autouser.conf <<EOF
+[Users]
+DefaultUser=$USERNAME
+RememberLastUser=true
+
+[General]
+DisplayServer=wayland
+
+[X11]
+DisplayCommand=
+
+[Wayland]
+CompositorCommand=sway
+EOF
+
+ok "SDDM auto-user configured (password still required)"
+
+# ── Dotfiles sync ─────────────────────────────────────────────────────────
+step "Syncing dotfiles"
+
+if [[ -d "$DOTFILES" ]]; then
+    CONFIG="$USER_HOME/.config"
+    mkdir -p "$CONFIG"
+
+    [[ -f "$DOTFILES/.bashrc" ]] && cp -f "$DOTFILES/.bashrc" "$USER_HOME/.bashrc"
+
+    for dir in waybar dunst wlogout niri fuzzel fcitx5 qutebrowser; do
+        SRC="$DOTFILES/configs/$dir"
+        DST="$CONFIG/$dir"
+
+        if [[ -d "$SRC" ]]; then
+            rm -rf "$DST"
+            cp -r "$SRC" "$DST"
+            ok "$dir synced"
+        else
+            warn "$dir missing"
+        fi
+    done
+
+    [[ -d "$DOTFILES/configs/Pictures" ]] && cp -r "$DOTFILES/configs/Pictures" "$USER_HOME/"
+
+    chown -R "$USERNAME:$USERNAME" "$USER_HOME"
+fi
+
+# ── GTK theme ─────────────────────────────────────────────────────────────
+step "GTK theme"
+
+GTK_SRC="$DOTFILES/configs/diinki-retro-dark"
+GTK_DST="/usr/share/themes/diinki-retro-dark"
+
+if [[ -d "$GTK_SRC" && ! -d "$GTK_DST" ]]; then
+    mv "$GTK_SRC" "$GTK_DST" 2>/dev/null || warn "GTK theme install failed"
+fi
+
+# ── SDDM theme ─────────────────────────────────────────────────────────────
+step "SDDM theme"
+
+if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
+    warn "Installing SDDM theme (external script)"
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)" || true
+fi
+
+# ── Desktop portals ───────────────────────────────────────────────────────
+step "xdg portals"
+
+mkdir -p /etc/xdg/xdg-desktop-portal
+
+cat > /etc/xdg/xdg-desktop-portal/portals.conf <<EOF
+[preferred]
+default=wlroots
+org.freedesktop.impl.portal.ScreenCast=wlroots
+org.freedesktop.impl.portal.Screenshot=wlroots
+EOF
+
+# ── Final ────────────────────────────────────────────────────────────────
 echo "
 ========================================
  Setup complete
 
  User: $USERNAME
- WM:   Sway (TTY1 autostart enabled)
- GPU:  Nouveau (safe config)
+ WM:   Sway (via SDDM auto-user)
+ GPU:  Nouveau
  Audio: PipeWire
  Init: runit
 
