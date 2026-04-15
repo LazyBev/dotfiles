@@ -61,7 +61,7 @@ xbps-install -y \
     polkit polkit-gnome \
     fcitx5 fcitx5-anthy \
     seatd firefox dolphin \
-    gnome-tweaks xz
+    gnome-tweaks xz unzip zip
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 step "Installing fonts"
