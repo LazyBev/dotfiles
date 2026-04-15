@@ -161,7 +161,7 @@ bindsym --locked XF86AudioMute        exec wpctl set-mute @DEFAULT_AUDIO_SINK@ t
 bindsym --locked XF86AudioMicMute     exec wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
 
 # ── Screenshots ────────────────────────────────────────────────────────────
-bindsym $mod+x       exec grim -g "$(slurp)" ~/Pictures/Screenshots/scr-$(date +%F-%H-%M-%S).png
+bindsym $mod+x       exec grim -g "$(slurp)" ~/Pictures/Screenshots/scr-$(date +%F-%H-%M-%S).png | wl-copy < ~/Pictures/Screenshots/scr-$(date +%F-%H-%M-%S).png
 bindsym $mod+Shift+x exec grim ~/Pictures/Screenshots/scr-$(date +%F-%H-%M-%S).png
 
 # ── Resize mode ────────────────────────────────────────────────────────────
