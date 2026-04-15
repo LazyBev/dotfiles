@@ -124,6 +124,27 @@ xbps-reconfigure -f glibc-locales
 
 echo "Locales fixed."
 
+VERSION="GE-Proton10-34"
+URL="https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${VERSION}/${VERSION}.tar.gz"
+DEST="$HOME/.steam/root/compatibilitytools.d"
+TMP="/tmp/${VERSION}.tar.gz"
+
+echo "Installing $VERSION..."
+
+# Ensure compatibility tools directory exists
+mkdir -p "$DEST"
+
+# Download
+echo "Downloading..."
+curl -L "$URL" -o "$TMP"
+
+# Extract
+echo "Extracting..."
+tar -xf "$TMP" -C "$DEST"
+
+# Cleanup
+rm "$TMP"
+
 # Disable Nouveau completely (prevents conflicts)
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/blacklist-nouveau.conf <<EOF
@@ -182,7 +203,7 @@ if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
     export __GLX_VENDOR_LIBRARY_NAME=nvidia
     export LIBVA_DRIVER_NAME=nvidia
     export MOZ_ENABLE_WAYLAND=1
-    exec sway --unsupported-gpu
+    exec dbus-run-session sway --unsupported-gpu
 fi
 EOF
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
