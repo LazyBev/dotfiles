@@ -159,7 +159,7 @@ EOF
 
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 
-# ── 🔥 SDDM AUTO-USER (PASSWORD STILL REQUIRED) ───────────────────────────
+# ── SDDM AUTO-USER (PASSWORD STILL REQUIRED) ───────────────────────────
 step "Configuring SDDM auto-user"
 
 enable_service dbus
@@ -171,9 +171,14 @@ else
     warn "SDDM service not found"
 fi
 
-# kill tty1 getty to avoid conflicts
-rm -f /var/service/getty-tty1 2>/dev/null || true
-sv down getty-tty1 2>/dev/null || true
+# ── Safe TTY handling (Void-correct) ───────────────────────────────────────
+if [[ -e /etc/sv/agetty-tty1 ]]; then
+    sv down agetty-tty1 2>/dev/null || true
+    rm -f /var/service/agetty-tty1 2>/dev/null || true
+    ok "agetty-tty1 disabled (safe)"
+else
+    skip "agetty-tty1 not found (no action needed)"
+fi
 
 mkdir -p /etc/sddm.conf.d
 
