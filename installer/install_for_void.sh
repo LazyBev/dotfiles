@@ -55,7 +55,8 @@ pkg_install \
     dbus elogind rtkit chrony opendoas \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
-    qt5-svg qt5-quickcontrols2 qt5-graphicaleffects
+    qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
+    glibc-32bit glibc
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
@@ -242,6 +243,8 @@ if [[ -d "$DOTFILES" ]]; then
     CONFIG="$USER_HOME/.config"
     mkdir -p "$CONFIG"
 
+    [[ -f "$DOTFILES/.bashrc" ]] && cp -f "$DOTFILES/.bashrc" "$USER_HOME/.bashrc"
+
     for dir in waybar dunst wlogout sway foot fuzzel fcitx5 qutebrowser; do
         SRC="$DOTFILES/configs/$dir"
         DST="$CONFIG/$dir"
@@ -325,20 +328,58 @@ else
         else
             echo "GRUB_THEME=\"$THEME_PATH\"" >> "$GRUB_CFG"
         fi
-
-        # Update GRUB
-        if command -v grub-mkconfig &>/dev/null; then
-            grub-mkconfig -o /boot/grub/grub.cfg
-            ok "GRUB updated"
-        else
-            warn "grub-mkconfig not found"
-        fi
-
-        ok "Hatsune Miku GRUB theme installed"
     else
         warn "theme.txt missing — skipping GRUB config"
     fi
 fi
+
+step "Fixing GRUB_CMDLINE_LINUX_DEFAULT"
+
+GRUB_CFG="/etc/default/grub"
+
+REQUIRED_PARAMS=(
+    profile
+    quiet
+    loglevel=3
+    preempt=full
+    threadirqs
+    mitigations=off
+)
+
+# Get current line or create it
+if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_CFG"; then
+    CURRENT=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_CFG" | cut -d'"' -f2)
+else
+    CURRENT=""
+fi
+
+# Remove splash
+CURRENT=$(echo "$CURRENT" | sed 's/\bsplash\b//g')
+
+# Add missing params
+for param in "${REQUIRED_PARAMS[@]}"; do
+    if [[ ! " $CURRENT " =~ " $param " ]]; then
+        CURRENT="$CURRENT $param"
+    fi
+done
+
+# Clean spacing
+CURRENT=$(echo "$CURRENT" | xargs)
+
+NEW_LINE="GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT\""
+
+# Apply
+if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_CFG"; then
+    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|$NEW_LINE|" "$GRUB_CFG"
+else
+    echo "$NEW_LINE" >> "$GRUB_CFG"
+fi
+
+ok "GRUB_CMDLINE_LINUX_DEFAULT set to: $CURRENT"
+
+# Regenerate GRUB
+grub-mkconfig -o /boot/grub/grub.cfg
+ok "Hatsune Miku GRUB theme installed"
 
 # Cleanup
 rm -rf "$TMP"
