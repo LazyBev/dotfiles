@@ -120,7 +120,7 @@ chmod 0400 /etc/doas.conf
 
 # ── Groups ──────────────────────────────────────────────
 step "User groups"
-usermod -aG seatd,input,video,audio,wheel,network "$USERNAME"
+usermod -aG _seatd,input,video,audio,wheel,network "$USERNAME"
 
 # ── PAM runtime dir ──────────────────────────────────────
 step "XDG runtime setup"
