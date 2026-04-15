@@ -1,0 +1,90 @@
+{
+    "layer": "top",
+    "position": "bottom",
+    "exclusive": true,
+    "gtk-layer-shell": true,
+    "passthrough": false,
+    "height": 32,
+    "spacing": 0,
+
+    "modules-left": [
+        "sway/workspaces",
+        "sway/window"
+    ],
+    "modules-center": [],
+    "modules-right": [
+        "tray",
+        "disk",
+        "network",
+        "battery",
+        "pulseaudio",
+        "clock"
+    ],
+
+    "sway/workspaces": {
+        "disable-scroll": false,
+        "all-outputs": false,
+        "format": "{name}"
+    },
+
+    "sway/window": {
+        "format": "{title}",
+        "max-length": 60,
+        "rewrite": {
+            "(.*) — Mozilla Firefox": "🌐 $1",
+            "(.*) - qutebrowser": "🌐 $1"
+        }
+    },
+
+    "tray": {
+        "icon-size": 16,
+        "spacing": 6,
+        "show-passive-items": true
+    },
+
+    "disk": {
+        "interval": 30,
+        "format": "󰋊 {used}/{total}",
+        "path": "/",
+        "tooltip": false,
+        "unit": "GB"
+    },
+
+    "network": {
+        "interval": 2,
+        "format-wifi": "  {bandwidthDownBytes}  {bandwidthUpBytes}  {signalStrength}%",
+        "format-ethernet": "  {bandwidthDownBytes}  {bandwidthUpBytes}",
+        "format-disconnected": "󰌙 disconnected",
+        "tooltip-format": "{essid} ({signalStrength}%)\n{ipaddr}"
+    },
+
+    "battery": {
+        "states": {
+            "good": 95,
+            "warning": 30,
+            "critical": 20
+        },
+        "format": "{icon} {capacity}%",
+        "format-charging": " {capacity}%",
+        "format-plugged": " {capacity}%",
+        "format-icons": ["󰂎","󰁺","󰁻","󰁼","󰁽","󰁾","󰁿","󰂀","󰂁","󰂂","󰁹"]
+    },
+
+    "pulseaudio": {
+        "max-volume": 150,
+        "scroll-step": 5,
+        "format": "{icon} {volume}%",
+        "format-muted": "󰝟",
+        "format-icons": {
+            "default": ["󰕿","󰖀","󰕾"]
+        },
+        "on-click": "pwvucontrol",
+        "tooltip": false
+    },
+
+    "clock": {
+        "interval": 1,
+        "format": "󰃰 {:%H:%M:%S   %a, %d.%m.%Y}",
+        "tooltip": false
+    }
+}
