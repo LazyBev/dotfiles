@@ -247,7 +247,7 @@ chmod +x "$HOME/.local/bin/vesktop"
 cat > "$VESKTOP_FILE" <<EOF
 [Desktop Entry]
 Name=Vesktop
-Exec=vesktop %U
+Exec=vesktop --ozone-platform=wayland --enable-features=UseOzonePlatform &
 Icon=vesktop
 Type=Application
 Categories=Network;InstantMessaging;
