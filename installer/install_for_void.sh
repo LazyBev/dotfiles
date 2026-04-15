@@ -55,7 +55,7 @@ pkg_install \
     dbus elogind rtkit chrony opendoas \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
-    sddm qt5-svg qt5-quickcontrols2 qt5-graphicaleffects
+    qt5-svg qt5-quickcontrols2 qt5-graphicaleffects
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
@@ -116,7 +116,7 @@ dracut --force --regenerate-all
 
 # ── Services ─────────────────────────────────────────────
 step "Enabling services"
-for svc in dbus elogind NetworkManager chronyd rtkit seatd sddm; do
+for svc in dbus elogind NetworkManager chronyd rtkit seatd ; do
     enable_service "$svc"
 done
 
@@ -140,44 +140,48 @@ grep -q pam_rundir.so /etc/pam.d/login || \
     echo 'session optional pam_rundir.so' >> /etc/pam.d/login
 
 # ── Wayland session ─────────────────────────────────────
-step "Sway session"
+#step "Sway session"
 
-mkdir -p /usr/share/wayland-sessions
+#mkdir -p /usr/share/wayland-sessions
 
-cat > /usr/share/wayland-sessions/sway.desktop <<EOF
-[Desktop Entry]
-Name=Sway
-Exec=env WLR_RENDERER=gles2 sway
-Type=Application
-EOF
+#cat > /usr/share/wayland-sessions/sway.desktop <<EOF
+#[Desktop Entry]
+#Name=Sway
+#Exec=env WLR_RENDERER=gles2 sway
+#Type=Application
+#EOF
 
 # ── TTY autostart ───────────────────────────────────────
 step "TTY autostart"
 
 cat > "$USER_HOME/.bash_profile" <<'EOF'
 if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
-    exec sway
+    export WLR_NO_HARDWARE_CURSORS=1
+    export GBM_BACKEND=nvidia-drm
+    export __GLX_VENDOR_LIBRARY_NAME=nvidia
+    export LIBVA_DRIVER_NAME=nvidia
+    export MOZ_ENABLE_WAYLAND=1
+    exec sway --unsupported-gpu
 fi
 EOF
-
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 
 # ── SDDM config ─────────────────────────────────────────
-step "SDDM auto-user"
+#step "SDDM auto-user"
 
-mkdir -p /etc/sddm.conf.d
+#mkdir -p /etc/sddm.conf.d
 
-cat > /etc/sddm.conf.d/10-autouser.conf <<EOF
-[Users]
-DefaultUser=$USERNAME
-RememberLastUser=true
+#cat > /etc/sddm.conf.d/10-autouser.conf <<EOF
+#[Users]
+#DefaultUser=$USERNAME
+#RememberLastUser=true
 
-[General]
-DisplayServer=wayland
+#[General]
+#DisplayServer=wayland
 
-[Wayland]
-CompositorCommand=sway
-EOF
+#[Wayland]
+#CompositorCommand=sway
+#EOF
 
 # ──────────────────────── extra  ─────────────────────────────
 step "Extras"
@@ -208,28 +212,28 @@ Categories=Network;InstantMessaging;
 Terminal=false
 EOF
 
-THEME_REPO="https://github.com/Keyitdev/sddm-astronaut-theme.git"
-THEME_NAME="sddm-astronaut-theme"
-THEMES_DIR="/usr/share/sddm/themes"
-CLONE_DIR="/tmp/$THEME_NAME"
+#THEME_REPO="https://github.com/Keyitdev/sddm-astronaut-theme.git"
+#THEME_NAME="sddm-astronaut-theme"
+#THEMES_DIR="/usr/share/sddm/themes"
+#CLONE_DIR="/tmp/$THEME_NAME"
 
-rm -rf "$CLONE_DIR"
-git clone -b master --depth 1 "$THEME_REPO" "$CLONE_DIR"
+#rm -rf "$CLONE_DIR"
+#git clone -b master --depth 1 "$THEME_REPO" "$CLONE_DIR"
 
-rm -rf "$THEMES_DIR/$THEME_NAME"
-mkdir -p "$THEMES_DIR"
-cp -r "$CLONE_DIR" "$THEMES_DIR/$THEME_NAME"
-chmod -R 755 "$THEMES_DIR/$THEME_NAME"
+#rm -rf "$THEMES_DIR/$THEME_NAME"
+#mkdir -p "$THEMES_DIR"
+#cp -r "$CLONE_DIR" "$THEMES_DIR/$THEME_NAME"
+#chmod -R 755 "$THEMES_DIR/$THEME_NAME"
 
-THEME_CONF="$THEMES_DIR/$THEME_NAME/metadata.desktop"
-if [[ -f "$THEME_CONF" ]]; then
-    sed -i 's|^ConfigFile=.*|ConfigFile=Themes/hyprland_kath.conf|' "$THEME_CONF" || true
-fi
+#THEME_CONF="$THEMES_DIR/$THEME_NAME/metadata.desktop"
+#if [[ -f "$THEME_CONF" ]]; then
+#    sed -i 's|^ConfigFile=.*|ConfigFile=Themes/hyprland_kath.conf|' "$THEME_CONF" || true
+#fi
 
-cat > /etc/sddm.conf.d/10-theme.conf <<EOF
-[Theme]
-Current=$THEME_NAME
-EOF
+#cat > /etc/sddm.conf.d/10-theme.conf <<EOF
+#[Theme]
+#Current=$THEME_NAME
+#EOF
 
 # ── Dotfiles sync ───────────────────────────────────────
 step "Syncing dotfiles"
