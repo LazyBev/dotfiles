@@ -174,19 +174,32 @@ EOF
 # ──────────────────────── extra  ─────────────────────────────
 step "Extras"
 
-curl -L https://vencord.dev/download/vesktop/amd64/tar -o ~/Downloads/Vesktop.AppImage
-chmod +x ~/Downloads/Vesktop.AppImage
-sudo mv ~/Downloads/Vesktop.AppImage /usr/local/bin/vesktop
+mkdir -p "$USER_HOME/Downloads"
 
-mkdir -p ~/.local/share/applications
-cat > ~/.local/share/applications/vesktop.desktop << 'EOF'
+curl -L https://vencord.dev/download/vesktop/amd64/tar \
+  -o "$USER_HOME/Downloads/Vesktop.AppImage"
+
+chmod +x "$USER_HOME/Downloads/Vesktop.AppImage"
+
+chown "$USERNAME:$USERNAME" "$USER_HOME/Downloads/Vesktop.AppImage"
+
+mkdir -p "$USER_HOME/.local/bin"
+mv "$USER_HOME/Downloads/Vesktop.AppImage" "$USER_HOME/.local/bin/vesktop"
+
+chown -R "$USERNAME:$USERNAME" "$USER_HOME/.local/bin"
+
+mkdir -p "$USER_HOME/.local/share/applications"
+
+cat > "$USER_HOME/.local/share/applications/vesktop.desktop" <<EOF
 [Desktop Entry]
 Name=Vesktop
-Exec=vesktop
+Exec=/home/$USERNAME/.local/bin/vesktop
 Icon=vesktop
 Type=Application
 Categories=Network;InstantMessaging;
 EOF
+
+chown -R "$USERNAME:$USERNAME" "$USER_HOME/.local/share/applications"
 
 THEME_REPO="https://github.com/Keyitdev/sddm-astronaut-theme.git"
 THEME_NAME="sddm-astronaut-theme"
