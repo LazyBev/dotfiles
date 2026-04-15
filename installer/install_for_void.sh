@@ -174,32 +174,31 @@ EOF
 # ──────────────────────── extra  ─────────────────────────────
 step "Extras"
 
-mkdir -p "$USER_HOME/Downloads"
+VESKTOP_FILE="$HOME/.local/share/applications/vesktop.desktop"
 
-curl -L https://vencord.dev/download/vesktop/amd64/tar \
-  -o "$USER_HOME/Downloads/Vesktop.AppImage"
+mkdir -p "$HOME/.local/bin"
+mkdir -p "$HOME/.local/share/applications"
 
-chmod +x "$USER_HOME/Downloads/Vesktop.AppImage"
+rm -f "$HOME/.local/bin/vesktop"
+rm -f "$VESKTOP_FILE"
 
-chown "$USERNAME:$USERNAME" "$USER_HOME/Downloads/Vesktop.AppImage"
+# download directly to final name
+curl -fL https://vencord.dev/download/vesktop/amd64/appimage \
+  -o "$HOME/.local/bin/vesktop"
 
-mkdir -p "$USER_HOME/.local/bin"
-mv "$USER_HOME/Downloads/Vesktop.AppImage" "$USER_HOME/.local/bin/vesktop"
+[[ -s "$HOME/.local/bin/vesktop" ]] || die "Vesktop download failed"
 
-chown -R "$USERNAME:$USERNAME" "$USER_HOME/.local/bin"
+chmod +x "$HOME/.local/bin/vesktop"
 
-mkdir -p "$USER_HOME/.local/share/applications"
-
-cat > "$USER_HOME/.local/share/applications/vesktop.desktop" <<EOF
+cat > "$VESKTOP_FILE" <<EOF
 [Desktop Entry]
 Name=Vesktop
-Exec=/home/$USERNAME/.local/bin/vesktop
+Exec=vesktop %U
 Icon=vesktop
 Type=Application
 Categories=Network;InstantMessaging;
+Terminal=false
 EOF
-
-chown -R "$USERNAME:$USERNAME" "$USER_HOME/.local/share/applications"
 
 THEME_REPO="https://github.com/Keyitdev/sddm-astronaut-theme.git"
 THEME_NAME="sddm-astronaut-theme"
