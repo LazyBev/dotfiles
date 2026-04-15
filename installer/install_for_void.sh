@@ -172,7 +172,21 @@ CompositorCommand=sway
 EOF
 
 # ── Theme install ───────────────────────────────────────
-step "SDDM theme"
+step "Extras"
+
+curl -L https://vencord.dev/download/vesktop/amd64/tar -o ~/Downloads/Vesktop.AppImage
+chmod +x ~/Downloads/Vesktop.AppImage
+sudo mv ~/Downloads/Vesktop.AppImage /usr/local/bin/vesktop
+
+mkdir -p ~/.local/share/applications
+cat > ~/.local/share/applications/vesktop.desktop << 'EOF'
+[Desktop Entry]
+Name=Vesktop
+Exec=vesktop
+Icon=vesktop
+Type=Application
+Categories=Network;InstantMessaging;
+EOF
 
 THEME_REPO="https://github.com/Keyitdev/sddm-astronaut-theme.git"
 THEME_NAME="sddm-astronaut-theme"
