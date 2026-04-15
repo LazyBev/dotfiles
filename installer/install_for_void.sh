@@ -56,7 +56,8 @@ pkg_install \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
-    glibc-32bit glibc
+    glibc-32bit glibc libgcc-32bit libstdc++-32bit \
+    libdrm-32bit libglvnd-32bit mesa-32bit mesa-dri-32bit
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
