@@ -87,7 +87,10 @@ step "Installing fonts"
 pkg_install \
     noto-fonts-ttf noto-fonts-emoji \
     font-firacode font-awesome6 terminus-font \
-    nerd-fonts-fira-code nerd-fonts-jetbrains-mono
+    noto-fonts-ttf noto-fonts-cjk \
+    nerd-fonts-jetbrains-mono nerd-fonts
+
+xbps-reconfigure -f fontconfig
 
 setfont ter-v22n || true
 
