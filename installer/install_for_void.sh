@@ -56,8 +56,7 @@ pkg_install \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
-    glibc-32bit glibc libgcc-32bit libstdc++-32bit \
-    libdrm-32bit libglvnd-32bit mesa-32bit mesa-dri-32bit
+    glibc-32bit glibc
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
@@ -103,7 +102,27 @@ step "Configuring GPU (AMD Mesa, disable Nouveau)"
 xbps-remove -Ry mesa-vulkan-nouveau 2>/dev/null || true
 
 # Install proper AMD stack
-pkg_install mesa mesa-dri mesa-vulkan-radeon vulkan-loader mesa-demos
+pkg_install mesa mesa-dri mesa-vulkan-radeon vulkan-loader mesa-demos \
+vulkan-loader-32bit mesa-dri-32bit mesa-vulkan-radeon-32bit \
+mesa-vulkan-intel-32bit libgcc-32bit libstdc++-32bit \
+libdrm-32bit libglvnd-32bit mesa-32bit nvidia-libs-32bit \
+
+FILE="/etc/default/libc-locales"
+
+echo "Fixing locales..."
+
+# Add if missing
+grep -q "^en_US.UTF-8 UTF-8" "$FILE" || echo "en_US.UTF-8 UTF-8" >> "$FILE"
+grep -q "^en_GB.UTF-8 UTF-8" "$FILE" || echo "en_GB.UTF-8 UTF-8" >> "$FILE"
+
+# Uncomment if commented
+sed -i 's/^#\s*\(en_US.UTF-8 UTF-8\)/\1/' "$FILE"
+sed -i 's/^#\s*\(en_GB.UTF-8 UTF-8\)/\1/' "$FILE"
+
+# Regenerate locales
+xbps-reconfigure -f glibc-locales
+
+echo "Locales fixed."
 
 # Disable Nouveau completely (prevents conflicts)
 mkdir -p /etc/modprobe.d
