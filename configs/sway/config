@@ -60,7 +60,8 @@ exec dbus-update-activation-environment --all \
     SDL_VIDEODRIVER=wayland \
     CLUTTER_BACKEND=wayland \
     _JAVA_AWT_WM_NONREPARENTING=1 \
-    XCURSOR_SIZE=24
+    XCURSOR_SIZE=24 \
+    DBUS_SESSION_BUS_ADDRESS
 
 # ── Core services ───────────────────────────────────────────────────────────
 exec /usr/bin/pipewire
