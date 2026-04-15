@@ -240,8 +240,11 @@ fi
 step "SDDM theme"
 
 if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
-    warn "Installing SDDM theme (external script)"
-    curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh | bash || true
+    warn "Installing SDDM theme (user-level install)"
+
+    sudo -u "$USERNAME" bash -c '
+        curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh | bash
+    ' || warn "SDDM theme install failed"
 fi
 
 # ── Desktop portals ───────────────────────────────────────────────────────
