@@ -78,7 +78,9 @@ pkg_install \
     polkit polkit-gnome \
     seatd firefox dolphin \
     pipewire wireplumber alsa-utils pamixer pavucontrol \
-    NetworkManager network-manager-applet xz unzip zip
+    NetworkManager network-manager-applet xz unzip zip flatpak
+
+
 
 # ── Fonts ────────────────────────────────────────────────
 step "Installing fonts"
