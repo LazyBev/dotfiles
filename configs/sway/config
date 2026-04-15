@@ -1,4 +1,3 @@
-cat > ~/.config/sway/config << 'SWAYEOF'
 # ~/.config/sway/config
 # Void Linux | runit | nouveau
 # Terminal: foot | Shell: bash | Launcher: fuzzel
@@ -190,4 +189,3 @@ for_window [window_role="pop-up"]          floating enable
 
 # ── XDG portal includes ─────────────────────────────────────────────────────
 include /etc/sway/config.d/*
-SWAYEOF
