@@ -73,7 +73,7 @@ step "Installing Sway stack"
 
 pkg_install \
     sway swaylock swayidle swaybg \
-    waybar foot fuzzel dunst \
+    Waybar foot fuzzel dunst \
     wl-clipboard grim slurp \
     xdg-desktop-portal-wlr \
     polkit polkit-gnome \
