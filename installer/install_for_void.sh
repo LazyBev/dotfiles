@@ -292,6 +292,59 @@ EOF
 chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config/gtk-3.0" "$USER_HOME/.config/gtk-4.0"
 ok "GTK settings applied"
 
+# ── GRUB Hatsune Miku theme ─────────────────────────────
+
+step "GRUB Hatsune Miku theme"
+
+REPO="https://github.com/yorunoken/HatsuneMiku.git"
+TMP="/tmp/miku-grub"
+THEMES_DIR="/usr/share/grub/themes"
+THEME_NAME="4k-HatsuneMiku"   # or 1080-HatsuneMiku
+GRUB_CFG="/etc/default/grub"
+THEME_PATH="$THEMES_DIR/$THEME_NAME/theme.txt"
+
+mkdir -p "$TMP"
+
+# Clone repo
+if ! git clone --depth=1 "$REPO" "$TMP"; then
+    warn "Failed to clone repo — skipping"
+else
+    mkdir -p "$THEMES_DIR"
+    rm -rf "$THEMES_DIR/$THEME_NAME"
+
+    if [[ -d "$TMP/$THEME_NAME" ]]; then
+        cp -r "$TMP/$THEME_NAME" "$THEMES_DIR/"
+        chmod -R 755 "$THEMES_DIR/$THEME_NAME"
+        ok "Theme copied"
+    else
+        warn "Theme folder '$THEME_NAME' not found — skipping"
+    fi
+
+    # Apply GRUB theme
+    if [[ -f "$THEME_PATH" ]]; then
+        if grep -q "^GRUB_THEME=" "$GRUB_CFG"; then
+            sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"$THEME_PATH\"|" "$GRUB_CFG"
+        else
+            echo "GRUB_THEME=\"$THEME_PATH\"" >> "$GRUB_CFG"
+        fi
+
+        # Update GRUB
+        if command -v grub-mkconfig &>/dev/null; then
+            grub-mkconfig -o /boot/grub/grub.cfg
+            ok "GRUB updated"
+        else
+            warn "grub-mkconfig not found"
+        fi
+
+        ok "Hatsune Miku GRUB theme installed"
+    else
+        warn "theme.txt missing — skipping GRUB config"
+    fi
+fi
+
+# Cleanup
+rm -rf "$TMP"
+
 # ── FINAL FIX: ZRAM SAFE INIT ───────────────────────────
 step "ZRAM setup"
 
