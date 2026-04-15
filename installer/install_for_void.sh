@@ -242,8 +242,6 @@ if [[ -d "$DOTFILES" ]]; then
     CONFIG="$USER_HOME/.config"
     mkdir -p "$CONFIG"
 
-    [[ -f "$DOTFILES/.bashrc" ]] && cp -f "$DOTFILES/.bashrc" "$USER_HOME/.bashrc"
-
     for dir in waybar dunst wlogout sway foot fuzzel fcitx5 qutebrowser; do
         SRC="$DOTFILES/configs/$dir"
         DST="$CONFIG/$dir"
