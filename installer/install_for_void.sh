@@ -237,23 +237,23 @@ if [[ -d "$GTK_SRC" && ! -d "$GTK_DST" ]]; then
 fi
 
 # ── SDDM theme ─────────────────────────────────────────────────────────────
-step "SDDM theme"
-
-step "SDDM theme (interactive installer)"
+step "SDDM theme (interactive, user context)"
 
 if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
-    warn "Launching interactive SDDM theme installer..."
+    warn "Running SDDM theme installer as user..."
 
     git clone https://github.com/keyitdev/sddm-astronaut-theme.git /tmp/sddm-theme
 
-    cd /tmp/sddm-theme
+    chown -R "$USERNAME:$USERNAME" /tmp/sddm-theme
 
-    # Run with real terminal interaction
-    script -q -c "bash setup.sh" /dev/tty
+    sudo -u "$USERNAME" bash -c '
+        cd /tmp/sddm-theme
+        bash setup.sh
+    '
 
-    cd - >/dev/null
+    rm -rf /tmp/sddm-theme
 
-    ok "SDDM theme installer finished"
+    ok "SDDM theme installed"
 else
     skip "SDDM theme already installed"
 fi
