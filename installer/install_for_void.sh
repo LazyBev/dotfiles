@@ -241,7 +241,7 @@ step "SDDM theme"
 
 if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
     warn "Installing SDDM theme (external script)"
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh)" || true
+    curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh | bash || true
 fi
 
 # ── Desktop portals ───────────────────────────────────────────────────────
