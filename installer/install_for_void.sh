@@ -171,7 +171,7 @@ DisplayServer=wayland
 CompositorCommand=sway
 EOF
 
-# ── Theme install ───────────────────────────────────────
+# ──────────────────────── extra  ─────────────────────────────
 step "Extras"
 
 curl -L https://vencord.dev/download/vesktop/amd64/tar -o ~/Downloads/Vesktop.AppImage
@@ -232,12 +232,41 @@ if [[ -d "$DOTFILES" ]]; then
 fi
 
 # ── GTK theme ───────────────────────────────────────────
-step "GTK theme"
 
+step "GTK theme"
 GTK_SRC="$DOTFILES/configs/diinki-retro-dark"
 GTK_DST="/usr/share/themes/diinki-retro-dark"
 
-[[ -d "$GTK_SRC" && ! -d "$GTK_DST" ]] && mv "$GTK_SRC" "$GTK_DST" || true
+if [[ -d "$GTK_SRC" ]]; then
+    rm -rf "$GTK_DST"
+    cp -r "$GTK_SRC" "$GTK_DST"
+    ok "GTK theme installed"
+else
+    warn "GTK theme source not found at $GTK_SRC — skipping"
+fi
+
+mkdir -p "$USER_HOME/.config/gtk-3.0" "$USER_HOME/.config/gtk-4.0"
+
+tee "$USER_HOME/.config/gtk-3.0/settings.ini" > /dev/null << 'EOF'
+[Settings]
+gtk-theme-name=diinki-retro-dark
+gtk-icon-theme-name=Adwaita
+gtk-font-name=Sans 10
+gtk-cursor-theme-name=Adwaita
+gtk-cursor-theme-size=24
+EOF
+
+tee "$USER_HOME/.config/gtk-4.0/settings.ini" > /dev/null << 'EOF'
+[Settings]
+gtk-theme-name=diinki-retro-dark
+gtk-icon-theme-name=Adwaita
+gtk-font-name=Sans 10
+gtk-cursor-theme-name=Adwaita
+gtk-cursor-theme-size=24
+EOF
+
+chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config/gtk-3.0" "$USER_HOME/.config/gtk-4.0"
+ok "GTK settings applied"
 
 # ── FINAL FIX: ZRAM SAFE INIT ───────────────────────────
 step "ZRAM setup"
