@@ -80,7 +80,9 @@ pkg_install \
     pipewire wireplumber alsa-utils pamixer pavucontrol \
     NetworkManager network-manager-applet xz unzip zip flatpak
 
-
+flatpak install flathub org.freedesktop.Platform.VulkanInfo//23.08
+flatpak install flathub org.freedesktop.Platform.GL.default//23.08
+flatpak install flathub org.freedesktop.Platform.GL.default//24.08
 
 # ── Fonts ────────────────────────────────────────────────
 step "Installing fonts"
@@ -92,17 +94,23 @@ pkg_install \
 xbps-reconfigure -f fontconfig
 setfont ter-v22n || true
 
-# ── GPU (Nouveau safe) ──────────────────────────────────
-step "Configuring GPU (Nouveau)"
+# ── GPU (AMD preferred, disable Nouveau) ────────────────
+step "Configuring GPU (AMD Mesa, disable Nouveau)"
 
-xbps-remove -Ry nvidia nvidia-dkms nvidia-libs 2>/dev/null || true
+# Remove NVIDIA/Nouveau junk
+xbps-remove -Ry mesa-vulkan-nouveau 2>/dev/null || true
 
-pkg_install mesa-dri mesa-vulkan-nouveau vulkan-loader || true
+# Install proper AMD stack
+pkg_install mesa mesa-dri mesa-vulkan-radeon vulkan-loader mesa-demos
 
+# Disable Nouveau completely (prevents conflicts)
 mkdir -p /etc/modprobe.d
-cat > /etc/modprobe.d/nouveau.conf <<EOF
-options nouveau config=NvPmEnableGating=1
+cat > /etc/modprobe.d/blacklist-nouveau.conf <<EOF
+blacklist nouveau
+options nouveau modeset=0
 EOF
+
+sudo xbps-reconfigure -fa
 
 dracut --force --regenerate-all
 
