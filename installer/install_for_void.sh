@@ -236,28 +236,6 @@ if [[ -d "$GTK_SRC" && ! -d "$GTK_DST" ]]; then
     mv "$GTK_SRC" "$GTK_DST" 2>/dev/null || warn "GTK theme install failed"
 fi
 
-# ── SDDM theme ─────────────────────────────────────────────────────────────
-step "SDDM theme (interactive, user context)"
-
-if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
-    warn "Running SDDM theme installer as user..."
-
-    git clone https://github.com/keyitdev/sddm-astronaut-theme.git /tmp/sddm-theme
-
-    chown -R "$USERNAME:$USERNAME" /tmp/sddm-theme
-
-    sudo -u "$USERNAME" bash -c '
-        cd /tmp/sddm-theme
-        bash setup.sh
-    '
-
-    rm -rf /tmp/sddm-theme
-
-    ok "SDDM theme installed"
-else
-    skip "SDDM theme already installed"
-fi
-
 # ── Desktop portals ───────────────────────────────────────────────────────
 step "xdg portals"
 
