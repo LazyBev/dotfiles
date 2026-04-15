@@ -87,6 +87,7 @@ exec swayidle -w \
     before-sleep 'swaylock -f -c 000000'
 
 exec_always mkdir -p ~/Pictures/Screenshots
+exec_always gsettings set org.gnome.desktop.interface gtk-theme "diinki-retro-dark"
 
 # ── Key bindings — apps ────────────────────────────────────────────────────
 bindsym $mod+Return       exec $term
