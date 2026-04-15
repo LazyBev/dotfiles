@@ -52,7 +52,7 @@ step "Installing base packages"
 pkg_install \
     git curl wget jq ripgrep fd bat fzf \
     neovim tmux btop \
-    dbus elogind rtkit chrony opendoas \
+    dbus seatd rtkit chrony opendoas \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
@@ -81,9 +81,9 @@ pkg_install \
     pipewire wireplumber alsa-utils pamixer pavucontrol \
     NetworkManager network-manager-applet xz unzip zip flatpak
 
-flatpak install flathub org.freedesktop.Platform.VulkanInfo//23.08
-flatpak install flathub org.freedesktop.Platform.GL.default//23.08
-flatpak install flathub org.freedesktop.Platform.GL.default//24.08
+flatpak install -y flathub org.freedesktop.Platform.VulkanInfo//23.08
+flatpak install -y flathub org.freedesktop.Platform.GL.default//23.08
+flatpak install -y flathub org.freedesktop.Platform.GL.default//24.08
 
 # ── Fonts ────────────────────────────────────────────────
 step "Installing fonts"
@@ -101,11 +101,10 @@ step "Configuring GPU (AMD Mesa, disable Nouveau)"
 # Remove NVIDIA/Nouveau junk
 xbps-remove -Ry mesa-vulkan-nouveau 2>/dev/null || true
 
-# Install proper AMD stack
-pkg_install mesa mesa-dri mesa-vulkan-radeon vulkan-loader mesa-demos \
-vulkan-loader-32bit mesa-dri-32bit mesa-vulkan-radeon-32bit \
-mesa-vulkan-intel-32bit libgcc-32bit libstdc++-32bit \
-libdrm-32bit libglvnd-32bit mesa-32bit nvidia-libs-32bit
+pkg_install \
+    mesa mesa-dri mesa-vulkan-radeon vulkan-loader mesa-demos \
+    mesa-dri-32bit mesa-vulkan-radeon-32bit vulkan-loader-32bit \
+    libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-32bit
 
 FILE="/etc/default/libc-locales"
 
@@ -152,13 +151,12 @@ blacklist nouveau
 options nouveau modeset=0
 EOF
 
-sudo xbps-reconfigure -fa
-
+xbps-reconfigure -fa
 dracut --force --regenerate-all
 
 # ── Services ─────────────────────────────────────────────
 step "Enabling services"
-for svc in dbus elogind NetworkManager chronyd rtkit seatd ; do
+for svc in dbus NetworkManager chronyd rtkit seatd ; do
     enable_service "$svc"
 done
 
@@ -385,6 +383,7 @@ REQUIRED_PARAMS=(
     preempt=full
     threadirqs
     mitigations=off
+    nvidia-drm.modeset=1
 )
 
 # Get current line or create it
