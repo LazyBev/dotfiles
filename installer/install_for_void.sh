@@ -239,12 +239,23 @@ fi
 # ── SDDM theme ─────────────────────────────────────────────────────────────
 step "SDDM theme"
 
-if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
-    warn "Installing SDDM theme (user-level install)"
+step "SDDM theme (interactive installer)"
 
-    sudo -u "$USERNAME" bash -c '
-        curl -fsSL https://raw.githubusercontent.com/keyitdev/sddm-astronaut-theme/master/setup.sh | bash
-    ' || warn "SDDM theme install failed"
+if [[ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ]]; then
+    warn "Launching interactive SDDM theme installer..."
+
+    git clone https://github.com/keyitdev/sddm-astronaut-theme.git /tmp/sddm-theme
+
+    cd /tmp/sddm-theme
+
+    # Run with real terminal interaction
+    script -q -c "bash setup.sh" /dev/tty
+
+    cd - >/dev/null
+
+    ok "SDDM theme installer finished"
+else
+    skip "SDDM theme already installed"
 fi
 
 # ── Desktop portals ───────────────────────────────────────────────────────
