@@ -87,8 +87,7 @@ step "Installing fonts"
 pkg_install \
     noto-fonts-ttf noto-fonts-emoji \
     font-firacode font-awesome6 terminus-font \
-    noto-fonts-ttf noto-fonts-cjk \
-    nerd-fonts-jetbrains-mono nerd-fonts
+    noto-fonts-ttf noto-fonts-cjk nerd-fonts
 
 xbps-reconfigure -f fontconfig
 
