@@ -196,11 +196,18 @@ step "TTY autostart"
 
 cat > "$USER_HOME/.bash_profile" <<'EOF'
 if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    export XDG_CURRENT_DESKTOP=sway
+    export XDG_SESSION_TYPE=wayland
+    export XDG_RUNTIME_DIR=/run/user/$(id -u)
+
+    # NVIDIA Wayland requirements
     export WLR_NO_HARDWARE_CURSORS=1
     export GBM_BACKEND=nvidia-drm
     export __GLX_VENDOR_LIBRARY_NAME=nvidia
     export LIBVA_DRIVER_NAME=nvidia
+    export EGL_PLATFORM=wayland
     export MOZ_ENABLE_WAYLAND=1
+
     exec dbus-run-session sway --unsupported-gpu
 fi
 EOF
