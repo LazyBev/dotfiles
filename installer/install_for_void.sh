@@ -48,7 +48,7 @@ pkg_install void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
 xbps-install -Syu -y
 
 # ── Base packages ───────────────────────────────────────
-step "Installing base packages"
+step "Installing Packages"
 pkg_install \
     git curl wget jq ripgrep fd bat fzf \
     neovim tmux btop \
@@ -56,7 +56,7 @@ pkg_install \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
-    glibc-32bit glibc
+    glibc-32bit glibc kdenlive
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
@@ -84,6 +84,7 @@ pkg_install \
 flatpak install -y flathub org.freedesktop.Platform.VulkanInfo//23.08
 flatpak install -y flathub org.freedesktop.Platform.GL.default//23.08
 flatpak install -y flathub org.freedesktop.Platform.GL.default//24.08
+flatpak install -y flathub org.kde.glaxnimate
 
 # ── Fonts ────────────────────────────────────────────────
 step "Installing fonts"
