@@ -302,6 +302,8 @@ if [[ -d "$DOTFILES" ]]; then
     chown -R "$USERNAME:$USERNAME" "$USER_HOME"
 fi
 
+mkdir -p "$USER_HOME/Videos";
+
 # ── GTK theme ───────────────────────────────────────────
 
 step "GTK theme"
