@@ -56,7 +56,7 @@ pkg_install \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
-    glibc-32bit glibc kdenlive
+    glibc-32bit glibc kdenlive mpv mpvpaper
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
