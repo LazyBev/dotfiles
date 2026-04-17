@@ -56,7 +56,8 @@ pkg_install \
     xdg-user-dirs xdg-utils linux-firmware \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
-    glibc-32bit glibc kdenlive mpv mpvpaper
+    glibc-32bit glibc kdenlive mpv mpvpaper xz unzip zip \
+    flatpak
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
@@ -79,7 +80,7 @@ pkg_install \
     polkit polkit-gnome \
     seatd firefox dolphin \
     pipewire wireplumber alsa-utils pamixer pavucontrol \
-    NetworkManager network-manager-applet xz unzip zip flatpak
+    NetworkManager network-manager-applet
 
 flatpak install -y flathub org.freedesktop.Platform.VulkanInfo//23.08
 flatpak install -y flathub org.freedesktop.Platform.GL.default//23.08
@@ -233,6 +234,15 @@ chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 
 # ──────────────────────── extra  ─────────────────────────────
 step "Extras"
+
+mv ~/.config/nvim{,.bak} || true
+mv ~/.local/share/nvim{,.bak} || true
+mv ~/.local/state/nvim{,.bak} || true
+mv ~/.cache/nvim{,.bak} || true
+
+git clone https://github.com/LazyVim/starter ~/.config/nvim
+
+rm -rf ~/.config/nvim/.git
 
 VESKTOP_FILE="$HOME/.local/share/applications/vesktop.desktop"
 
