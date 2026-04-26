@@ -57,7 +57,7 @@ pkg_install \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
     glibc-32bit glibc kdenlive mpv mpvpaper xz unzip zip \
-    flatpak
+    flatpak wine
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
