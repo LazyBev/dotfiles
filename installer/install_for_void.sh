@@ -87,7 +87,7 @@ pkg_install \
     wl-clipboard grim slurp \
     xdg-desktop-portal-wlr \
     polkit polkit-gnome \
-    seatd firefox dolphin \
+    seatd dolphin \
     pipewire wireplumber alsa-utils pamixer pavucontrol \
     NetworkManager network-manager-applet
 
@@ -155,7 +155,7 @@ tar -xf "$TMP" -C "$DEST"
 # Cleanup
 rm "$TMP"
 
-VERSION="LibreWolf.AppImage"
+VERSION="LibreWolf"
 URL="https://gitlab.com/api/v4/projects/24386000/packages/generic/librewolf/150.0-1/LibreWolf.x86_64.AppImage"
 DEST="$HOME/Downloads/${VERSION}"
 
@@ -164,6 +164,22 @@ echo "Installing $VERSION..."
 echo "Downloading..."
 curl -L "$URL" -o "$DEST"
 chmod +x "$DEST"; mv "$DEST" /usr/bin
+
+cat << 'EOF' > /usr/share/applications/librewolf.desktop
+[Desktop Entry]
+Name=LibreWolf
+Comment=Browse the Web
+Exec=/usr/bin/LibreWolf %u
+Icon=librewolf
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;application/vnd.mozilla.xul+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+StartupWMClass=LibreWolf
+Terminal=false
+EOF
+
+echo "Done."
 
 # Disable Nouveau completely (prevents conflicts)
 mkdir -p /etc/modprobe.d
