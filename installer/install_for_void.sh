@@ -58,6 +58,15 @@ pkg_install \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
     glibc-32bit glibc kdenlive mpv mpvpaper xz unzip zip \
     flatpak wine
+    
+# ── Groups ──────────────────────────────────────────────
+step "User groups"
+usermod -aG _seatd,input,video,audio,wheel,network "$USERNAME"
+
+# ── doas ────────────────────────────────────────────────
+step "Configuring doas"
+echo "permit persist :wheel" > /etc/doas.conf
+chmod 0400 /etc/doas.conf
 
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
@@ -146,6 +155,16 @@ tar -xf "$TMP" -C "$DEST"
 # Cleanup
 rm "$TMP"
 
+VERSION="LibreWolf.AppImage"
+URL="https://gitlab.com/api/v4/projects/24386000/packages/generic/librewolf/150.0-1/LibreWolf.x86_64.AppImage"
+DEST="$HOME/Downloads/${VERSION}"
+
+echo "Installing $VERSION..."
+
+echo "Downloading..."
+curl -L "$URL" -o "$DEST"
+chmod +x "$DEST"; mv "$DEST" /usr/bin
+
 # Disable Nouveau completely (prevents conflicts)
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/blacklist-nouveau.conf <<EOF
@@ -164,15 +183,6 @@ done
 
 rm -f /var/service/dhcpcd 2>/dev/null || true
 rm -f /var/service/wpa_supplicant 2>/dev/null || true
-
-# ── doas ────────────────────────────────────────────────
-step "Configuring doas"
-echo "permit persist :wheel" > /etc/doas.conf
-chmod 0400 /etc/doas.conf
-
-# ── Groups ──────────────────────────────────────────────
-step "User groups"
-usermod -aG _seatd,input,video,audio,wheel,network "$USERNAME"
 
 # ── PAM runtime dir ──────────────────────────────────────
 step "XDG runtime setup"
