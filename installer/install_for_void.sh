@@ -234,7 +234,7 @@ if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
     export __GLX_VENDOR_LIBRARY_NAME=nvidia
     export LIBVA_DRIVER_NAME=nvidia
     export EGL_PLATFORM=wayland
-    export MOZ_ENABLE_WAYLAND=1
+    #export MOZ_ENABLE_WAYLAND=1
 
     exec dbus-run-session sway --unsupported-gpu
 fi
