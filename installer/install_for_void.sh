@@ -95,6 +95,7 @@ flatpak install -y flathub org.freedesktop.Platform.VulkanInfo//23.08
 flatpak install -y flathub org.freedesktop.Platform.GL.default//23.08
 flatpak install -y flathub org.freedesktop.Platform.GL.default//24.08
 flatpak install -y flathub org.kde.glaxnimate
+flatpak install -y flathub com.stremio.Stremio
 
 # ── Fonts ────────────────────────────────────────────────
 step "Installing fonts"
