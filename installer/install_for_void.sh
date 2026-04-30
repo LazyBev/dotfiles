@@ -116,7 +116,10 @@ xbps-remove -Ry mesa-vulkan-nouveau 2>/dev/null || true
 pkg_install \
     mesa mesa-dri mesa-vulkan-radeon vulkan-loader mesa-demos \
     mesa-dri-32bit mesa-vulkan-radeon-32bit vulkan-loader-32bit \
-    libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-32bit
+    libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-32bit \
+    libXtst-32bit libXfixes-32bit libXrandr-32bit libXrender-32bit \
+    libXi-32bit glib-32bit gtk+3-32bit libpipewire-32bit gdk-pixbuf-32bit \
+    libva-32bit libvdpau-32bit libpulseaudio-32bit
 
 FILE="/etc/default/libc-locales"
 
