@@ -13,7 +13,7 @@ set $shell bash
 
 # ── Output / display ───────────────────────────────────────────────────────
 output eDP-1 mode 1920x1080@120Hz scale 2 transform normal
-output * bg ~/Pictures/manhattan.jpg fill
+output * bg ~/Pictures/yellow_burber_wall1.png fill
 
 # ── Input ──────────────────────────────────────────────────────────────────
 input type:keyboard {
