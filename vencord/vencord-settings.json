@@ -3,10 +3,10 @@
         "autoUpdate": true,
         "autoUpdateNotification": true,
         "useQuickCss": true,
-        "themeLinks": ["https://marda33.github.io/SkeuoCord/SkeuoCord.theme.css"],
+        "themeLinks": ["https://raw.githubusercontent.com/refact0r/system24/refs/heads/main/theme/system24.theme.css"],
         "eagerPatches": false,
         "enabledThemes": [
-            "https://marda33.github.io/SkeuoCord/SkeuoCord.theme.css"
+            "https://raw.githubusercontent.com/refact0r/system24/refs/heads/main/theme/system24.theme.css"
         ],
         "enableReactDevtools": false,
         "frameless": false,
