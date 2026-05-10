@@ -221,14 +221,14 @@ chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 # ──────────────────────── extra  ─────────────────────────────
 step "Extras"
 
-mv $USER_HOME/.config/nvim{,.bak} || true
-mv $USER_HOME/.local/share/nvim{,.bak} || true
-mv $USER_HOME/.local/state/nvim{,.bak} || true
-mv $USER_HOME/.cache/nvim{,.bak} || true
+mv "$USER_HOME/.config/nvim{,.bak}" || true
+mv "$USER_HOME/.local/share/nvim{,.bak}" || true
+mv "$USER_HOME/.local/state/nvim{,.bak}" || true
+mv "$USER_HOME/.cache/nvim{,.bak}" || true
 
-git clone https://github.com/LazyVim/starter $USER_HOME/.config/nvim
+git clone https://github.com/LazyVim/starter "$USER_HOME/.config/nvim"
 
-rm -rf $USER_HOME/.config/nvim/.git
+rm -rf "$USER_HOME/.config/nvim/.git"
 
 VESKTOP_FILE="$USER_HOME/.local/share/applications/vesktop.desktop"
 mkdir -p "$USER_HOME/.local/bin"
