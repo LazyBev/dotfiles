@@ -40,7 +40,7 @@ pkg_install() {
 
 # ── System update ───────────────────────────────────────
 step "Updating system"
-xbps-install -Syu -y
+xbps-install -Syu -y curl
 
 # ── Repositories ────────────────────────────────────────
 step "Enabling repositories"
