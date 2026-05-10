@@ -99,6 +99,7 @@ bindsym $mod+b            exec qutebrowser
 bindsym $mod+Shift+b      exec firefox
 bindsym $mod+t            exec dolphin
 bindsym $mod+s            exec steam
+bindsym $mod+Shift+s      exec flatpak run org.vinegarhq.Sober
 bindsym $mod+d            exec $menu
 bindsym $mod+v            exec lutris
 bindsym $mod+u            exec bash -c 'pkill -x waybar || waybar &'
