@@ -140,53 +140,6 @@ xbps-reconfigure -f glibc-locales
 
 echo "Locales fixed."
 
-VERSION="GE-Proton10-34"
-URL="https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${VERSION}/${VERSION}.tar.gz"
-DEST="$HOME/.steam/root/compatibilitytools.d"
-TMP="/tmp/${VERSION}.tar.gz"
-
-echo "Installing $VERSION..."
-
-# Ensure compatibility tools directory exists
-mkdir -p "$DEST"
-
-# Download
-echo "Downloading..."
-curl -L "$URL" -o "$TMP"
-
-# Extract
-echo "Extracting..."
-tar -xf "$TMP" -C "$DEST"
-
-# Cleanup
-rm "$TMP"
-
-VERSION="LibreWolf"
-URL="https://gitlab.com/api/v4/projects/24386000/packages/generic/librewolf/150.0-1/LibreWolf.x86_64.AppImage"
-DEST="$HOME/Downloads/${VERSION}"
-
-echo "Installing $VERSION..."
-
-echo "Downloading..."
-curl -L "$URL" -o "$DEST"
-chmod +x "$DEST"; mv "$DEST" /usr/bin
-
-cat << 'EOF' > /usr/share/applications/librewolf.desktop
-[Desktop Entry]
-Name=LibreWolf
-Comment=Browse the Web
-Exec=/usr/bin/LibreWolf %u
-Icon=librewolf
-Type=Application
-Categories=Network;WebBrowser;
-MimeType=text/html;text/xml;application/xhtml+xml;application/vnd.mozilla.xul+xml;x-scheme-handler/http;x-scheme-handler/https;
-StartupNotify=true
-StartupWMClass=LibreWolf
-Terminal=false
-EOF
-
-echo "Done."
-
 # Disable Nouveau completely (prevents conflicts)
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/blacklist-nouveau.conf <<EOF
