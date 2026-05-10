@@ -91,6 +91,8 @@ pkg_install \
     pipewire wireplumber alsa-utils pamixer pavucontrol \
     NetworkManager network-manager-applet
 
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
 flatpak install -y flathub org.freedesktop.Platform.VulkanInfo//23.08
 flatpak install -y flathub org.freedesktop.Platform.GL.default//23.08
 flatpak install -y flathub org.freedesktop.Platform.GL.default//24.08
