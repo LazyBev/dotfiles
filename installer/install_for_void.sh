@@ -21,6 +21,7 @@ USERNAME="${1:-}"
 id "$USERNAME" &>/dev/null || die "User '$USERNAME' not found"
 
 USER_HOME="$(getent passwd "$USERNAME" | cut -d: -f6)"
+HOME=$USER_HOME
 DOTFILES="$USER_HOME/dotfiles"
 
 [[ -z "$USER_HOME" || ! -d "$USER_HOME" ]] && die "Invalid home directory for $USERNAME"
@@ -220,30 +221,24 @@ chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 # ──────────────────────── extra  ─────────────────────────────
 step "Extras"
 
-mv ~/.config/nvim{,.bak} || true
-mv ~/.local/share/nvim{,.bak} || true
-mv ~/.local/state/nvim{,.bak} || true
-mv ~/.cache/nvim{,.bak} || true
+mv $USER_HOME/.config/nvim{,.bak} || true
+mv $USER_HOME/.local/share/nvim{,.bak} || true
+mv $USER_HOME/.local/state/nvim{,.bak} || true
+mv $USER_HOME/.cache/nvim{,.bak} || true
 
-git clone https://github.com/LazyVim/starter ~/.config/nvim
+git clone https://github.com/LazyVim/starter $USER_HOME/.config/nvim
 
-rm -rf ~/.config/nvim/.git
+rm -rf $USER_HOME/.config/nvim/.git
 
-VESKTOP_FILE="$HOME/.local/share/applications/vesktop.desktop"
-
-mkdir -p "$HOME/.local/bin"
-mkdir -p "$HOME/.local/share/applications"
-
-rm -f "$HOME/.local/bin/vesktop"
+VESKTOP_FILE="$USER_HOME/.local/share/applications/vesktop.desktop"
+mkdir -p "$USER_HOME/.local/bin"
+mkdir -p "$USER_HOME/.local/share/applications"
+rm -f "$USER_HOME/.local/bin/vesktop"
 rm -f "$VESKTOP_FILE"
-
-# download directly to final name
 curl -fL https://vencord.dev/download/vesktop/amd64/appimage \
-  -o "$HOME/.local/bin/vesktop"
-
-[[ -s "$HOME/.local/bin/vesktop" ]] || die "Vesktop download failed"
-
-chmod +x "$HOME/.local/bin/vesktop"
+  -o "$USER_HOME/.local/bin/vesktop"
+[[ -s "$USER_HOME/.local/bin/vesktop" ]] || die "Vesktop download failed"
+chmod +x "$USER_HOME/.local/bin/vesktop"
 
 cat > "$VESKTOP_FILE" <<EOF
 [Desktop Entry]
