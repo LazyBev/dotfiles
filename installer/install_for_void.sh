@@ -113,16 +113,16 @@ flatpak install -y flathub org.kde.glaxnimate
 flatpak install -y flathub com.stremio.Stremio
 
 # ── Wifi ────────────────────────────────────────────────
-echo "==> Installing wireless-regdb..."
-xbps-install -y wireless-regdb
+#echo "==> Installing wireless-regdb..."
+#xbps-install -y wireless-regdb
 
-echo "==> Setting GB regulatory domain..."
-echo 'options cfg80211 ieee80211_regdom=GB' > /etc/modprobe.d/regdom.conf
+#echo "==> Setting GB regulatory domain..."
+#echo 'options cfg80211 ieee80211_regdom=GB' > /etc/modprobe.d/regdom.conf
 
-echo "==> Disabling rtw88 deep low-power state..."
-echo 'options rtw88_core disable_lps_deep=y' > /etc/modprobe.d/rtw88.conf
+#echo "==> Disabling rtw88 deep low-power state..."
+#echo 'options rtw88_core disable_lps_deep=y' > /etc/modprobe.d/rtw88.conf
 
-echo "==> Disabling power save on wlp10s0..."
+echo "==> Disabling power save on wifi..."
 iface=$(iw dev | awk '/Interface/ {print $2}' | grep '^w' | head -1)
  
 if [[ -z "$iface" ]]; then
