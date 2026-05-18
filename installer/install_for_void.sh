@@ -373,6 +373,4 @@ if [[ -e /sys/block/zram0/disksize ]]; then
     swapon /dev/zram0 || true
 fi
 
-xbps-install -Syu NetworkManager network-manager-applet
-
 ok "Setup complete"
