@@ -91,6 +91,16 @@ pkg_install \
     seatd dolphin \
     pipewire wireplumber alsa-utils pamixer pavucontrol
 
+# Noctalia Shell
+
+echo "repository=https://universalrepository.pages.dev/void" | sudo tee /etc/xbps.d/10-noctalia.conf
+xbps-install -S \
+  noctalia-shell brightnessctl ImageMagick python3 git \
+  ddcutil power-profiles-daemon \
+  NetworkManager upower bluez \
+  cliphist wlsunset xdg-desktop-portal \
+  evolution-data-server 
+
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 flatpak install -y flathub org.freedesktop.Platform.VulkanInfo//23.08
