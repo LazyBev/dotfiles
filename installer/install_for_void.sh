@@ -373,4 +373,6 @@ if [[ -e /sys/block/zram0/disksize ]]; then
     swapon /dev/zram0 || true
 fi
 
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+
 ok "Setup complete"
