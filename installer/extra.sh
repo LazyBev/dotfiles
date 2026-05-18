@@ -99,5 +99,7 @@ else
     fi
 fi
 
+grub-mkconfig -o /boot/grub/grub.cfg
+
 # Cleanup
 rm -rf "$TMP"
