@@ -327,7 +327,7 @@ if [[ -d "$DOTFILES" ]]; then
 
     [[ -f "$DOTFILES/.bashrc" ]] && cp -f "$DOTFILES/.bashrc" "$USER_HOME/.bashrc"
 
-    for dir in waybar dunst wlogout sway foot fuzzel fcitx5 qutebrowser; do
+    for dir in waybar dunst wlogout sway foot fuzzel fcitx5 qutebrowser noctalia; do
         SRC="$DOTFILES/configs/$dir"
         DST="$CONFIG/$dir"
 
