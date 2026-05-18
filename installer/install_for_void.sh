@@ -198,7 +198,7 @@ dracut --force --regenerate-all
 
 # ── Services ─────────────────────────────────────────────
 step "Enabling services"
-for svc in dbus NetworkManager chronyd rtkit seatd bluetoothd power-profiles-daemon upower; do
+for svc in dbus NetworkManager chronyd rtkit seatd bluetoothd power-profiles-daemon upower pipewire wireplumber pipewire-pulse; do
     enable_service "$svc"
 done
 
