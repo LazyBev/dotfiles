@@ -98,3 +98,6 @@ else
         warn "theme.txt missing — skipping GRUB config"
     fi
 fi
+
+# Cleanup
+rm -rf "$TMP"
