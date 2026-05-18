@@ -255,78 +255,6 @@ fi
 EOF
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 
-# ── SDDM config ─────────────────────────────────────────
-#step "SDDM auto-user"
-
-#mkdir -p /etc/sddm.conf.d
-
-#cat > /etc/sddm.conf.d/10-autouser.conf <<EOF
-#[Users]
-#DefaultUser=$USERNAME
-#RememberLastUser=true
-
-#[General]
-#DisplayServer=wayland
-
-#[Wayland]
-#CompositorCommand=sway
-#EOF
-
-# ──────────────────────── extra  ─────────────────────────────
-step "Extras"
-
-#mv "$USER_HOME/.config/nvim{,.bak}" || true
-#mv "$USER_HOME/.local/share/nvim{,.bak}" || true
-#mv "$USER_HOME/.local/state/nvim{,.bak}" || true
-#mv "$USER_HOME/.cache/nvim{,.bak}" || true
-
-#git clone https://github.com/LazyVim/starter "$USER_HOME/.config/nvim"
-
-#rm -rf "$USER_HOME/.config/nvim/.git"
-
-VESKTOP_FILE="$USER_HOME/.local/share/applications/vesktop.desktop"
-mkdir -p "$USER_HOME/.local/bin"
-mkdir -p "$USER_HOME/.local/share/applications"
-rm -f "$USER_HOME/.local/bin/vesktop"
-rm -f "$VESKTOP_FILE"
-curl -fL https://vencord.dev/download/vesktop/amd64/appimage \
-  -o "$USER_HOME/.local/bin/vesktop"
-[[ -s "$USER_HOME/.local/bin/vesktop" ]] || die "Vesktop download failed"
-chmod +x "$USER_HOME/.local/bin/vesktop"
-
-cat > "$VESKTOP_FILE" <<EOF
-[Desktop Entry]
-Name=Vesktop
-Exec=vesktop --ozone-platform=wayland --enable-features=UseOzonePlatform &
-Icon=vesktop
-Type=Application
-Categories=Network;InstantMessaging;
-Terminal=false
-EOF
-
-#THEME_REPO="https://github.com/Keyitdev/sddm-astronaut-theme.git"
-#THEME_NAME="sddm-astronaut-theme"
-#THEMES_DIR="/usr/share/sddm/themes"
-#CLONE_DIR="/tmp/$THEME_NAME"
-
-#rm -rf "$CLONE_DIR"
-#git clone -b master --depth 1 "$THEME_REPO" "$CLONE_DIR"
-
-#rm -rf "$THEMES_DIR/$THEME_NAME"
-#mkdir -p "$THEMES_DIR"
-#cp -r "$CLONE_DIR" "$THEMES_DIR/$THEME_NAME"
-#chmod -R 755 "$THEMES_DIR/$THEME_NAME"
-
-#THEME_CONF="$THEMES_DIR/$THEME_NAME/metadata.desktop"
-#if [[ -f "$THEME_CONF" ]]; then
-#    sed -i 's|^ConfigFile=.*|ConfigFile=Themes/hyprland_kath.conf|' "$THEME_CONF" || true
-#fi
-
-#cat > /etc/sddm.conf.d/10-theme.conf <<EOF
-#[Theme]
-#Current=$THEME_NAME
-#EOF
-
 # ── Dotfiles sync ───────────────────────────────────────
 step "Syncing dotfiles"
 
@@ -386,46 +314,6 @@ EOF
 chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config/gtk-3.0" "$USER_HOME/.config/gtk-4.0"
 ok "GTK settings applied"
 
-# ── GRUB Hatsune Miku theme ─────────────────────────────
-
-step "GRUB Hatsune Miku theme"
-
-REPO="https://github.com/yorunoken/HatsuneMiku.git"
-TMP="/tmp/miku-grub"
-THEMES_DIR="/usr/share/grub/themes"
-THEME_NAME="4k-HatsuneMiku"   # or 1080-HatsuneMiku
-GRUB_CFG="/etc/default/grub"
-THEME_PATH="$THEMES_DIR/$THEME_NAME/theme.txt"
-
-mkdir -p "$TMP"
-
-# Clone repo
-if ! git clone --depth=1 "$REPO" "$TMP"; then
-    warn "Failed to clone repo — skipping"
-else
-    mkdir -p "$THEMES_DIR"
-    rm -rf "$THEMES_DIR/$THEME_NAME"
-
-    if [[ -d "$TMP/$THEME_NAME" ]]; then
-        cp -r "$TMP/$THEME_NAME" "$THEMES_DIR/"
-        chmod -R 755 "$THEMES_DIR/$THEME_NAME"
-        ok "Theme copied"
-    else
-        warn "Theme folder '$THEME_NAME' not found — skipping"
-    fi
-
-    # Apply GRUB theme
-    if [[ -f "$THEME_PATH" ]]; then
-        if grep -q "^GRUB_THEME=" "$GRUB_CFG"; then
-            sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"$THEME_PATH\"|" "$GRUB_CFG"
-        else
-            echo "GRUB_THEME=\"$THEME_PATH\"" >> "$GRUB_CFG"
-        fi
-    else
-        warn "theme.txt missing — skipping GRUB config"
-    fi
-fi
-
 step "Fixing GRUB_CMDLINE_LINUX_DEFAULT"
 
 GRUB_CFG="/etc/default/grub"
@@ -473,7 +361,6 @@ ok "GRUB_CMDLINE_LINUX_DEFAULT set to: $CURRENT"
 
 # Regenerate GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
-ok "Hatsune Miku GRUB theme installed"
 
 # Cleanup
 rm -rf "$TMP"
