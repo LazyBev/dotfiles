@@ -402,7 +402,7 @@ step "Final cleanup"
 
 rm -rf "$USER_HOME/.local/state/wireplumber" 2>/dev/null || true
 
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" || true
 
 ok "Setup complete"
 ok "Reboot required"
