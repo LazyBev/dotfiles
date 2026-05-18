@@ -94,7 +94,7 @@ step "Installing Sway stack"
 
 pkg_install \
     sway swaylock swayidle swaybg \
-    Waybar foot fuzzel dunst \
+    foot fuzzel dunst \
     wl-clipboard grim slurp \
     xdg-desktop-portal \
     xdg-desktop-portal-wlr \
@@ -299,7 +299,7 @@ if [[ -d "$DOTFILES" ]]; then
     fi
 
     # Config directories
-    for dir in waybar dunst wlogout sway foot fuzzel fcitx5 qutebrowser noctalia; do
+    for dir in dunst wlogout sway foot fuzzel fcitx5 qutebrowser noctalia; do
         SRC="$DOTFILES/configs/$dir"
         DST="$CONFIG/$dir"
 
