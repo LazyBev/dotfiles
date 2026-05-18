@@ -73,7 +73,7 @@ exec setfont ter-v22n
 exec sh -c '/usr/lib/polkit-kde-authentication-agent-1 || /usr/libexec/polkit-gnome-authentication-agent-1'
 
 # ── Bar + notifications ─────────────────────────────────────────────────────
-exec waybar
+exec qs -c noctalia-shell
 exec dunst
 
 # ── Applets ─────────────────────────────────────────────────────────────────
