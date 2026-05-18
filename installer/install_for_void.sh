@@ -100,7 +100,7 @@ pkg_install \
     xdg-desktop-portal-wlr \
     polkit polkit-gnome \
     dolphin pipewire wireplumber \
-    pipewire-pulse network-manager-applet \
+    network-manager-applet \
     alsa-utils pamixer pavucontrol \
     wireplumber-devel alsa-pipewire \
 
