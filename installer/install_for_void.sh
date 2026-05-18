@@ -89,8 +89,7 @@ pkg_install \
     xdg-desktop-portal-wlr \
     polkit polkit-gnome \
     seatd dolphin \
-    pipewire wireplumber alsa-utils pamixer pavucontrol \
-    NetworkManager network-manager-applet
+    pipewire wireplumber alsa-utils pamixer pavucontrol
 
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
@@ -467,5 +466,7 @@ if [[ -e /sys/block/zram0/disksize ]]; then
     mkswap /dev/zram0 || true
     swapon /dev/zram0 || true
 fi
+
+xbps-install -Syu NetworkManager network-manager-applet
 
 ok "Setup complete"
