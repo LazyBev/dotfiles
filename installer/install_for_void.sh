@@ -1,6 +1,3 @@
-# Fixed Void Linux Sway + NVIDIA + PipeWire Setup Script
-
-```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -105,7 +102,7 @@ pkg_install \
     pipewire wireplumber \
     pipewire-pulse \
     network-manager-applet \
-    alsa-utils pamixer pavucontrol alsa-pipewire
+    alsa-utils pamixer pavucontrol
 
 # ── Noctalia ────────────────────────────────────────────
 step "Installing Noctalia"
@@ -285,6 +282,32 @@ EOF
 
 chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config"
 
+# ── ALSA Setup ───────────────────────────────────────────
+step "Configuring ALSA"
+
+pkg_install alsa-utils || true
+
+# system-wide ALSA defaults
+mkdir -p /etc/alsa
+cat > /etc/asound.conf <<'EOF'
+defaults.pcm.card 0
+defaults.ctl.card 0
+EOF
+
+# ensure mixer is not muted (best effort)
+amixer sset Master unmute 2>/dev/null || true
+amixer sset PCM unmute 2>/dev/null || true
+
+# user ALSA config
+cat > "$USER_HOME/.asoundrc" <<'EOF'
+defaults.pcm.card 0
+defaults.ctl.card 0
+EOF
+
+chown "$USERNAME:$USERNAME" "$USER_HOME/.asoundrc"
+
+ok "ALSA configured"
+
 # ── GRUB ────────────────────────────────────────────────
 step "Configuring GRUB"
 
@@ -337,6 +360,8 @@ fi
 step "Final cleanup"
 
 rm -rf "$USER_HOME/.local/state/wireplumber" 2>/dev/null || true
+
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
 
 ok "Setup complete"
 ok "Reboot required"
