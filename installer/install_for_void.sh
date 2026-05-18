@@ -362,9 +362,6 @@ ok "GRUB_CMDLINE_LINUX_DEFAULT set to: $CURRENT"
 # Regenerate GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# Cleanup
-rm -rf "$TMP"
-
 # ── FINAL FIX: ZRAM SAFE INIT ───────────────────────────
 step "ZRAM setup"
 
