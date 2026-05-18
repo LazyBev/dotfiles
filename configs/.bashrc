@@ -202,4 +202,12 @@ export PATH=$PATH:$HOME/.bin
 
 alias steam="STEAM_ENABLE_WAYLAND=1 steam"
 
+function xbi() {
+  doas xbps-install -Su $1
+}
+
+function xbq() {
+  doas xbps-query -Rs $1
+}
+
 setfont ter-v22n
