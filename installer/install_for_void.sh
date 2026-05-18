@@ -111,7 +111,15 @@ echo "==> Disabling rtw88 deep low-power state..."
 echo 'options rtw88_core disable_lps_deep=y' > /etc/modprobe.d/rtw88.conf
 
 echo "==> Disabling power save on wlp10s0..."
-iw dev wlp10s0 set power_save off
+iface=$(iw dev | awk '/Interface/ {print $2}' | grep '^w' | head -1)
+ 
+if [[ -z "$iface" ]]; then
+    echo "No wireless interface found." >&2
+    exit 1
+fi
+ 
+echo "Setting power_save off on $iface"
+iw dev "$iface" set power_save off
 
 echo "==> Creating runit service to keep power save off..."
 mkdir -p /etc/sv/wifi-powersave
