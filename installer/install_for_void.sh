@@ -58,6 +58,7 @@ pkg_install \
     unzip zip xz \
     flatpak wine \
     iwd NetworkManager \
+    network-manager-applet \
     alacritty \
     bluez upower \
     power-profiles-daemon \
