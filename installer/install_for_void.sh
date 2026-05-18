@@ -284,8 +284,6 @@ chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config"
 
 # ── Dotfiles sync ───────────────────────────────────────
 step "Syncing dotfiles"
-
-DOTFILES="$USER_HOME/dotfiles"
 CONFIG="$USER_HOME/.config"
 
 if [[ -d "$DOTFILES" ]]; then
