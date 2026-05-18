@@ -282,6 +282,49 @@ EOF
 
 chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config"
 
+# ── Dotfiles sync ───────────────────────────────────────
+step "Syncing dotfiles"
+
+DOTFILES="$USER_HOME/dotfiles"
+CONFIG="$USER_HOME/.config"
+
+if [[ -d "$DOTFILES" ]]; then
+    mkdir -p "$CONFIG"
+
+    info "Using dotfiles at $DOTFILES"
+
+    # Bash config
+    if [[ -f "$DOTFILES/.bashrc" ]]; then
+        cp -f "$DOTFILES/.bashrc" "$USER_HOME/.bashrc"
+        ok "Installed .bashrc"
+    fi
+
+    # Config directories
+    for dir in waybar dunst wlogout sway foot fuzzel fcitx5 qutebrowser noctalia; do
+        SRC="$DOTFILES/configs/$dir"
+        DST="$CONFIG/$dir"
+
+        if [[ -d "$SRC" ]]; then
+            rm -rf "$DST"
+            cp -r "$SRC" "$DST"
+            ok "Synced $dir"
+        else
+            warn "Missing config: $dir"
+        fi
+    done
+
+    # Optional assets
+    if [[ -d "$DOTFILES/configs/Pictures" ]]; then
+        cp -r "$DOTFILES/configs/Pictures" "$USER_HOME/"
+        ok "Copied Pictures"
+    fi
+
+    chown -R "$USERNAME:$USERNAME" "$USER_HOME"
+else
+    warn "Dotfiles directory not found: $DOTFILES"
+    warn "Skipping dotfiles sync"
+fi
+
 # ── ALSA Setup ───────────────────────────────────────────
 step "Configuring ALSA"
 
