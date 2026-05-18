@@ -137,7 +137,7 @@ echo "==> Creating runit service to keep power save off..."
 mkdir -p /etc/sv/wifi-powersave
 cat > /etc/sv/wifi-powersave/run <<'EOF'
 #!/bin/sh
-iw dev wlp10s0 set power_save off
+iw dev $iface set power_save off
 EOF
 chmod +x /etc/sv/wifi-powersave/run
 
@@ -198,12 +198,21 @@ dracut --force --regenerate-all
 
 # ── Services ─────────────────────────────────────────────
 step "Enabling services"
-for svc in dbus NetworkManager chronyd rtkit seatd ; do
+for svc in dbus NetworkManager chronyd rtkit seatd bluetoothd power-profiles-daemon upower; do
     enable_service "$svc"
 done
 
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/iwd.conf <<EOF
+[device]
+wifi.backend=iwd
+EOF
+
 rm -f /var/service/dhcpcd 2>/dev/null || true
 rm -f /var/service/wpa_supplicant 2>/dev/null || true
+
+# DDC for ddcutil
+echo 'i2c-dev' > /etc/modules-load.d/i2c.conf
 
 # ── PAM runtime dir ──────────────────────────────────────
 step "XDG runtime setup"
