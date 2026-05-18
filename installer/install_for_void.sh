@@ -1,3 +1,6 @@
+# Fixed Void Linux Sway + NVIDIA + PipeWire Setup Script
+
+```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -8,7 +11,6 @@ warn()  { _log "WARN" "$*"; }
 ok()    { _log "OK"   "$*"; }
 step()  { echo -e "\n==> $*\n--------------------------------"; }
 die()   { _log "FATAL" "$*"; exit 1; }
-skip()  { _log "SKIP" "$*"; }
 
 trap 'die "Error on line ${LINENO}: ${BASH_COMMAND}"' ERR
 trap 'warn "Interrupted"; exit 130' INT TERM
@@ -21,10 +23,7 @@ USERNAME="${1:-}"
 id "$USERNAME" &>/dev/null || die "User '$USERNAME' not found"
 
 USER_HOME="$(getent passwd "$USERNAME" | cut -d: -f6)"
-HOME=$USER_HOME
 DOTFILES="$USER_HOME/dotfiles"
-
-[[ -z "$USER_HOME" || ! -d "$USER_HOME" ]] && die "Invalid home directory for $USERNAME"
 
 # ── Helpers ─────────────────────────────────────────────
 enable_service() {
@@ -39,7 +38,7 @@ pkg_install() {
     xbps-install -y "$@"
 }
 
-# ── System update ───────────────────────────────────────
+# ── System Update ───────────────────────────────────────
 step "Updating system"
 xbps-install -Syu -y curl
 
@@ -48,23 +47,32 @@ step "Enabling repositories"
 pkg_install void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
 xbps-install -Syu -y
 
-# ── Base packages ───────────────────────────────────────
-step "Installing Packages"
+# ── Base Packages ───────────────────────────────────────
+step "Installing base packages"
 pkg_install \
     git curl wget jq ripgrep fd bat fzf \
     neovim tmux btop \
-    dbus seatd rtkit chrony opendoas \
-    xdg-user-dirs xdg-utils linux-firmware \
+    dbus elogind seatd rtkit chrony opendoas \
+    xdg-user-dirs xdg-utils linux-firmware sof-firmware \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
-    glibc-32bit glibc kdenlive mpv mpvpaper xz unzip zip \
-    flatpak wine iwd alacritty fcitx5-configtool fcitx5 \
-    fcitx5 fcitx5-gtk+3 fcitx5-gtk4 fcitx5-qt5 fcitx5-qt6 \
-    fcitx5-mozc fcitx5-chinese-addons fcitx5-cloudpinyin \
-    fcitx5-rime fcitx5-hangul fcitx5-m17n 
-    
-# ── Groups ──────────────────────────────────────────────
-step "User groups"
+    glibc-32bit glibc \
+    kdenlive mpv mpvpaper \
+    unzip zip xz \
+    flatpak wine \
+    iwd NetworkManager \
+    alacritty \
+    bluez upower \
+    power-profiles-daemon \
+    fcitx5 fcitx5-configtool \
+    fcitx5-gtk+3 fcitx5-gtk4 \
+    fcitx5-qt5 fcitx5-qt6 \
+    fcitx5-mozc fcitx5-chinese-addons \
+    fcitx5-cloudpinyin fcitx5-rime \
+    fcitx5-hangul fcitx5-m17n
+
+# ── User Groups ─────────────────────────────────────────
+step "Configuring groups"
 usermod -aG _seatd,input,video,audio,wheel,network "$USERNAME"
 
 # ── doas ────────────────────────────────────────────────
@@ -75,6 +83,7 @@ chmod 0400 /etc/doas.conf
 # ── Performance ─────────────────────────────────────────
 step "Performance tuning"
 echo 'governor="performance"' > /etc/default/cpupower
+
 enable_service cpupower
 enable_service irqbalance
 
@@ -82,112 +91,82 @@ for sched in /sys/block/*/queue/scheduler; do
     echo mq-deadline > "$sched" 2>/dev/null || true
 done
 
-# ── Sway stack ──────────────────────────────────────────
+# ── Sway Stack ──────────────────────────────────────────
 step "Installing Sway stack"
 
 pkg_install \
     sway swaylock swayidle swaybg \
     Waybar foot fuzzel dunst \
     wl-clipboard grim slurp \
+    xdg-desktop-portal \
     xdg-desktop-portal-wlr \
     polkit polkit-gnome \
-    seatd dolphin \
-    pipewire wireplumber alsa-utils pamixer pavucontrol
+    dolphin \
+    pipewire wireplumber \
+    pipewire-pulse \
+    network-manager-applet \
+    alsa-utils pamixer pavucontrol alsa-pipewire
 
-# Noctalia Shell
+# ── Noctalia ────────────────────────────────────────────
+step "Installing Noctalia"
 
-echo "repository=https://universalrepository.pages.dev/void" | sudo tee /etc/xbps.d/10-noctalia.conf
+echo "repository=https://universalrepository.pages.dev/void" \
+    > /etc/xbps.d/10-noctalia.conf
+
 xbps-install -Sy \
-  noctalia-shell brightnessctl ImageMagick python3 git \
-  ddcutil power-profiles-daemon \
-  NetworkManager upower bluez \
-  cliphist wlsunset xdg-desktop-portal \
-  evolution-data-server 
+    noctalia-shell \
+    brightnessctl \
+    ImageMagick \
+    python3 \
+    ddcutil \
+    cliphist \
+    wlsunset \
+    evolution-data-server
 
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+# ── Flatpak ─────────────────────────────────────────────
+step "Configuring Flatpak"
 
-flatpak install -y flathub org.freedesktop.Platform.VulkanInfo//23.08
-flatpak install -y flathub org.freedesktop.Platform.GL.default//23.08
-flatpak install -y flathub org.freedesktop.Platform.GL.default//24.08
-flatpak install -y flathub org.kde.glaxnimate
-flatpak install -y flathub com.stremio.Stremio
+flatpak remote-add --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
 
-# ── Wifi ────────────────────────────────────────────────
-#echo "==> Installing wireless-regdb..."
-#xbps-install -y wireless-regdb
-
-#echo "==> Setting GB regulatory domain..."
-#echo 'options cfg80211 ieee80211_regdom=GB' > /etc/modprobe.d/regdom.conf
-
-#echo "==> Disabling rtw88 deep low-power state..."
-#echo 'options rtw88_core disable_lps_deep=y' > /etc/modprobe.d/rtw88.conf
-
-echo "==> Disabling power save on wifi..."
-iface=$(iw dev | awk '/Interface/ {print $2}' | grep '^w' | head -1)
- 
-if [[ -z "$iface" ]]; then
-    echo "No wireless interface found." >&2
-    exit 1
-fi
- 
-echo "Setting power_save off on $iface"
-iw dev "$iface" set power_save off
-
-echo "==> Creating runit service to keep power save off..."
-mkdir -p /etc/sv/wifi-powersave
-cat > /etc/sv/wifi-powersave/run <<'EOF'
-#!/bin/sh
-iw dev $iface set power_save off
-EOF
-chmod +x /etc/sv/wifi-powersave/run
-
-if [ ! -L /var/service/wifi-powersave ]; then
-    ln -s /etc/sv/wifi-powersave /var/service/
-fi
-
-# ── Fonts ────────────────────────────────────────────────
+# ── Fonts ───────────────────────────────────────────────
 step "Installing fonts"
+
 pkg_install \
-    noto-fonts-ttf noto-fonts-emoji \
-    font-firacode font-awesome6 terminus-font \
+    noto-fonts-ttf \
+    noto-fonts-emoji \
+    font-firacode \
+    font-awesome6 \
+    terminus-font \
     nerd-fonts
 
 xbps-reconfigure -f fontconfig
 setfont ter-v22n || true
 
-# ── GPU (AMD preferred, disable Nouveau) ────────────────
-step "Configuring GPU (AMD Mesa, disable Nouveau)"
+# ── NVIDIA Setup ────────────────────────────────────────
+step "Configuring NVIDIA"
 
-# Remove NVIDIA/Nouveau junk
 xbps-remove -Ry mesa-vulkan-nouveau 2>/dev/null || true
 
 pkg_install \
-    mesa mesa-dri mesa-vulkan-radeon vulkan-loader mesa-demos \
-    mesa-dri-32bit mesa-vulkan-radeon-32bit vulkan-loader-32bit \
-    libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-32bit \
-    libXtst-32bit libXfixes-32bit libXrandr-32bit libXrender-32bit \
-    libXi-32bit glib-32bit gtk+3-32bit libpipewire-32bit gdk-pixbuf-32bit \
-    libva-32bit libvdpau-32bit libpulseaudio-32bit
+    nvidia \
+    nvidia-libs-32bit \
+    mesa mesa-dri mesa-dri-32bit \
+    vulkan-loader vulkan-loader-32bit \
+    mesa-demos \
+    libgcc-32bit libstdc++-32bit \
+    libdrm-32bit libglvnd-32bit \
+    mesa-32bit \
+    libXtst-32bit libXfixes-32bit \
+    libXrandr-32bit libXrender-32bit \
+    libXi-32bit glib-32bit \
+    gtk+3-32bit gdk-pixbuf-32bit \
+    libpipewire-32bit \
+    libva-32bit libvdpau-32bit \
+    libpulseaudio-32bit
 
-FILE="/etc/default/libc-locales"
-
-echo "Fixing locales..."
-
-# Add if missing
-grep -q "^en_US.UTF-8 UTF-8" "$FILE" || echo "en_US.UTF-8 UTF-8" >> "$FILE"
-grep -q "^en_GB.UTF-8 UTF-8" "$FILE" || echo "en_GB.UTF-8 UTF-8" >> "$FILE"
-
-# Uncomment if commented
-sed -i 's/^#\s*\(en_US.UTF-8 UTF-8\)/\1/' "$FILE"
-sed -i 's/^#\s*\(en_GB.UTF-8 UTF-8\)/\1/' "$FILE"
-
-# Regenerate locales
-xbps-reconfigure -f glibc-locales
-
-echo "Locales fixed."
-
-# Disable Nouveau completely (prevents conflicts)
 mkdir -p /etc/modprobe.d
+
 cat > /etc/modprobe.d/blacklist-nouveau.conf <<EOF
 blacklist nouveau
 options nouveau modeset=0
@@ -196,106 +175,99 @@ EOF
 xbps-reconfigure -fa
 dracut --force --regenerate-all
 
-# ── Services ─────────────────────────────────────────────
+# ── Locales ─────────────────────────────────────────────
+step "Fixing locales"
+
+FILE="/etc/default/libc-locales"
+
+grep -q "^en_US.UTF-8 UTF-8" "$FILE" || \
+    echo "en_US.UTF-8 UTF-8" >> "$FILE"
+
+grep -q "^en_GB.UTF-8 UTF-8" "$FILE" || \
+    echo "en_GB.UTF-8 UTF-8" >> "$FILE"
+
+sed -i 's/^#\s*\(en_US.UTF-8 UTF-8\)/\1/' "$FILE"
+sed -i 's/^#\s*\(en_GB.UTF-8 UTF-8\)/\1/' "$FILE"
+
+xbps-reconfigure -f glibc-locales
+
+# ── Services ────────────────────────────────────────────
 step "Enabling services"
-for svc in dbus NetworkManager chronyd rtkit seatd bluetoothd power-profiles-daemon upower pipewire wireplumber pipewire-pulse; do
+
+for svc in \
+    dbus \
+    elogind \
+    NetworkManager \
+    chronyd \
+    rtkit \
+    seatd \
+    bluetoothd \
+    power-profiles-daemon \
+    upower; do
     enable_service "$svc"
 done
 
+# IMPORTANT: Do NOT run PipeWire as system services
+rm -f /var/service/pipewire 2>/dev/null || true
+rm -f /var/service/pipewire-pulse 2>/dev/null || true
+rm -f /var/service/wireplumber 2>/dev/null || true
+
+# ── NetworkManager + iwd ────────────────────────────────
+step "Configuring NetworkManager"
+
 mkdir -p /etc/NetworkManager/conf.d
+
 cat > /etc/NetworkManager/conf.d/iwd.conf <<EOF
 [device]
 wifi.backend=iwd
 EOF
 
+cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<EOF
+[connection]
+wifi.powersave=2
+EOF
+
 rm -f /var/service/dhcpcd 2>/dev/null || true
 rm -f /var/service/wpa_supplicant 2>/dev/null || true
 
-# DDC for ddcutil
-echo 'i2c-dev' > /etc/modules-load.d/i2c.conf
+# ── PAM Runtime ─────────────────────────────────────────
+step "Configuring PAM runtime"
 
-# ── PAM runtime dir ──────────────────────────────────────
-step "XDG runtime setup"
 pkg_install pam_rundir || true
 
 grep -q pam_rundir.so /etc/pam.d/login || \
     echo 'session optional pam_rundir.so' >> /etc/pam.d/login
 
-# ── Wayland session ─────────────────────────────────────
-#step "Sway session"
-
-#mkdir -p /usr/share/wayland-sessions
-
-#cat > /usr/share/wayland-sessions/sway.desktop <<EOF
-#[Desktop Entry]
-#Name=Sway
-#Exec=env WLR_RENDERER=gles2 sway
-#Type=Application
-#EOF
-
-# ── TTY autostart ───────────────────────────────────────
-step "TTY autostart"
+# ── Bash Profile ────────────────────────────────────────
+step "Creating sway autostart"
 
 cat > "$USER_HOME/.bash_profile" <<'EOF'
 if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
     export XDG_CURRENT_DESKTOP=sway
     export XDG_SESSION_TYPE=wayland
-    export XDG_RUNTIME_DIR=/run/user/$(id -u)
 
-    # NVIDIA Wayland requirements
     export WLR_NO_HARDWARE_CURSORS=1
     export GBM_BACKEND=nvidia-drm
     export __GLX_VENDOR_LIBRARY_NAME=nvidia
-    export LIBVA_DRIVER_NAME=nvidia
     export EGL_PLATFORM=wayland
-    #export MOZ_ENABLE_WAYLAND=1
+
+    nm-applet --indicator &
 
     exec dbus-run-session sway --unsupported-gpu
 fi
 EOF
+
 chown "$USERNAME:$USERNAME" "$USER_HOME/.bash_profile"
 
-# ── Dotfiles sync ───────────────────────────────────────
-step "Syncing dotfiles"
+# ── GTK Theme ───────────────────────────────────────────
+step "Configuring GTK"
 
-if [[ -d "$DOTFILES" ]]; then
-    CONFIG="$USER_HOME/.config"
-    mkdir -p "$CONFIG"
-
-    [[ -f "$DOTFILES/.bashrc" ]] && cp -f "$DOTFILES/.bashrc" "$USER_HOME/.bashrc"
-
-    for dir in waybar dunst wlogout sway foot fuzzel fcitx5 qutebrowser noctalia; do
-        SRC="$DOTFILES/configs/$dir"
-        DST="$CONFIG/$dir"
-
-        [[ -d "$SRC" ]] && rm -rf "$DST" && cp -r "$SRC" "$DST" || true
-    done
-
-    [[ -d "$DOTFILES/configs/Pictures" ]] && cp -r "$DOTFILES/configs/Pictures" "$USER_HOME/"
-    chown -R "$USERNAME:$USERNAME" "$USER_HOME"
-fi
-
-mkdir -p "$USER_HOME/Videos";
-
-# ── GTK theme ───────────────────────────────────────────
-
-step "GTK theme"
-GTK_SRC="$DOTFILES/configs/diinki-retro-dark"
-GTK_DST="/usr/share/themes/diinki-retro-dark"
-
-if [[ -d "$GTK_SRC" ]]; then
-    rm -rf "$GTK_DST"
-    cp -r "$GTK_SRC" "$GTK_DST"
-    ok "GTK theme installed"
-else
-    warn "GTK theme source not found at $GTK_SRC — skipping"
-fi
-
-mkdir -p "$USER_HOME/.config/gtk-3.0" "$USER_HOME/.config/gtk-4.0"
+mkdir -p "$USER_HOME/.config/gtk-3.0"
+mkdir -p "$USER_HOME/.config/gtk-4.0"
 
 tee "$USER_HOME/.config/gtk-3.0/settings.ini" > /dev/null << 'EOF'
 [Settings]
-gtk-theme-name=diinki-retro-dark
+gtk-theme-name=Adwaita-dark
 gtk-icon-theme-name=Adwaita
 gtk-font-name=Sans 10
 gtk-cursor-theme-name=Adwaita
@@ -304,66 +276,54 @@ EOF
 
 tee "$USER_HOME/.config/gtk-4.0/settings.ini" > /dev/null << 'EOF'
 [Settings]
-gtk-theme-name=diinki-retro-dark
+gtk-theme-name=Adwaita-dark
 gtk-icon-theme-name=Adwaita
 gtk-font-name=Sans 10
 gtk-cursor-theme-name=Adwaita
 gtk-cursor-theme-size=24
 EOF
 
-chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config/gtk-3.0" "$USER_HOME/.config/gtk-4.0"
-ok "GTK settings applied"
+chown -R "$USERNAME:$USERNAME" "$USER_HOME/.config"
 
-step "Fixing GRUB_CMDLINE_LINUX_DEFAULT"
+# ── GRUB ────────────────────────────────────────────────
+step "Configuring GRUB"
 
 GRUB_CFG="/etc/default/grub"
 
 REQUIRED_PARAMS=(
-    profile
     quiet
     loglevel=3
     preempt=full
     threadirqs
-    mitigations=off
     nvidia-drm.modeset=1
 )
 
-# Get current line or create it
 if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_CFG"; then
     CURRENT=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_CFG" | cut -d'"' -f2)
 else
     CURRENT=""
 fi
 
-# Remove splash
 CURRENT=$(echo "$CURRENT" | sed 's/\bsplash\b//g')
 
-# Add missing params
 for param in "${REQUIRED_PARAMS[@]}"; do
-    if [[ ! " $CURRENT " =~ " $param " ]]; then
-        CURRENT="$CURRENT $param"
-    fi
+    [[ ! " $CURRENT " =~ " $param " ]] && CURRENT="$CURRENT $param"
 done
 
-# Clean spacing
 CURRENT=$(echo "$CURRENT" | xargs)
 
 NEW_LINE="GRUB_CMDLINE_LINUX_DEFAULT=\"$CURRENT\""
 
-# Apply
 if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_CFG"; then
     sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|$NEW_LINE|" "$GRUB_CFG"
 else
     echo "$NEW_LINE" >> "$GRUB_CFG"
 fi
 
-ok "GRUB_CMDLINE_LINUX_DEFAULT set to: $CURRENT"
-
-# Regenerate GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# ── FINAL FIX: ZRAM SAFE INIT ───────────────────────────
-step "ZRAM setup"
+# ── ZRAM ────────────────────────────────────────────────
+step "Setting up ZRAM"
 
 modprobe zram num_devices=1 2>/dev/null || true
 
@@ -373,6 +333,10 @@ if [[ -e /sys/block/zram0/disksize ]]; then
     swapon /dev/zram0 || true
 fi
 
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+# ── Final ───────────────────────────────────────────────
+step "Final cleanup"
+
+rm -rf "$USER_HOME/.local/state/wireplumber" 2>/dev/null || true
 
 ok "Setup complete"
+ok "Reboot required"
