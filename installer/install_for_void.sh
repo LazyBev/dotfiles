@@ -58,7 +58,10 @@ pkg_install \
     cpupower irqbalance \
     qt5-svg qt5-quickcontrols2 qt5-graphicaleffects \
     glibc-32bit glibc kdenlive mpv mpvpaper xz unzip zip \
-    flatpak wine iwd alacritty fcitx5-configtool fcitx5
+    flatpak wine iwd alacritty fcitx5-configtool fcitx5 \
+    fcitx5 fcitx5-gtk+3 fcitx5-gtk4 fcitx5-qt5 fcitx5-qt6 \
+    fcitx5-mozc fcitx5-chinese-addons fcitx5-cloudpinyin \
+    fcitx5-rime fcitx5-hangul fcitx5-m17n 
     
 # ── Groups ──────────────────────────────────────────────
 step "User groups"
