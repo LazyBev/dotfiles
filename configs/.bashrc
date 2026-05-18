@@ -5,7 +5,7 @@ case $- in
 esac
 
 # Path to your oh-my-bash installation.
-export OSH='/home/yari/.oh-my-bash'
+export OSH='/home/$USER/.oh-my-bash'
 
 # Set name of the theme to load. Optionally, if you set this to "random"
 # it'll load a random theme each time that oh-my-bash is loaded.
@@ -194,23 +194,12 @@ define() {
 }
 
 xhost +local: >/dev/null 2>&1
-export PATH=~/.config/emacs/bin:/home/yari/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/var/lib/flatpak/exports/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl
+export PATH=~/.config/emacs/bin:/home/$USER/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/var/lib/flatpak/exports/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export XBPS_DISTDIR=$HOME/.void-packages
 export PATH=$PATH:$HOME/.bin
 
-# pnpm
-export PNPM_HOME="/home/yari/.local/share/pnpm"
-case ":$PATH:" in
-*":$PNPM_HOME:"*) ;;
-*) export PATH="$PNPM_HOME:$PATH" ;;
-esac
-
-PATH=$PATH:~/.dotnet
-export DOTNET_ROOT=~/.dotnet
-
-# pnpm end
 alias steam="STEAM_ENABLE_WAYLAND=1 steam"
 
 setfont ter-v22n
