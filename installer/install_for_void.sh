@@ -97,7 +97,7 @@ pkg_install \
 # Noctalia Shell
 
 echo "repository=https://universalrepository.pages.dev/void" | sudo tee /etc/xbps.d/10-noctalia.conf
-xbps-install -S \
+xbps-install -Sy \
   noctalia-shell brightnessctl ImageMagick python3 git \
   ddcutil power-profiles-daemon \
   NetworkManager upower bluez \
