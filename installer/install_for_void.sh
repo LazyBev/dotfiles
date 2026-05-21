@@ -118,7 +118,8 @@ xbps-install -Sy \
     ddcutil \
     cliphist \
     wlsunset \
-    evolution-data-server
+    evolution-data-server \
+    evtest
 
 # ── Flatpak ─────────────────────────────────────────────
 step "Configuring Flatpak"
