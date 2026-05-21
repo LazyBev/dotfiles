@@ -1,0 +1,9 @@
+{
+  "screens": [
+    {
+      "name": "HDMI-A-2",
+      "light": "/home/yari/Pictures/yellow_burber_wall1.png",
+      "dark": "/home/yari/Pictures/yellow_burber_wall1.png"
+    }
+  ]
+}
