@@ -46,7 +46,7 @@
         "barType": "framed",
         "capsuleColorKey": "none",
         "capsuleOpacity": 1,
-        "contentPadding": 8,
+        "contentPadding": 0,
         "density": "default",
         "displayMode": "always_visible",
         "enableExclusionZoneInset": true,
@@ -139,6 +139,21 @@
                         },
                         {
                             "id": "plugin:timer"
+                        },
+                        {
+                            "id": "plugin:screen-shot-and-record"
+                        },
+                        {
+                            "id": "plugin:monitor-layout"
+                        },
+                        {
+                            "id": "plugin:screen-toolkit"
+                        },
+                        {
+                            "id": "plugin:update-count"
+                        },
+                        {
+                            "id": "plugin:music-search"
                         }
                     ]
                 }
@@ -148,7 +163,7 @@
         "showOnWorkspaceSwitch": true,
         "showOutline": false,
         "useSeparateOpacity": true,
-        "widgetSpacing": 6,
+        "widgetSpacing": 2,
         "widgets": {
             "center": [
                 {
@@ -248,11 +263,14 @@
                     "hidePassive": false,
                     "id": "Tray",
                     "pinned": [
-                        "steam",
                         "OBS Studio",
                         "Vesktop",
                         "Keyboard - English (UK)",
-                        "nm-applet"
+                        "nm-applet",
+                        "Keyboard - Japanese",
+                        "Cursor",
+                        "Stremio",
+                        "steam"
                     ]
                 },
                 {
@@ -285,13 +303,13 @@
                     "textColor": "none"
                 },
                 {
-                    "clockColor": "none",
-                    "customFont": "",
-                    "formatHorizontal": "h:mm AP ddd, MMM dd",
-                    "formatVertical": "HH mm - dd MM",
+                    "clockColor": "error",
+                    "customFont": "0xProto Nerd Font",
+                    "formatHorizontal": "HH:mm dd.MM.yyyy",
+                    "formatVertical": "dd.MM.yyyy",
                     "id": "Clock",
                     "tooltipFormat": "HH:mm ddd, MMM dd",
-                    "useCustomFont": false
+                    "useCustomFont": true
                 },
                 {
                     "colorizeDistroLogo": false,
@@ -313,25 +331,219 @@
                     "id": "plugin:network-manager-vpn"
                 },
                 {
+                    "defaultSettings": {
+                        "autoHeight": true,
+                        "bindOverrides": {
+                        },
+                        "cheatsheetData": [
+                        ],
+                        "columnCount": 3,
+                        "descriptionTextColor": "#E0E0E0",
+                        "detectedCompositor": "",
+                        "hyprlandConfigPath": "~/.config/hypr/hyprland.conf",
+                        "hyprlandLuaConfigPath": "~/.config/hypr/hyprland.lua",
+                        "hyprlandParserMode": "auto",
+                        "keyColorAlt": "#FF6B6B",
+                        "keyColorCtrl": "",
+                        "keyColorDefault": "#6C757D",
+                        "keyColorMouse": "#F38181",
+                        "keyColorNumeric": "#A8DADC",
+                        "keyColorPrint": "#95E1D3",
+                        "keyColorShift": "",
+                        "keyColorSuper": "",
+                        "keyColorXF86": "#4ECDC4",
+                        "keyLabelColor": "#FFFFFF",
+                        "keyTextAlt": "",
+                        "keyTextCtrl": "",
+                        "keyTextDefault": "",
+                        "keyTextMouse": "",
+                        "keyTextNumeric": "",
+                        "keyTextPrint": "",
+                        "keyTextShift": "",
+                        "keyTextSuper": "",
+                        "keyTextXF86": "",
+                        "mangoConfigPath": "~/.config/mango/config.conf",
+                        "mergeSequentialBinds": true,
+                        "modKeyVariable": "$mod",
+                        "niriConfigPath": "~/.config/niri/config.kdl",
+                        "showUndescribedBinds": true,
+                        "splitLargeWorkspaceCategory": true,
+                        "windowHeight": 850,
+                        "windowWidth": 1400,
+                        "workspaceSplitThreshold": 12
+                    },
                     "id": "plugin:keybind-cheatsheet"
                 },
                 {
+                    "defaultSettings": {
+                        "activeBackend": "qt6-multimedia",
+                        "automationMode": "random",
+                        "automationTime": 300,
+                        "fillMode": "fit",
+                        "mpvSocket": "/tmp/mpv-socket",
+                        "profile": "default",
+                        "volume": 1,
+                        "wallpapersFolder": "~/Pictures/Wallpapers"
+                    },
                     "id": "plugin:video-wallpaper"
                 },
                 {
+                    "defaultSettings": {
+                        "backupCount": 5,
+                        "backupEnabled": true,
+                        "icon": "wand",
+                        "iconColor": "primary",
+                        "includeWallpapers": true,
+                        "lastAppliedProfile": "",
+                        "profilesDir": ""
+                    },
                     "id": "plugin:shell-profiles"
                 },
                 {
+                    "defaultSettings": {
+                        "density": "comfortable",
+                        "maxHistorySize": 100,
+                        "showImagePreviews": true
+                    },
                     "id": "plugin:clipboard"
                 },
                 {
+                    "defaultSettings": {
+                        "catColor": "default",
+                        "catOffsetY": 0,
+                        "catSize": 1,
+                        "idleTimeout": 150,
+                        "raveMode": false,
+                        "tappyMode": false,
+                        "useMprisFilter": false,
+                        "waitingTimeout": 30000
+                    },
                     "id": "plugin:slowbongo"
                 },
                 {
+                    "defaultSettings": {
+                        "audioCodec": "opus",
+                        "audioSource": "default_output",
+                        "colorRange": "limited",
+                        "copyToClipboard": false,
+                        "customReplayDuration": "30",
+                        "directory": "",
+                        "filenamePattern": "recording_yyyyMMdd_HHmmss",
+                        "frameRate": "60",
+                        "hideInactive": false,
+                        "iconColor": "none",
+                        "quality": "very_high",
+                        "replayDuration": "30",
+                        "replayEnabled": false,
+                        "replayStorage": "ram",
+                        "resolution": "original",
+                        "restorePortalSession": false,
+                        "showCursor": true,
+                        "videoCodec": "h264",
+                        "videoSource": "portal"
+                    },
                     "id": "plugin:screen-recorder"
                 },
                 {
+                    "defaultSettings": {
+                        "compactMode": false,
+                        "defaultDuration": 0,
+                        "iconColor": "none",
+                        "textColor": "none"
+                    },
                     "id": "plugin:timer"
+                },
+                {
+                    "defaultSettings": {
+                        "enableCross": true,
+                        "enableWindowsSelection": true,
+                        "keepSourceScreenshot": false,
+                        "recordingNotifications": true,
+                        "recordingSavePath": "~/Videos",
+                        "savePath": "~/Pictures/Screenshots",
+                        "screenshotEditor": "swappy"
+                    },
+                    "id": "plugin:screen-shot-and-record"
+                },
+                {
+                    "defaultSettings": {
+                        "backend": "auto",
+                        "gridSize": 40,
+                        "hyprctlCommand": "hyprctl",
+                        "iconColor": "primary",
+                        "snapToGrid": true,
+                        "swayCommand": "swaymsg"
+                    },
+                    "id": "plugin:monitor-layout"
+                },
+                {
+                    "defaultSettings": {
+                        "colorHistory": [
+                        ],
+                        "detectedRecorder": "",
+                        "filenameFormat": "",
+                        "gifMaxSeconds": 30,
+                        "installedLangs": [
+                            "eng"
+                        ],
+                        "paletteColors": [
+                        ],
+                        "recordCopyToClipboard": false,
+                        "recordSkipConfirmation": false,
+                        "screenshotPath": "",
+                        "selectedOcrLang": "eng",
+                        "transAvailable": false,
+                        "videoPath": ""
+                    },
+                    "id": "plugin:screen-toolkit"
+                },
+                {
+                    "defaultSettings": {
+                        "currentIconName": "world-download",
+                        "hideOnZero": false,
+                        "updateIntervalMinutes": 30,
+                        "updateTerminalCommand": "foot -e"
+                    },
+                    "id": "plugin:update-count"
+                },
+                {
+                    "commandPrefix": "music-search",
+                    "defaultSettings": {
+                        "autoSaveMp3AfterPlayback": false,
+                        "defaultPanelLibrarySection": "tracks",
+                        "defaultPanelTab": "search",
+                        "panelDensity": "balanced",
+                        "previewMetadataMode": "always",
+                        "previewPaneWidth": 0,
+                        "previewThumbnailSize": "comfortable",
+                        "showAlbumMetadata": true,
+                        "showBarHoverTrackTitle": true,
+                        "showDurationMetadata": true,
+                        "showHomeArtists": true,
+                        "showHomePlaylists": true,
+                        "showHomeRecent": true,
+                        "showHomeTags": true,
+                        "showHomeTop": true,
+                        "showPanelHeader": true,
+                        "showPanelNowPlaying": true,
+                        "showPanelPlaybackProgress": true,
+                        "showPanelPreview": true,
+                        "showPanelProviderChips": true,
+                        "showPanelQueueControls": true,
+                        "showPanelRecentTracks": true,
+                        "showPanelSearchHelper": true,
+                        "showPanelSpeedControls": true,
+                        "showPanelStatusBanner": true,
+                        "showPanelUrlActions": true,
+                        "showPlayStatsMetadata": true,
+                        "showPreviewChips": true,
+                        "showRatingMetadata": true,
+                        "showStatusMetadata": true,
+                        "showTagMetadata": true,
+                        "showUploaderMetadata": true,
+                        "ytPlayerClient": "android"
+                    },
+                    "id": "plugin:music-search"
                 }
             ]
         }
@@ -361,7 +573,7 @@
     },
     "colorSchemes": {
         "darkMode": true,
-        "generationMethod": "content",
+        "generationMethod": "fruit-salad",
         "manualSunrise": "06:30",
         "manualSunset": "18:30",
         "monitorForColors": "",
@@ -761,7 +973,7 @@
         "overlayLayer": true
     },
     "plugins": {
-        "autoUpdate": false,
+        "autoUpdate": true,
         "notifyUpdates": true
     },
     "sessionMenu": {
@@ -932,7 +1144,7 @@
     },
     "wallpaper": {
         "automationEnabled": false,
-        "directory": "/home/don/Pictures/Wallpapers",
+        "directory": "/home/yari/Pictures",
         "enableMultiMonitorDirectories": false,
         "enabled": true,
         "favorites": [
@@ -940,7 +1152,7 @@
         "fillColor": "#000000",
         "fillMode": "crop",
         "hideWallpaperFilenames": false,
-        "linkLightAndDarkWallpapers": true,
+        "linkLightAndDarkWallpapers": false,
         "monitorDirectories": [
         ],
         "overviewBlur": 0.4,
@@ -971,7 +1183,7 @@
         "wallhavenCategories": "111",
         "wallhavenOrder": "desc",
         "wallhavenPurity": "100",
-        "wallhavenQuery": "",
+        "wallhavenQuery": "matikanefukukitaru",
         "wallhavenRatios": "",
         "wallhavenResolutionHeight": "",
         "wallhavenResolutionMode": "atleast",
