@@ -61,10 +61,15 @@ programs.git.enable = true;
     "dunst".source           = ./dotfiles/configs/dunst;
     "qutebrowser".source     = ./dotfiles/configs/qutebrowser;
     "fcitx5".source          = ./dotfiles/configs/fcitx5;
+    "noctalia".source        = ./dotfiles/configs/noctalia;
   };
 
+  home.file.".bashrc" = {
+    source = ./dotfiles/configs/.bashrc;
+  };
+  
   home.file."Pictures" = {
-    source = ./dotfiles/Pictures;
+    source = ./dotfiles/configs/Pictures;
     recursive = true;
   };
 }
