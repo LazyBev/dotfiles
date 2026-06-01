@@ -155,8 +155,7 @@ source "$OSH"/oh-my-bash.sh
 # Example aliases
 # alias bashconfig="mate ~/.bashrc"
 # alias ohmybash="mate ~/.oh-my-bash"
-alias miau = 'echo "miau, im a cat"';
-alias rb   = "doas nixos-rebuild switch --flake /etc/nixos#gentuwu";
-alias edh  = "doas nvim /etc/nixos/home.nix";
-alias edc  = "doas nvim /etc/nixos/configuration.nix";
-alias edf  = "doas nvim /etc/nixos/flake.nix";
+alias rb="doas nixos-rebuild switch --flake /etc/nixos#gentuwu"
+alias edh="doas nvim /etc/nixos/home.nix"
+alias edc="doas nvim /etc/nixos/configuration.nix"
+alias edf="doas nvim /etc/nixos/flake.nix"
