@@ -28,13 +28,6 @@
   # ── Shell ─────────────────────────────────────────────────────────────────
   programs.bash = {
     enable = true;
-    shellAliases = {
-      miau = "miau, im a cat";
-      rb   = "doas nixos-rebuild switch --flake /etc/nixos#gentuwu";
-      edh  = "doas nvim /etc/nixos/home.nix";
-      edc  = "doas nvim /etc/nixos/configuration.nix";
-      edf  = "doas nvim /etc/nixos/flake.nix";
-    };
   };
 
 programs.git.enable = true;
