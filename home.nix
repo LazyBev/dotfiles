@@ -67,6 +67,7 @@ programs.git.enable = true;
     "fuzzel".source          = ./dotfiles/configs/fuzzel;
     "dunst".source           = ./dotfiles/configs/dunst;
     "qutebrowser".source     = ./dotfiles/configs/qutebrowser;
+    "fcitx5".source          = ./dotfiles/configs/fcitx5;
   };
 
   home.file."Pictures" = {
