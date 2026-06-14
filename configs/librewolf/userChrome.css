@@ -1,0 +1,6 @@
+/* dacctal's LibreWolf userChrome.css */
+/* https://git.symlinx.net/daccfiles/plain/browser-stuff/userChrome.css */
+#TabsToolbar { display: none !important; }
+#sidebar-box #sidebar-header { display: none !important; }
+
+* { border-radius: 0px; }

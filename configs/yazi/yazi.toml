@@ -1,0 +1,25 @@
+[manager]
+ratio = [1, 4, 3]
+show_hidden = false
+show_symlink = true
+sort_by = "modified"
+sort_dir_first = true
+sort_reverse = false
+linemode = "none"
+scrolloff = 8
+
+[preview]
+tab_size = 2
+max_width = 600
+max_height = 900
+cache_dir = "/tmp/yazi"
+image_quality = 75
+
+[opener]
+archive = [ { run = 'unar "$1"', block = true } ]
+video = [ { run = 'mpv "$1"', block = true, desktop = "mpv" } ]
+image = [ { run = 'imv "$1"', block = true, desktop = "imv" } ]
+audio = [ { run = 'mpv "$1"', block = true, desktop = "mpv" } ]
+text = [ { run = 'nvim "$1"', block = true, desktop = "nvim" } ]
+pdf = [ { run = 'zathura "$1"', block = true, desktop = "zathura" } ]
+directory = [ { run = 'cd "$1"', block = true } ]

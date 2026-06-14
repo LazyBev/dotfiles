@@ -1,0 +1,43 @@
+{
+    "settings": {
+        "autoUpdate": true,
+        "useQuickCss": true,
+        "themeLinks": ["https://raw.githubusercontent.com/refact0r/system24/refs/heads/main/theme/system24.theme.css"],
+        "enabledThemes": ["https://marda33.github.io/SkeuoCord/SkeuoCord.theme.css"],
+        "frameless": false,
+        "transparent": false,
+        "notifications": { "timeout": 5000, "position": "bottom-right", "useNative": "not-focused" },
+        "plugins": {
+            "ChatInputButtonAPI": { "enabled": true },
+            "CommandsAPI": { "enabled": true },
+            "MessageEventsAPI": { "enabled": true },
+            "ServerListAPI": { "enabled": true },
+            "BetterFolders": { "enabled": true, "sidebar": true },
+            "BetterSettings": { "enabled": true, "organizeMenu": true },
+            "ClearURLs": { "enabled": true },
+            "ConsoleJanitor": { "enabled": true },
+            "CtrlEnterSend": { "enabled": true, "submitRule": "ctrl+enter" },
+            "Dearrow": { "enabled": true },
+            "FakeNitro": { "enabled": true, "enableStickerBypass": true, "enableEmojiBypass": true },
+            "GameActivityToggle": { "enabled": true },
+            "ImageZoom": { "enabled": true },
+            "MemberCount": { "enabled": true },
+            "MessageLogger": { "enabled": true, "logEdits": true, "logDeletes": true },
+            "NoBlockedMessages": { "enabled": true },
+            "NoTrack": { "enabled": true, "disableAnalytics": true },
+            "PermissionsViewer": { "enabled": true },
+            "PlatformIndicators": { "enabled": true },
+            "RoleColorEverywhere": { "enabled": true },
+            "ShowHiddenChannels": { "enabled": true },
+            "SilentTyping": { "enabled": false },
+            "SpotifyControls": { "enabled": true },
+            "SpotifyCrack": { "enabled": true },
+            "Translator": { "enabled": false },
+            "USRBG": { "enabled": true },
+            "VoiceMessages": { "enabled": true },
+            "VolumeBooster": { "enabled": true, "multiplier": 2 },
+            "VcNarrator": { "enabled": true }
+        }
+    },
+    "quickCss": ""
+}

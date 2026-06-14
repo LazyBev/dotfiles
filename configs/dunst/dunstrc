@@ -1,0 +1,107 @@
+[global]
+monitor = 0
+follow = mouse
+width = (0, 420)
+origin = top-right
+offset = (16, 16)
+notification_limit = 5
+progress_bar = true
+progress_bar_height = 2
+progress_bar_frame_width = 0
+progress_bar_min_width = 300
+progress_bar_max_width = 360
+indicate_hidden = yes
+shrink = no
+separator_height = 1
+padding = 8
+horizontal_padding = 12
+text_icon_padding = 10
+frame_width = 1
+frame_color = "#bd93f9"
+separator_color = "#44475a"
+sort = yes
+idle_threshold = 0
+font = Pragmasevka Nerd Font 9
+line_height = 1
+markup = full
+format = "<b>%a</b>\n%s  <i>%b</i>"
+alignment = left
+vertical_alignment = center
+show_age_threshold = -1
+ellipsize = end
+ignore_newline = no
+stack_duplicates = true
+hide_duplicate_count = false
+show_indicators = no
+icon_position = left
+min_icon_size = 32
+max_icon_size = 32
+icon_corner_radius = 16
+sticky_history = yes
+history_length = 20
+dmenu = /run/current-system/sw/bin/fuzzel -dmenu -p 'dunst: '
+browser = /run/current-system/sw/bin/firefox
+always_run_script = true
+title = Dunst
+class = Dunst
+corner_radius = 0
+ignore_dbusclose = false
+mouse_left_click = close_current
+mouse_middle_click = do_action
+mouse_right_click = close_all
+[experimental]
+per_monitor_display = false
+
+[urgency_low]
+background = "#1e1f29"
+foreground = "#6272a4"
+timeout = 4
+frame_color = "#6272a4"
+
+[urgency_normal]
+background = "#1e1f29"
+foreground = "#f8f8f2"
+timeout = 5
+frame_color = "#bd93f9"
+
+[urgency_critical]
+background = "#1e1f29"
+foreground = "#ff5555"
+timeout = 0
+frame_color = "#ff5555"
+
+[vesktop]
+appname = "Vesktop"
+format = "<b>%s</b>\n<i>%b</i>"
+icon_position = left
+min_icon_size = 40
+max_icon_size = 40
+icon_corner_radius = 20
+frame_color = "#5865f2"
+background = "#1e1f29"
+foreground = "#f8f8f2"
+timeout = 5
+
+[vesktop-lower]
+appname = "vesktop"
+format = "<b>%s</b>\n<i>%b</i>"
+icon_position = left
+min_icon_size = 40
+max_icon_size = 40
+icon_corner_radius = 20
+frame_color = "#5865f2"
+background = "#1e1f29"
+foreground = "#f8f8f2"
+timeout = 5
+
+[firefox-normal]
+appname = "Firefox"
+format = "<b>%s</b>\n<i>%b</i>"
+icon_position = left
+min_icon_size = 40
+max_icon_size = 40
+icon_corner_radius = 8
+frame_color = "#ff9500"
+background = "#1e1f29"
+foreground = "#f8f8f2"
+timeout = 5

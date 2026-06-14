@@ -1,0 +1,8 @@
+[manager]
+prepend_keymap = [
+  { on = "g", run = "cd $HOME/Git", desc = "Go to Git directory" },
+  { on = "n", run = "cd $HOME/nixos", desc = "Go to nixos directory" },
+  { on = "d", run = "cd $HOME/Downloads", desc = "Go to Downloads" },
+  { on = "D", run = "cd $HOME/Desktop", desc = "Go to Desktop" },
+  { on = "p", run = "cd $HOME/Pictures", desc = "Go to Pictures" },
+]
